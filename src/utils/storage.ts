@@ -1,0 +1,83 @@
+import config from '../config';
+import { ChainType, RelayedHeights, RelayPaths } from '../types';
+
+const updateRelayedHeights = async (pathId: number, relayHeightA: bigint, relayHeightB: bigint, ackHeightA: bigint, ackHeightB: bigint) => {
+    const height = await getRelayedHeights(pathId);
+    if (height) {
+        if (typeof window != "undefined") {
+            const dexie = await import('./dexie');
+            await dexie.db.relayedHeights.update( height.id, {
+                relayHeightA,
+                relayHeightB,
+                ackHeightA,
+                ackHeightB
+            });
+        } else {
+            const sqlite = await import('./sqlite');
+            const db = await sqlite.openDB(config.dbFile);
+            await db.run('UPDATE relayedHeights SET relayHeightA = ?, relayHeightB = ?, ackHeightA = ?, ackHeightB = ? WHERE id = ?',
+                [relayHeightA, relayHeightB, ackHeightA, ackHeightB, height.id]);
+        }   
+    }else{
+        throw new Error("Heights not found");
+    }
+}
+const getRelayedHeights = async (pathId: number) => {
+
+    if (typeof window != "undefined") {
+        const dexie = await import('./dexie');
+        return await dexie.db.relayedHeights.where({ relayPathId: pathId }).first();
+    } else {
+        const sqlite = await import('./sqlite');
+        const db = await sqlite.openDB(config.dbFile);
+        return db.get('SELECT * FROM relayedHeights WHERE relayPathId = ?', [pathId]) as Promise<RelayedHeights>;
+    }
+}
+const addRelayPath = async (chainIdA: string, nodeA: string, chainIdB: string, nodeB: string, chainTypeA: ChainType, chainTypeB: ChainType, clientIdA: string, clientIdB: string, version: number = 1) => {
+    if (typeof window != "undefined") {
+        const dexie = await import('./dexie');
+        dexie.db.relayPaths.add({
+            chainIdA,
+            nodeA,
+            chainIdB,
+            nodeB,
+            chainTypeA,
+            chainTypeB,
+            clientA: clientIdA,
+            clientB: clientIdB,
+            version
+        });
+    } else {
+        const sqlite = await import('./sqlite');
+        const db = await sqlite.openDB(config.dbFile);
+        await db.run('INSERT INTO relayPaths (chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientA, clientB, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version]);
+        return await getRelayPath(chainIdA, chainIdB, clientIdA, clientIdB, version);
+    }
+}
+const getRelayPath = async (chainIdA: string, chainIdB: string, clientIdA: string, clientIdB: string, version: number = 1) => {
+    if (typeof window != "undefined") {
+        const dexie = await import('./dexie');
+        return dexie.db.relayPaths.where({ chainIdA, chainIdB, clientA: clientIdA, clientB: clientIdB, version }).first();
+    } else {
+        const sqlite = await import('./sqlite');
+        const db = await sqlite.openDB(config.dbFile);
+        return db.get('SELECT * FROM relayPaths WHERE chainIdA = ? AND chainIdB = ? AND clientA = ? AND clientB = ? AND version = ?', [chainIdA, chainIdB, clientIdA, clientIdB, version]) as Promise<RelayPaths>
+    }
+}
+const getRelayPaths = async () => {
+    if (typeof window != "undefined") {
+        const dexie = await import('./dexie');
+        return dexie.db.relayPaths.toArray();
+    } else {
+        const sqlite = await import('./sqlite');
+        const db = await sqlite.openDB(config.dbFile);
+        return db.all('SELECT * FROM relayPaths') as Promise<RelayPaths[]>;
+    }
+}
+export {
+    addRelayPath,
+    getRelayedHeights,
+    getRelayPath,
+    getRelayPaths,
+    updateRelayedHeights,
+};
