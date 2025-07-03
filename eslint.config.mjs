@@ -1,5 +1,5 @@
 import eslint from "@eslint/js";
-import stylisticTs from "@stylistic/eslint-plugin-ts";
+import stylisticTs from "@stylistic/eslint-plugin";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tseslint from "typescript-eslint";
 
