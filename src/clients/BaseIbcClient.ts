@@ -1,4 +1,4 @@
-import { BlockResultsResponse, ReadonlyDateWithNanoseconds, TxSearchResponse } from "@cosmjs/tendermint-rpc";
+import { ReadonlyDateWithNanoseconds } from "@cosmjs/tendermint-rpc";
 import { Order, Packet } from "cosmjs-types/ibc/core/channel/v1/channel";
 import { QueryNextSequenceReceiveResponse } from "cosmjs-types/ibc/core/channel/v1/query";
 import { Height } from "cosmjs-types/ibc/core/client/v1/client";
@@ -9,7 +9,7 @@ import { SignedHeader } from "cosmjs-types/tendermint/types/types";
 import { ValidatorSet } from "cosmjs-types/tendermint/types/validator";
 import winston from "winston";
 
-import { Ack, BlockSearchResponse, ChannelHandshake, ChannelInfo, CometCommitResponse, ConnectionHandshakeProof,CreateChannelResult,CreateClientArgs,CreateClientResult, CreateConnectionResult, MsgResult } from "../types";
+import { Ack, BlockResultsResponse, BlockSearchResponse, ChannelHandshake, ChannelInfo, CometCommitResponse, ConnectionHandshakeProof,CreateChannelResult,CreateClientArgs,CreateClientResult, CreateConnectionResult, MsgResult, TxSearchResponse } from "../types";
 
 export type BaseIbcClientOptions = {
   chainId: string;
@@ -47,17 +47,19 @@ export abstract class BaseIbcClient {
   }
 
   abstract createTendermintClient(clientState: TendermintClientState, consensusState: TendermintConsensusState) : Promise<CreateClientResult>;
-  abstract registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<void>;
-  abstract getTendermintConsensusState(clientId: string, height?: number): Promise<TendermintConsensusState>;
-  abstract getTendermintClientState(clientId: string, height?: number): Promise<TendermintClientState>;
+  abstract registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<MsgResult>;
+  abstract getTendermintConsensusState(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<{ consensusState: TendermintConsensusState, proof: Uint8Array }>;
+  abstract getTendermintClientState(clientId: string, proofHeight: Height): Promise<{ clientState: TendermintClientState, proof: Uint8Array }>;
   abstract getChannelProof(portId: string, channelId: string, proofHeight: Height) : Promise<ChannelHandshake>;
   abstract getReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<Uint8Array>;
+  abstract getRawConnectionProof(connectionId:string, proofHeight: Height): Promise<Uint8Array>;
+  abstract getRawChannelProof(portId: string, channelId: string, proofHeight: Height): Promise<Uint8Array>;
+  abstract getClientStateProof(clientId: string, proofHeight?: Height): Promise<QueryClientStateResponse & {proofHeight: Height}>;
+  abstract getConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<QueryConsensusStateResponse>;
   abstract getPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array>;
   abstract getPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<Uint8Array>;
   abstract getNextSequenceRecvProof(portId: string, channelId: string, proofHeight: Height) : Promise<QueryNextSequenceReceiveResponse>;
   abstract getConnectionProof(clientId:string, connectionId: string, proofHeight: Height) : Promise<ConnectionHandshakeProof>
-  abstract getClientStateProof(clientId: string, proofHeight?: Height): Promise<QueryClientStateResponse & {proofHeight: Height}>;
-  abstract getConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<QueryConsensusStateResponse>;
   abstract updateClient(clientId: string, src: BaseIbcClient): Promise<Height>
   abstract getConnection(connectionId: string): Promise<QueryConnectionResponse>;
   abstract getUnbondingPeriod(clientId: string): Promise<number>;
@@ -89,5 +91,7 @@ export abstract class BaseIbcClient {
   abstract receivePackets(packets: readonly Packet[], proofCommitments: readonly Uint8Array[], proofHeight?: Height): Promise<MsgResult>;
   abstract acknowledgePackets(acks: readonly Ack[], proofAckeds: readonly Uint8Array[], proofHeight?: Height): Promise<MsgResult>;
   abstract timeoutPackets(packets: Packet[], proofsUnreceived: Uint8Array[], nextSequenceRecv: bigint[], proofHeight: Height): Promise<MsgResult>;
-  abstract buildCreateTendermintClientArgs(src: BaseIbcClient,trustPeriodSec?: number | null,): Promise<CreateClientArgs>;
+  abstract buildCreateTendermintClientArgs(trustPeriodSec?: number | null,): Promise<CreateClientArgs>;
+  abstract waitOneBlock(): Promise<void>;
+  abstract waitForIndexer(): Promise<void>;
 }

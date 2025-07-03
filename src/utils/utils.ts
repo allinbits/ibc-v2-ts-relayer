@@ -1,4 +1,4 @@
-import { fromUtf8, toHex, toUtf8 } from "@cosmjs/encoding";
+import { fromUtf8, toBase64, toHex, toUtf8 } from "@cosmjs/encoding";
 import {
   DeliverTxResponse,
   Event,
@@ -10,7 +10,7 @@ import {
   tendermint37,
   ValidatorPubkey as RpcPubKey,
 } from "@cosmjs/tendermint-rpc";
-import { HashOp, LengthOp } from "cosmjs-types/cosmos/ics23/v1/proofs";
+import { CommitmentProof, HashOp, LengthOp } from "cosmjs-types/cosmos/ics23/v1/proofs";
 import { Timestamp } from "cosmjs-types/google/protobuf/timestamp";
 import { Packet } from "cosmjs-types/ibc/core/channel/v1/channel";
 import { Height } from "cosmjs-types/ibc/core/client/v1/client";
@@ -21,10 +21,25 @@ import {
 import { PublicKey as ProtoPubKey } from "cosmjs-types/tendermint/crypto/keys";
 
 import { BaseIbcClient } from "../clients/BaseIbcClient";
-import { PacketWithMetadata } from "../endpoints/v1/endpoint";
-import { Ack, ChannelHandshake, ConnectionHandshakeProof } from "../types";
+import { Ack, ChannelHandshake, ConnectionHandshakeProof, PacketWithMetadata } from "../types";
+import { arrayContentEquals } from "@cosmjs/utils";
+import { ProofOps } from "cosmjs-types/tendermint/crypto/proof";
+import { MerkleProof } from "cosmjs-types/ibc/core/commitment/v1/commitment";
 
 
+export function deepCloneAndMutate<T extends Record<string, unknown>>(
+  object: T,
+  mutateFn: (deepClonedObject: T) => void,
+): Record<string, unknown> {
+  const deepClonedObject = structuredClone(object);
+  mutateFn(deepClonedObject);
+
+  return deepClonedObject;
+}
+
+export function toBase64AsAny(...input: Parameters<typeof toBase64>) {
+  return toBase64(...input) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
 export function createDeliverTxFailureMessage(
   result: DeliverTxResponse,
 ): string {
@@ -387,7 +402,7 @@ export async function prepareConnectionHandshake(
   // ensure the last transaction was committed to the header (one block after it was included)
   await src.waitOneBlock();
   // update client on dest
-  const headerHeight = await dest.doUpdateClient(clientIdDest, src);
+  const headerHeight = await dest.updateClient(clientIdDest, src);
 
   // get a proof (for the proven height)
   const proof = await src.getConnectionProof(
@@ -408,8 +423,26 @@ export async function prepareChannelHandshake(
   // ensure the last transaction was committed to the header (one block after it was included)
   await src.waitOneBlock();
   // update client on dest
-  const headerHeight = await dest.doUpdateClient(clientIdDest, src);
+  const headerHeight = await dest.updateClient(clientIdDest, src);
   // get a proof (for the proven height)
   const proof = await src.getChannelProof( portId, channelId , headerHeight);
   return proof;
+}
+
+export function checkAndParseOp(op: tendermint34.ProofOp, kind: string, key: Uint8Array): CommitmentProof {
+  if (op.type !== kind) {
+    throw new Error(`Op expected to be ${kind}, got "${op.type}`);
+  }
+  if (!arrayContentEquals(key, op.key)) {
+    throw new Error(`Proven key different than queried key.\nQuery: ${toHex(key)}\nProven: ${toHex(op.key)}`);
+  }
+  return CommitmentProof.decode(op.data);
+}
+
+export function convertProofsToIcs23(ops: ProofOps): Uint8Array {
+  const proofs = ops.ops.map((op) => CommitmentProof.decode(op.data));
+  const resp = MerkleProof.fromPartial({
+    proofs,
+  });
+  return MerkleProof.encode(resp).finish();
 }

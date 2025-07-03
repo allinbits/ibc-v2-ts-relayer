@@ -1,13 +1,12 @@
 /* eslint-disable max-lines */
-import { MsgAcknowledgement as MsgAcknowledgementV2,MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2 } from "@clockworkgr/ibc-v2-client-ts/ibc.core.channel.v2/types/ibc/core/channel/v2/tx";
+import { MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2 } from "@clockworkgr/ibc-v2-client-ts/ibc.core.channel.v2/types/ibc/core/channel/v2/tx";
 import { MsgRegisterCounterparty } from "@clockworkgr/ibc-v2-client-ts/ibc.core.client.v2/types/ibc/core/client/v2/tx";
 import { OfflineSigner, Registry } from "@cosmjs/proto-signing";
+import { heightQueryString, IbcExtension, setupIbcExtension } from "./queries/ibc";
 import {
   AuthExtension,
   BankExtension,
-  Coin,
   defaultRegistryTypes,
-  Event,
   GasPrice,
   isDeliverTxFailure,
   QueryClient,
@@ -18,8 +17,8 @@ import {
   SigningStargateClientOptions,
   StakingExtension,
 } from "@cosmjs/stargate";
-import { BlockResultsResponse, CometClient, connectComet, ReadonlyDateWithNanoseconds, TxSearchResponse } from "@cosmjs/tendermint-rpc";
-import { sleep } from "@cosmjs/utils";
+import { BlockResultsResponse, comet38, CometClient, connectComet, ReadonlyDateWithNanoseconds, tendermint34, tendermint37, TxSearchResponse } from "@cosmjs/tendermint-rpc";
+import { arrayContentEquals, assert, sleep } from "@cosmjs/utils";
 import { MsgTransfer } from "cosmjs-types/ibc/applications/transfer/v1/tx";
 import { Order, Packet, State } from "cosmjs-types/ibc/core/channel/v1/channel";
 import { QueryNextSequenceReceiveResponse } from "cosmjs-types/ibc/core/channel/v1/query";
@@ -46,12 +45,21 @@ import {
   MsgConnectionOpenInit,
   MsgConnectionOpenTry,
 } from "cosmjs-types/ibc/core/connection/v1/tx";
-import { ClientState, ConsensusState, Header } from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
-import { blockIDFlagFromJSON, SignedHeader } from "cosmjs-types/tendermint/types/types";
+import { ClientState, ConsensusState } from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
+import { blockIDFlagFromJSON, Commit, Header, SignedHeader } from "cosmjs-types/tendermint/types/types";
 
-import { BlockSearchResponse, CometCommitResponse, CometHeader, CreateClientArgs } from "../../types";
-import { parseRevisionNumber, timestampFromDateNanos } from "../../utils/utils";
+import { Ack, BlockSearchResponse, ChannelHandshake, ChannelInfo, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientArgs, CreateClientResult, CreateConnectionResult, MsgResult, ProvenQuery } from "../../types";
+import { buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, mapRpcPubKeyToProto, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight } from "../../utils/utils";
 import { BaseIbcClient, BaseIbcClientOptions } from "../BaseIbcClient";
+import { ValidatorSet } from "cosmjs-types/tendermint/types/validator";
+import {
+  ClientState as TendermintClientState,
+  ConsensusState as TendermintConsensusState,
+  Header as TendermintHeader,
+} from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
+import { toAscii, toHex } from "@cosmjs/encoding";
+import { Any } from "cosmjs-types/google/protobuf/any";
+import { Uint64 } from "@cosmjs/math";
 
 function ibcRegistry(): Registry {
   return new Registry([
@@ -75,16 +83,27 @@ function ibcRegistry(): Registry {
     ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout],
     ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket],
     ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2],
-    ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgementV2],
-    ["/ibc.core.channel.v1.MsgTimeout", MsgTimeoutV2],
+    ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2],
+    ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2],
     ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer],
   ]);
 }
-export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {  
+export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice;
 };
-export class TendermintIbcClient extends BaseIbcClient{
-  
+
+
+const defaultMerklePrefix = {
+  keyPrefix: toAscii("ibc"),
+};
+const defaultConnectionVersion: Version = {
+  identifier: "1",
+  features: ["ORDER_ORDERED", "ORDER_UNORDERED"],
+};
+// this is a sane default, but we can revisit it
+const defaultDelayPeriod = 0n;
+export class TendermintIbcClient extends BaseIbcClient {
+
   public readonly gasPrice: GasPrice;
   public readonly sign: SigningStargateClient;
   public readonly tm: CometClient;
@@ -130,6 +149,13 @@ export class TendermintIbcClient extends BaseIbcClient{
     this.sign = signingClient;
     this.tm = tmClient;
     this.gasPrice = options.gasPrice;
+    this.query = QueryClient.withExtensions(
+      tmClient,
+      setupAuthExtension,
+      setupBankExtension,
+      setupIbcExtension,
+      setupStakingExtension,
+    );
   }
 
   public revisionHeight(height: number): Height {
@@ -210,7 +236,7 @@ export class TendermintIbcClient extends BaseIbcClient{
     await sleep(this.estimatedIndexerTime);
   }
 
-  public getCommit(height?: number): Promise<CometCommitResponse> {
+  public getTendermintCommit(height?: number): Promise<CometCommitResponse> {
     this.logger.verbose(
       height === undefined
         ? "Get latest commit"
@@ -232,7 +258,7 @@ export class TendermintIbcClient extends BaseIbcClient{
 
   public async getSignedHeader(height?: number): Promise<SignedHeader> {
     const { header: rpcHeader, commit: rpcCommit } =
-      await this.getCommit(height);
+      await this.getTendermintCommit(height);
     const header = Header.fromPartial({
       ...rpcHeader,
       version: {
@@ -308,7 +334,7 @@ export class TendermintIbcClient extends BaseIbcClient{
   //
   // For the vote sign bytes, it checks (from the commit):
   //   Height, Round, BlockId, TimeStamp, ChainID
-  public async buildHeader(lastHeight: number): Promise<TendermintHeader> {
+  public async buildTendermintHeader(lastHeight: number): Promise<TendermintHeader> {
     const signedHeader = await this.getSignedHeader();
     // "assert that trustedVals is NextValidators of last trusted header"
     // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
@@ -323,6 +349,44 @@ export class TendermintIbcClient extends BaseIbcClient{
     });
   }
 
+  public async getClientStateProof(clientId: string, proofHeight: Height): Promise<QueryClientStateResponse> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const key = `clients/${clientId}/clientState`;
+    const proven = await this.queryRawProof(
+      "ibc",
+      toAscii(key),
+      Number(proofHeight.revisionHeight),
+    );
+    const clientState = Any.decode(proven.value);
+    const proof = convertProofsToIcs23(proven.proof);
+
+    const state = {
+      clientState,
+      proof,
+      proofHeight,
+    };
+    return state;
+  }
+  public async getConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight: Height): Promise<QueryConsensusStateResponse> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const height = heightQueryString(consensusHeight);
+    const key = `clients/${clientId}/consensusStates/${height}`;
+    const proven = await this.queryRawProof(
+      "ibc",
+      toAscii(key),
+      Number(proofHeight.revisionHeight),
+    );
+    const consensusState = Any.decode(proven.value);
+    const proof = convertProofsToIcs23(proven.proof);
+    const state = {
+      consensusState,
+      proof,
+      proofHeight,
+    };
+    return state;
+  }
   // trustedHeight must be proven by the client on the destination chain
   // and include a proof for the connOpenInit (eg. must be 1 or more blocks after the
   // block connOpenInit Tx was in).
@@ -341,7 +405,7 @@ export class TendermintIbcClient extends BaseIbcClient{
       clientState,
       proof: proofClient,
       // proofHeight,
-    } = await this.query.ibc.proof.client.state(clientId, queryHeight);
+    } = await this.getClientStateProof(clientId, queryHeight);
 
     // This is the most recent state we have on this chain of the other
     const { latestHeight: consensusHeight } =
@@ -349,15 +413,15 @@ export class TendermintIbcClient extends BaseIbcClient{
     assert(consensusHeight);
 
     // get the init proof
-    const { proof: proofConnection } =
-      await this.query.ibc.proof.connection.connection(
+    const proofConnection =
+      await this.getRawConnectionProof(
         connectionId,
         queryHeight,
       );
 
     // get the consensus proof
     const { proof: proofConsensus } =
-      await this.query.ibc.proof.client.consensusState(
+      await this.getConsensusStateProof(
         clientId,
         consensusHeight,
         queryHeight,
@@ -382,20 +446,24 @@ export class TendermintIbcClient extends BaseIbcClient{
   // pass a header height that was previously updated to on the remote chain using updateClient.
   // note: the queries will be for the block before this header, so the proofs match up (appHash is on H+1)
   public async getChannelProof(
-    id: ChannelInfo,
+    portId: string,
+    channelId: string,
     headerHeight: Height | number,
   ): Promise<ChannelHandshake> {
     const proofHeight = this.ensureRevisionHeight(headerHeight);
     const queryHeight = subtractBlock(proofHeight, 1n);
 
-    const { proof } = await this.query.ibc.proof.channel.channel(
-      id.portId,
-      id.channelId,
+    const proof = await this.getRawChannelProof(
+      portId,
+      channelId,
       queryHeight,
     );
 
     return {
-      id,
+      id: {
+        portId,
+        channelId,
+      },
       proofHeight,
       proof,
     };
@@ -408,7 +476,7 @@ export class TendermintIbcClient extends BaseIbcClient{
     const proofHeight = this.ensureRevisionHeight(headerHeight);
     const queryHeight = subtractBlock(proofHeight, 1n);
 
-    const { proof } = await this.query.ibc.proof.channel.packetCommitment(
+    const proof = await this.getPacketCommitmentProof(
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
@@ -425,14 +493,12 @@ export class TendermintIbcClient extends BaseIbcClient{
     const proofHeight = this.ensureRevisionHeight(headerHeight);
     const queryHeight = subtractBlock(proofHeight, 1n);
 
-    const res = await this.query.ibc.proof.channel.packetAcknowledgement(
+    return await this.getPacketAcknowledgementProof(
       originalPacket.destinationPort,
       originalPacket.destinationChannel,
-      Number(originalPacket.sequence),
+      originalPacket.sequence,
       queryHeight,
     );
-    const { proof } = res;
-    return proof;
   }
 
   public async getTimeoutProof(
@@ -442,10 +508,10 @@ export class TendermintIbcClient extends BaseIbcClient{
     const proofHeight = this.ensureRevisionHeight(headerHeight);
     const queryHeight = subtractBlock(proofHeight, 1n);
 
-    const proof = await this.query.ibc.proof.channel.receiptProof(
+    const proof = await this.getReceiptProof(
       originalPacket.destinationPort,
       originalPacket.destinationChannel,
-      Number(originalPacket.sequence),
+      originalPacket.sequence,
       queryHeight,
     );
     return proof;
@@ -458,68 +524,15 @@ export class TendermintIbcClient extends BaseIbcClient{
 
   // Updates existing client on this chain with data from src chain.
   // Returns the height that was updated to.
-  public async doUpdateClient(
+  public async updateClient(
     clientId: string,
-    src: IbcClient,
+    src: BaseIbcClient,
   ): Promise<Height> {
     const { latestHeight } = await this.query.ibc.client.stateTm(clientId);
-    const header = await src.buildHeader(toIntHeight(latestHeight));
+    const header = await src.buildTendermintHeader(toIntHeight(latestHeight));
     await this.updateTendermintClient(clientId, header);
     const height = Number(header.signedHeader?.header?.height ?? 0);
     return src.revisionHeight(height);
-  }
-
-  /***** These are all direct wrappers around message constructors ********/
-
-  public async sendTokens(
-    recipientAddress: string,
-    transferAmount: readonly Coin[],
-    memo?: string,
-  ): Promise<MsgResult> {
-    this.logger.verbose(`Send tokens to ${recipientAddress}`);
-    this.logger.debug("Send tokens:", {
-      senderAddress: this.senderAddress,
-      recipientAddress,
-      transferAmount,
-      memo,
-    });
-    const result = await this.sign.sendTokens(
-      this.senderAddress,
-      recipientAddress,
-      transferAmount,
-      "auto",
-      memo,
-    );
-    if (isDeliverTxFailure(result)) {
-      throw new Error(createDeliverTxFailureMessage(result));
-    }
-    return {
-      events: result.events,
-      transactionHash: result.transactionHash,
-      height: result.height,
-    };
-  }
-
-  /* Send any number of messages, you are responsible for encoding them */
-  public async sendMultiMsg(msgs: EncodeObject[]): Promise<MsgResult> {
-    this.logger.verbose(`Broadcast multiple msgs`);
-    this.logger.debug(`Multiple msgs:`, {
-      msgs,
-    });
-    const senderAddress = this.senderAddress;
-    const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      msgs,
-      "auto",
-    );
-    if (isDeliverTxFailure(result)) {
-      throw new Error(createDeliverTxFailureMessage(result));
-    }
-    return {
-      events: result.events,
-      transactionHash: result.transactionHash,
-      height: result.height,
-    };
   }
 
   public async createTendermintClient(
@@ -1271,86 +1284,222 @@ export class TendermintIbcClient extends BaseIbcClient{
       height: result.height,
     };
   }
+  public async queryRawProof(store: string, queryKey: Uint8Array, proofHeight: number): Promise<ProvenQuery> {
 
-  public async transferTokens(
-    sourcePort: string,
-    sourceChannel: string,
-    token: Coin,
-    receiver: string,
-    timeoutHeight?: Height,
-    /** timeout in seconds (SigningStargateClient converts to nanoseconds) */
-    timeoutTime?: number,
-  ): Promise<MsgResult> {
-    this.logger.verbose(`Transfer tokens to ${receiver}`);
-    const result = await this.sign.sendIbcTokens(
-      this.senderAddress,
-      receiver,
-      token,
-      sourcePort,
-      sourceChannel,
-      timeoutHeight,
-      timeoutTime,
+    const { key, value, height, proof, code, log } = await this.tm.abciQuery({
+      path: `/store/${store}/key`,
+      data: queryKey,
+      height: proofHeight,
+      prove: true
+    });
+
+    if (code) {
+      throw new Error(`Query failed with (${code}): ${log}`);
+    }
+
+    if (!arrayContentEquals(queryKey, key)) {
+      throw new Error(`Response key ${toHex(key)} doesn't match query key ${toHex(queryKey)}`);
+    }
+
+    if (!height) {
+      throw new Error("No query height returned");
+    }
+    if (!proof || proof.ops.length !== 2) {
+      throw new Error(`Expected 2 proof ops, got ${proof?.ops.length ?? 0}. Are you using stargate?`);
+    }
+
+    // we don't need the results, but we can ensure the data is the proper format
+    checkAndParseOp(proof.ops[0], "ics23:iavl", key);
+    checkAndParseOp(proof.ops[1], "ics23:simple", toAscii(store));
+
+    return {
+      key: key,
+      value: value,
+      height: height,
+      // need to clone this: readonly input / writeable output
+      proof: {
+        ops: [...proof.ops],
+      },
+    };
+  }
+  public async registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<MsgResult> {
+    this.logger.verbose(
+      `Register Counterparty : ${counterpartyClientId} => ${clientId}`,
+    );
+    const senderAddress = this.senderAddress;
+    const msg = {
+      typeUrl: "/ibc.core.client.v2.MsgRegisterCounterparty",
+      value: MsgRegisterCounterparty.fromPartial({
+        clientId,
+        counterpartyClientId,
+        counterpartyMerklePrefix: [merklePrefix, new Uint8Array()],
+        signer: senderAddress,
+      }),
+    };
+    this.logger.debug("MsgRegisterCounterparty", msg);
+
+    const result = await this.sign.signAndBroadcast(
+      senderAddress,
+      [msg],
       "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
-    return {
-      events: result.events,
-      transactionHash: result.transactionHash,
-      height: result.height,
-    };
+
+    return result;
+  }
+  public async getTendermintConsensusState(clientId: string, consensusHeight: Height, proofHeight: Height): Promise<{ consensusState: ConsensusState, proof: Uint8Array }> {
+
+    const state = await this.getConsensusStateProof(clientId, consensusHeight, proofHeight);
+    if (!state.consensusState) {
+      throw new Error(`No consensus state found for client ${clientId} at height ${consensusHeight}`);
+    }
+    return { consensusState: ConsensusState.decode(state.consensusState.value), proof: state.proof };
+
+  }
+  public async getTendermintClientState(clientId: string, proofHeight: Height): Promise<{ clientState: ClientState, proof: Uint8Array }> {
+
+    const state = await this.getClientStateProof(clientId, proofHeight);
+    if (!state.clientState) {
+      throw new Error(`No proven client state found for client ${clientId} at height ${proofHeight}`);
+    }
+    return { clientState: ClientState.decode(state.clientState.value), proof: state.proof };
   }
 
-  registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<void> {
-    throw new Error("Method not implemented.");
+  public async getRawConnectionProof(connectionId: string, proofHeight: Height): Promise<Uint8Array> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const key = `connections/${connectionId}`;
+    const proven = await this.queryRawProof(
+      "ibc",
+      toAscii(key),
+      Number(proofHeight.revisionHeight),
+    );
+    const proof = convertProofsToIcs23(proven.proof);
+
+    return proof;
   }
-  getTendermintConsensusState(clientId: string, height?: number): Promise<ConsensusState> {
-    throw new Error("Method not implemented.");
+  public async getRawChannelProof(portId: string, channelId: string, proofHeight: Height): Promise<Uint8Array> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const key = toAscii(
+      `channelEnds/ports/${portId}/channels/${channelId}`,
+    );
+    const proven = await this.queryRawProof(
+      "ibc",
+      key,
+      Number(proofHeight.revisionHeight),
+    );
+    const proof = convertProofsToIcs23(proven.proof);
+    return proof;
   }
-  getTendermintClientState(clientId: string, height?: number): Promise<ClientState> {
-    throw new Error("Method not implemented.");
+  public async getReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const key = toAscii(
+      `receipts/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
+    );
+    const proven = await this.queryRawProof(
+      "ibc",
+      key,
+      Number(proofHeight.revisionHeight),
+    );
+    const proof = convertProofsToIcs23(proven.proof);
+    return proof;
   }
-  getReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
-    throw new Error("Method not implemented.");
+  public async getPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const key = toAscii(
+      `commitments/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
+    );
+    const proven = await this.queryRawProof(
+      "ibc",
+      key,
+      Number(proofHeight.revisionHeight),
+    );
+    const proof = convertProofsToIcs23(proven.proof);
+
+    return proof;
   }
-  getPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
-    throw new Error("Method not implemented.");
+  public async getPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const key = toAscii(
+      `acks/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
+    );
+    const proven = await this.queryRawProof(
+      "ibc",
+      key,
+      Number(proofHeight.revisionHeight),
+    );
+    const proof = convertProofsToIcs23(proven.proof);
+
+    return proof;
   }
-  getPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
-    throw new Error("Method not implemented.");
+  public async getNextSequenceRecvProof(portId: string, channelId: string, proofHeight: Height): Promise<QueryNextSequenceReceiveResponse> {
+
+    /* This replaces the QueryClient method which no longer supports QueryRawProof */
+    const key = toAscii(
+      `nextSequenceRecv/ports/${portId}/channels/${channelId}`,
+    );
+    const proven = await this.queryRawProof(
+      "ibc",
+      key,
+      Number(proofHeight.revisionHeight),
+    );
+    const nextSequenceReceive = Uint64.fromBytes(
+      [...proven.value],
+      "be",
+    ).toBigInt();
+    const proof = convertProofsToIcs23(proven.proof);
+    return {
+      nextSequenceReceive,
+      proof,
+      proofHeight,
+    };
   }
-  getNextSequenceRecvProof(portId: string, channelId: string, proofHeight: Height): Promise<QueryNextSequenceReceiveResponse> {
-    throw new Error("Method not implemented.");
+  public async getConnection(connectionId: string): Promise<QueryConnectionResponse> {
+
+    const connection = await this.query.ibc.connection.connection(connectionId)
+    if (!connection.connection) {
+      throw new Error(`No connection ${connectionId} found`);
+    }
+    return connection;
   }
-  getClientStateProof(clientId: string, proofHeight?: Height): Promise<QueryClientStateResponse & { proofHeight: Height; }> {
-    throw new Error("Method not implemented.");
+  public async searchTendermintBlocks(query: string): Promise<BlockSearchResponse> {
+
+    const search = await this.tm.blockSearchAll({ query });
+    return search;
+
   }
-  getConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<QueryConsensusStateResponse> {
-    throw new Error("Method not implemented.");
+  public async getTendermintBlockResults(height: number): Promise<BlockResultsResponse> {
+
+    const result = await this.tm.blockResults(height);
+    return result;
+
   }
-  updateClient(clientId: string, src: BaseIbcClient): Promise<Height> {
-    throw new Error("Method not implemented.");
+  public async searchTendermintTxs(query: string): Promise<TxSearchResponse> {
+
+    const search = await this.tm.txSearchAll({ query });
+    return search;
+
   }
-  getConnection(connectionId: string): Promise<QueryConnectionResponse> {
-    throw new Error("Method not implemented.");
-  }
-  getTendermintCommit(height?: number): Promise<CometCommitResponse> {
-    throw new Error("Method not implemented.");
-  }
-  searchTendermintBlocks(query: string): Promise<BlockSearchResponse> {
-    throw new Error("Method not implemented.");
-  }
-  getTendermintBlockResults(height: number): Promise<BlockResultsResponse> {
-    throw new Error("Method not implemented.");
-  }
-  searchTendermintTxs(query: string): Promise<TxSearchResponse> {
-    throw new Error("Method not implemented.");
-  }
-  buildTendermintHeader(lastHeight: number): Promise<Header> {
-    throw new Error("Method not implemented.");
-  }
-  buildCreateTendermintClientArgs(src: BaseIbcClient, trustPeriodSec?: number | null): Promise<CreateClientArgs> {
-    throw new Error("Method not implemented.");
+  public async buildCreateTendermintClientArgs(trustPeriodSec?: number | null): Promise<CreateClientArgs> {
+
+    const header = await this.latestHeader();
+    const consensusState = buildTendermintConsensusState(header);
+    const unbondingPeriodSec = await this.getUnbondingPeriod();
+    if (trustPeriodSec === undefined || trustPeriodSec === null) {
+      trustPeriodSec = Math.floor((unbondingPeriodSec * 2) / 3);
+    }
+    const clientState = buildTendermintClientState(
+      this.chainId,
+      unbondingPeriodSec,
+      trustPeriodSec,
+      this.revisionHeight(header.height),
+    );
+    return { consensusState, clientState };
   }
 }

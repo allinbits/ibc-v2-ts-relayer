@@ -4,6 +4,7 @@ import { Any } from "cosmjs-types/google/protobuf/any";
 import { Packet } from "cosmjs-types/ibc/core/channel/v1/channel";
 import { Height } from "cosmjs-types/ibc/core/client/v1/client";
 import { ClientState as TendermintClientState, ConsensusState as TendermintConsensusState } from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
+import { ProofOps } from "cosmjs-types/tendermint/crypto/proof";
 
 export enum ChainType {
     Cosmos = "cosmos",
@@ -89,6 +90,14 @@ export type BlockSearchResponse =
   | tendermint34.BlockSearchResponse
   | tendermint37.BlockSearchResponse
   | comet38.BlockSearchResponse;
+export type TxSearchResponse = 
+  | tendermint34.TxSearchResponse
+  | tendermint37.TxSearchResponse
+  | comet38.TxSearchResponse;
+export type BlockResultsResponse = 
+  | tendermint34.BlockResultsResponse
+  | tendermint37.BlockResultsResponse
+  | comet38.BlockResultsResponse;
 export interface CreateClientArgs {
   clientState: TendermintClientState;
   consensusState: TendermintConsensusState;
@@ -114,3 +123,9 @@ export type AckWithMetadata = Ack & {
    */
   txEvents: readonly Event[];
 };
+export interface ProvenQuery {
+  readonly key: Uint8Array;
+  readonly value: Uint8Array;
+  readonly proof: ProofOps;
+  readonly height: number;
+}
