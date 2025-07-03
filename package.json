@@ -27,6 +27,7 @@
   "devDependencies": {
     "@clockworkgr/ibc-v2-client-ts": "^0.0.1",
     "@cosmjs/encoding": "^0.33.1",
+    "@cosmjs/math": "^0.33.1",
     "@cosmjs/proto-signing": "^0.33.1",
     "@cosmjs/stargate": "^0.33.1",
     "@cosmjs/tendermint-rpc": "^0.33.1",

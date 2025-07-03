@@ -27,6 +27,9 @@ importers:
       '@cosmjs/encoding':
         specifier: ^0.33.1
         version: 0.33.1
+      '@cosmjs/math':
+        specifier: ^0.33.1
+        version: 0.33.1
       '@cosmjs/proto-signing':
         specifier: ^0.33.1
         version: 0.33.1

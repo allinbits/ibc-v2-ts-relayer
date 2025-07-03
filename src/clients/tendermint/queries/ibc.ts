@@ -1,19 +1,17 @@
-import { toAscii } from "@cosmjs/encoding";
-import { Uint64 } from "@cosmjs/math";
-import {
-  createPagination,
-  createProtobufRpcClient,
-  QueryClient,
-} from "@cosmjs/stargate";
-import { CommitmentProof } from "cosmjs-types/cosmos/ics23/v1/proofs";
+/* eslint-disable @typescript-eslint/naming-convention */
 import { Any } from "cosmjs-types/google/protobuf/any";
-import { Channel } from "cosmjs-types/ibc/core/channel/v1/channel";
 import {
-  QueryClientImpl as ChannelQuery,
+  QueryClientImpl as TransferQuery,
+  QueryDenomTraceResponse,
+  QueryDenomTracesResponse,
+  QueryParamsResponse as QueryTransferParamsResponse,
+} from "cosmjs-types/ibc/applications/transfer/v1/query";
+import {
   QueryChannelClientStateResponse,
   QueryChannelConsensusStateResponse,
   QueryChannelResponse,
   QueryChannelsResponse,
+  QueryClientImpl as ChannelQuery,
   QueryConnectionChannelsResponse,
   QueryNextSequenceReceiveResponse,
   QueryPacketAcknowledgementResponse,
@@ -35,11 +33,9 @@ import {
   QueryConsensusStateResponse,
   QueryConsensusStatesResponse,
 } from "cosmjs-types/ibc/core/client/v1/query";
-import { MerkleProof } from "cosmjs-types/ibc/core/commitment/v1/commitment";
-import { ConnectionEnd } from "cosmjs-types/ibc/core/connection/v1/connection";
 import {
-  QueryClientImpl as ConnectionQuery,
   QueryClientConnectionsResponse,
+  QueryClientImpl as ConnectionQuery,
   QueryConnectionClientStateResponse,
   QueryConnectionConsensusStateRequest,
   QueryConnectionConsensusStateResponse,
@@ -50,54 +46,35 @@ import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
 } from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
-import { ProofOps } from "cosmjs-types/tendermint/crypto/proof";
 
-function decodeTendermintClientStateAny(
-  clientState: Any | undefined,
-): TendermintClientState {
+import { createPagination, createProtobufRpcClient, longify, QueryClient } from "../../queryclient";
+
+function decodeTendermintClientStateAny(clientState: Any | undefined): TendermintClientState {
   if (clientState?.typeUrl !== "/ibc.lightclients.tendermint.v1.ClientState") {
     throw new Error(`Unexpected client state type: ${clientState?.typeUrl}`);
   }
   return TendermintClientState.decode(clientState.value);
 }
 
-function decodeTendermintConsensusStateAny(
-  clientState: Any | undefined,
-): TendermintConsensusState {
-  if (
-    clientState?.typeUrl !== "/ibc.lightclients.tendermint.v1.ConsensusState"
-  ) {
+function decodeTendermintConsensusStateAny(clientState: Any | undefined): TendermintConsensusState {
+  if (clientState?.typeUrl !== "/ibc.lightclients.tendermint.v1.ConsensusState") {
     throw new Error(`Unexpected client state type: ${clientState?.typeUrl}`);
   }
   return TendermintConsensusState.decode(clientState.value);
 }
 
-export function heightQueryString(height: Height): string {
-  return `${height.revisionNumber}-${height.revisionHeight}`;
-}
-
 export interface IbcExtension {
   readonly ibc: {
     readonly channel: {
-      readonly channel: (
-        portId: string,
-        channelId: string,
-      ) => Promise<QueryChannelResponse>;
-      readonly channels: (
-        paginationKey?: Uint8Array,
-      ) => Promise<QueryChannelsResponse>;
+      readonly channel: (portId: string, channelId: string) => Promise<QueryChannelResponse>;
+      readonly channels: (paginationKey?: Uint8Array) => Promise<QueryChannelsResponse>;
       readonly allChannels: () => Promise<QueryChannelsResponse>;
       readonly connectionChannels: (
         connection: string,
         paginationKey?: Uint8Array,
       ) => Promise<QueryConnectionChannelsResponse>;
-      readonly allConnectionChannels: (
-        connection: string,
-      ) => Promise<QueryConnectionChannelsResponse>;
-      readonly clientState: (
-        portId: string,
-        channelId: string,
-      ) => Promise<QueryChannelClientStateResponse>;
+      readonly allConnectionChannels: (connection: string) => Promise<QueryConnectionChannelsResponse>;
+      readonly clientState: (portId: string, channelId: string) => Promise<QueryChannelClientStateResponse>;
       readonly consensusState: (
         portId: string,
         channelId: string,
@@ -107,7 +84,7 @@ export interface IbcExtension {
       readonly packetCommitment: (
         portId: string,
         channelId: string,
-        sequence: bigint,
+        sequence: number,
       ) => Promise<QueryPacketCommitmentResponse>;
       readonly packetCommitments: (
         portId: string,
@@ -154,100 +131,37 @@ export interface IbcExtension {
     };
     readonly client: {
       readonly state: (clientId: string) => Promise<QueryClientStateResponse>;
-      readonly states: (
-        paginationKey?: Uint8Array,
-      ) => Promise<QueryClientStatesResponse>;
+      readonly states: (paginationKey?: Uint8Array) => Promise<QueryClientStatesResponse>;
       readonly allStates: () => Promise<QueryClientStatesResponse>;
-      readonly consensusState: (
-        clientId: string,
-        height?: number,
-      ) => Promise<QueryConsensusStateResponse>;
+      readonly consensusState: (clientId: string, height?: number) => Promise<QueryConsensusStateResponse>;
       readonly consensusStates: (
         clientId: string,
         paginationKey?: Uint8Array,
       ) => Promise<QueryConsensusStatesResponse>;
-      readonly allConsensusStates: (
-        clientId: string,
-      ) => Promise<QueryConsensusStatesResponse>;
+      readonly allConsensusStates: (clientId: string) => Promise<QueryConsensusStatesResponse>;
       readonly params: () => Promise<QueryClientParamsResponse>;
       readonly stateTm: (clientId: string) => Promise<TendermintClientState>;
-      readonly statesTm: (
-        paginationKey?: Uint8Array,
-      ) => Promise<TendermintClientState[]>;
+      readonly statesTm: (paginationKey?: Uint8Array) => Promise<TendermintClientState[]>;
       readonly allStatesTm: () => Promise<TendermintClientState[]>;
-      readonly consensusStateTm: (
-        clientId: string,
-        height?: Height,
-      ) => Promise<TendermintConsensusState>;
+      readonly consensusStateTm: (clientId: string, height?: Height) => Promise<TendermintConsensusState>;
     };
     readonly connection: {
-      readonly connection: (
-        connectionId: string,
-      ) => Promise<QueryConnectionResponse>;
-      readonly connections: (
-        paginationKey?: Uint8Array,
-      ) => Promise<QueryConnectionsResponse>;
+      readonly connection: (connectionId: string) => Promise<QueryConnectionResponse>;
+      readonly connections: (paginationKey?: Uint8Array) => Promise<QueryConnectionsResponse>;
       readonly allConnections: () => Promise<QueryConnectionsResponse>;
-      readonly clientConnections: (
-        clientId: string,
-      ) => Promise<QueryClientConnectionsResponse>;
-      readonly clientState: (
-        connectionId: string,
-      ) => Promise<QueryConnectionClientStateResponse>;
+      readonly clientConnections: (clientId: string) => Promise<QueryClientConnectionsResponse>;
+      readonly clientState: (connectionId: string) => Promise<QueryConnectionClientStateResponse>;
       readonly consensusState: (
         connectionId: string,
         revisionNumber: number,
         revisionHeight: number,
       ) => Promise<QueryConnectionConsensusStateResponse>;
     };
-    readonly proof: {
-      readonly channel: {
-        readonly channel: (
-          portId: string,
-          channelId: string,
-          proofHeight: Height,
-        ) => Promise<QueryChannelResponse>;
-        readonly receiptProof: (
-          portId: string,
-          channelId: string,
-          sequence: number,
-          proofHeight: Height,
-        ) => Promise<Uint8Array>;
-        readonly packetCommitment: (
-          portId: string,
-          channelId: string,
-          sequence: bigint,
-          proofHeight: Height,
-        ) => Promise<QueryPacketCommitmentResponse>;
-        readonly packetAcknowledgement: (
-          portId: string,
-          channelId: string,
-          sequence: number,
-          proofHeight: Height,
-        ) => Promise<QueryPacketAcknowledgementResponse>;
-        readonly nextSequenceReceive: (
-          portId: string,
-          channelId: string,
-          proofHeight: Height,
-        ) => Promise<QueryNextSequenceReceiveResponse>;
-      };
-      readonly client: {
-        readonly state: (
-          clientId: string,
-          proofHeight: Height,
-        ) => Promise<QueryClientStateResponse & { proofHeight: Height }>;
-        readonly consensusState: (
-          clientId: string,
-          consensusHeight: Height,
-          proofHeight: Height,
-        ) => Promise<QueryConsensusStateResponse>;
-      };
-      readonly connection: {
-        readonly connection: (
-          connectionId: string,
-          proofHeight: Height,
-        ) => Promise<QueryConnectionResponse>;
-      };
+    readonly transfer: {
+      readonly denomTrace: (hash: string) => Promise<QueryDenomTraceResponse>;
+      readonly denomTraces: (paginationKey?: Uint8Array) => Promise<QueryDenomTracesResponse>;
+      readonly allDenomTraces: () => Promise<QueryDenomTracesResponse>;
+      readonly params: () => Promise<QueryTransferParamsResponse>;
     };
   };
 }
@@ -259,14 +173,15 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
   const channelQueryService = new ChannelQuery(rpc);
   const clientQueryService = new ClientQuery(rpc);
   const connectionQueryService = new ConnectionQuery(rpc);
+  const transferQueryService = new TransferQuery(rpc);
 
   return {
     ibc: {
       channel: {
         channel: async (portId: string, channelId: string) =>
           channelQueryService.Channel({
-            portId,
-            channelId,
+            portId: portId,
+            channelId: channelId,
           }),
         channels: async (paginationKey?: Uint8Array) =>
           channelQueryService.Channels({
@@ -283,17 +198,14 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
             channels.push(...response.channels);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return {
-            channels,
+          return QueryChannelsResponse.fromPartial({
+            channels: channels,
             height: response.height,
-          };
+          });
         },
-        connectionChannels: async (
-          connection: string,
-          paginationKey?: Uint8Array,
-        ) =>
+        connectionChannels: async (connection: string, paginationKey?: Uint8Array) =>
           channelQueryService.ConnectionChannels({
-            connection,
+            connection: connection,
             pagination: createPagination(paginationKey),
           }),
         allConnectionChannels: async (connection: string) => {
@@ -302,21 +214,21 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           let key: Uint8Array | undefined;
           do {
             response = await channelQueryService.ConnectionChannels({
-              connection,
+              connection: connection,
               pagination: createPagination(key),
             });
             channels.push(...response.channels);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return {
-            channels,
+          return QueryConnectionChannelsResponse.fromPartial({
+            channels: channels,
             height: response.height,
-          };
+          });
         },
         clientState: async (portId: string, channelId: string) =>
           channelQueryService.ChannelClientState({
-            portId,
-            channelId,
+            portId: portId,
+            channelId: channelId,
           }),
         consensusState: async (
           portId: string,
@@ -325,29 +237,21 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           revisionHeight: number,
         ) =>
           channelQueryService.ChannelConsensusState({
-            portId,
-            channelId,
+            portId: portId,
+            channelId: channelId,
             revisionNumber: BigInt(revisionNumber),
             revisionHeight: BigInt(revisionHeight),
           }),
-        packetCommitment: async (
-          portId: string,
-          channelId: string,
-          sequence: bigint,
-        ) =>
+        packetCommitment: async (portId: string, channelId: string, sequence: number) =>
           channelQueryService.PacketCommitment({
-            portId,
-            channelId,
-            sequence,
+            portId: portId,
+            channelId: channelId,
+            sequence: longify(sequence),
           }),
-        packetCommitments: async (
-          portId: string,
-          channelId: string,
-          paginationKey?: Uint8Array,
-        ) =>
+        packetCommitments: async (portId: string, channelId: string, paginationKey?: Uint8Array) =>
           channelQueryService.PacketCommitments({
-            channelId,
-            portId,
+            channelId: channelId,
+            portId: portId,
             pagination: createPagination(paginationKey),
           }),
         allPacketCommitments: async (portId: string, channelId: string) => {
@@ -356,72 +260,56 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           let key: Uint8Array | undefined;
           do {
             response = await channelQueryService.PacketCommitments({
-              channelId,
-              portId,
+              channelId: channelId,
+              portId: portId,
               pagination: createPagination(key),
             });
             commitments.push(...response.commitments);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return {
-            commitments,
+          return QueryPacketCommitmentsResponse.fromPartial({
+            commitments: commitments,
             height: response.height,
-          };
+          });
         },
-        packetReceipt: async (
-          portId: string,
-          channelId: string,
-          sequence: number,
-        ) =>
+        packetReceipt: async (portId: string, channelId: string, sequence: number) =>
           channelQueryService.PacketReceipt({
-            portId,
-            channelId,
-            sequence: BigInt(sequence),
+            portId: portId,
+            channelId: channelId,
+            sequence: longify(sequence),
           }),
-        packetAcknowledgement: async (
-          portId: string,
-          channelId: string,
-          sequence: number,
-        ) =>
+        packetAcknowledgement: async (portId: string, channelId: string, sequence: number) =>
           channelQueryService.PacketAcknowledgement({
-            portId,
-            channelId,
-            sequence: BigInt(sequence),
+            portId: portId,
+            channelId: channelId,
+            sequence: longify(sequence),
           }),
-        packetAcknowledgements: async (
-          portId: string,
-          channelId: string,
-          paginationKey?: Uint8Array,
-        ) => {
+        packetAcknowledgements: async (portId: string, channelId: string, paginationKey?: Uint8Array) => {
           const request = QueryPacketAcknowledgementsRequest.fromPartial({
-            portId,
-            channelId,
+            portId: portId,
+            channelId: channelId,
             pagination: createPagination(paginationKey),
           });
           return channelQueryService.PacketAcknowledgements(request);
         },
-        allPacketAcknowledgements: async (
-          portId: string,
-          channelId: string,
-        ) => {
+        allPacketAcknowledgements: async (portId: string, channelId: string) => {
           const acknowledgements = [];
           let response: QueryPacketAcknowledgementsResponse;
           let key: Uint8Array | undefined;
           do {
             const request = QueryPacketAcknowledgementsRequest.fromPartial({
-              channelId,
-              portId,
+              channelId: channelId,
+              portId: portId,
               pagination: createPagination(key),
             });
-            response =
-              await channelQueryService.PacketAcknowledgements(request);
+            response = await channelQueryService.PacketAcknowledgements(request);
             acknowledgements.push(...response.acknowledgements);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return {
-            acknowledgements,
+          return QueryPacketAcknowledgementsResponse.fromPartial({
+            acknowledgements: acknowledgements,
             height: response.height,
-          };
+          });
         },
         unreceivedPackets: async (
           portId: string,
@@ -429,32 +317,25 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           packetCommitmentSequences: readonly number[],
         ) =>
           channelQueryService.UnreceivedPackets({
-            portId,
-            channelId,
-            packetCommitmentSequences: packetCommitmentSequences.map((s) =>
-              BigInt(s),
-            ),
+            portId: portId,
+            channelId: channelId,
+            packetCommitmentSequences: packetCommitmentSequences.map((s) => BigInt(s)),
           }),
-        unreceivedAcks: async (
-          portId: string,
-          channelId: string,
-          packetAckSequences: readonly number[],
-        ) =>
+        unreceivedAcks: async (portId: string, channelId: string, packetAckSequences: readonly number[]) =>
           channelQueryService.UnreceivedAcks({
-            portId,
-            channelId,
+            portId: portId,
+            channelId: channelId,
             packetAckSequences: packetAckSequences.map((s) => BigInt(s)),
           }),
         nextSequenceReceive: async (portId: string, channelId: string) =>
           channelQueryService.NextSequenceReceive({
-            portId,
-            channelId,
+            portId: portId,
+            channelId: channelId,
           }),
       },
       client: {
-        state: (clientId: string) =>
-          clientQueryService.ClientState({ clientId }),
-        states: (paginationKey?: Uint8Array) =>
+        state: async (clientId: string) => clientQueryService.ClientState({ clientId }),
+        states: async (paginationKey?: Uint8Array) =>
           clientQueryService.ClientStates({
             pagination: createPagination(paginationKey),
           }),
@@ -469,24 +350,21 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
             clientStates.push(...response.clientStates);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return {
-            clientStates,
-          };
+          return QueryClientStatesResponse.fromPartial({
+            clientStates: clientStates,
+          });
         },
-        consensusState: (clientId: string, consensusHeight?: number) =>
+        consensusState: async (clientId: string, consensusHeight?: number) =>
           clientQueryService.ConsensusState(
             QueryConsensusStateRequest.fromPartial({
-              clientId,
-              revisionHeight:
-                consensusHeight !== undefined
-                  ? BigInt(consensusHeight)
-                  : undefined,
+              clientId: clientId,
+              revisionHeight: consensusHeight !== undefined ? BigInt(consensusHeight) : undefined,
               latestHeight: consensusHeight === undefined,
             }),
           ),
-        consensusStates: (clientId: string, paginationKey?: Uint8Array) =>
+        consensusStates: async (clientId: string, paginationKey?: Uint8Array) =>
           clientQueryService.ConsensusStates({
-            clientId,
+            clientId: clientId,
             pagination: createPagination(paginationKey),
           }),
         allConsensusStates: async (clientId: string) => {
@@ -495,17 +373,17 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           let key: Uint8Array | undefined;
           do {
             response = await clientQueryService.ConsensusStates({
-              clientId,
+              clientId: clientId,
               pagination: createPagination(key),
             });
             consensusStates.push(...response.consensusStates);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return {
-            consensusStates,
-          };
+          return QueryConsensusStatesResponse.fromPartial({
+            consensusStates: consensusStates,
+          });
         },
-        params: () => clientQueryService.ClientParams({}),
+        params: async () => clientQueryService.ClientParams({}),
         stateTm: async (clientId: string) => {
           const response = await clientQueryService.ClientState({ clientId });
           return decodeTendermintClientStateAny(response.clientState);
@@ -514,9 +392,7 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           const { clientStates } = await clientQueryService.ClientStates({
             pagination: createPagination(paginationKey),
           });
-          return clientStates.map(({ clientState }) =>
-            decodeTendermintClientStateAny(clientState),
-          );
+          return clientStates.map(({ clientState }) => decodeTendermintClientStateAny(clientState));
         },
         allStatesTm: async () => {
           const clientStates = [];
@@ -529,17 +405,12 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
             clientStates.push(...response.clientStates);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return clientStates.map(({ clientState }) =>
-            decodeTendermintClientStateAny(clientState),
-          );
+          return clientStates.map(({ clientState }) => decodeTendermintClientStateAny(clientState));
         },
-        consensusStateTm: async (
-          clientId: string,
-          consensusHeight?: Height,
-        ) => {
+        consensusStateTm: async (clientId: string, consensusHeight?: Height) => {
           const response = await clientQueryService.ConsensusState(
             QueryConsensusStateRequest.fromPartial({
-              clientId,
+              clientId: clientId,
               revisionHeight: consensusHeight?.revisionHeight,
               revisionNumber: consensusHeight?.revisionNumber,
               latestHeight: consensusHeight === undefined,
@@ -551,7 +422,7 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
       connection: {
         connection: async (connectionId: string) =>
           connectionQueryService.Connection({
-            connectionId,
+            connectionId: connectionId,
           }),
         connections: async (paginationKey?: Uint8Array) =>
           connectionQueryService.Connections({
@@ -568,204 +439,50 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
             connections.push(...response.connections);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return {
-            connections,
+          return QueryConnectionsResponse.fromPartial({
+            connections: connections,
             height: response.height,
-          };
+          });
         },
         clientConnections: async (clientId: string) =>
           connectionQueryService.ClientConnections({
-            clientId,
+            clientId: clientId,
           }),
         clientState: async (connectionId: string) =>
           connectionQueryService.ConnectionClientState({
-            connectionId,
+            connectionId: connectionId,
           }),
         consensusState: async (connectionId: string, revisionHeight: number) =>
           connectionQueryService.ConnectionConsensusState(
             QueryConnectionConsensusStateRequest.fromPartial({
-              connectionId,
+              connectionId: connectionId,
               revisionHeight: BigInt(revisionHeight),
             }),
           ),
       },
-      proof: {
-        // these keys can all be found here: https://github.com/cosmos/cosmos-sdk/blob/v0.41.1/x/ibc/core/24-host/keys.go
-        // note some have changed since the v0.40 pre-release this code was based on
-        channel: {
-          channel: async (
-            portId: string,
-            channelId: string,
-            proofHeight: Height,
-          ) => {
-            // key: https://github.com/cosmos/cosmos-sdk/blob/ef0a7344af345882729598bc2958a21143930a6b/x/ibc/24-host/keys.go#L117-L120
-            const key = toAscii(
-              `channelEnds/ports/${portId}/channels/${channelId}`,
-            );
-            const proven = await base.queryRawProof(
-              "ibc",
-              key,
-              Number(proofHeight.revisionHeight),
-            );
-            const channel = Channel.decode(proven.value);
-            const proof = convertProofsToIcs23(proven.proof);
-            return {
-              channel,
-              proof,
-              proofHeight,
-            };
-          },
-          // designed only for timeout, modify if we need actual value not just proof
-          // could not verify absence of key receipts/ports/transfer/channels/channel-5/sequences/2
-          receiptProof: async (
-            portId: string,
-            channelId: string,
-            sequence: number,
-            proofHeight: Height,
-          ) => {
-            const key = toAscii(
-              `receipts/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
-            );
-            const proven = await base.queryRawProof(
-              "ibc",
-              key,
-              Number(proofHeight.revisionHeight),
-            );
-            const proof = convertProofsToIcs23(proven.proof);
-            return proof;
-          },
-          packetCommitment: async (
-            portId: string,
-            channelId: string,
-            sequence: bigint,
-            proofHeight: Height,
-          ) => {
-            const key = toAscii(
-              `commitments/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
-            );
-            const proven = await base.queryRawProof(
-              "ibc",
-              key,
-              Number(proofHeight.revisionHeight),
-            );
-            const commitment = proven.value;
-            const proof = convertProofsToIcs23(proven.proof);
-            return {
-              commitment,
-              proof,
-              proofHeight,
-            };
-          },
-          packetAcknowledgement: async (
-            portId: string,
-            channelId: string,
-            sequence: number,
-            proofHeight: Height,
-          ) => {
-            const key = toAscii(
-              `acks/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
-            );
-            const proven = await base.queryRawProof(
-              "ibc",
-              key,
-              Number(proofHeight.revisionHeight),
-            );
-            const acknowledgement = proven.value;
-            const proof = convertProofsToIcs23(proven.proof);
-            return {
-              acknowledgement,
-              proof,
-              proofHeight,
-            };
-          },
-          nextSequenceReceive: async (
-            portId: string,
-            channelId: string,
-            proofHeight: Height,
-          ) => {
-            const key = toAscii(
-              `nextSequenceRecv/ports/${portId}/channels/${channelId}`,
-            );
-            const proven = await base.queryRawProof(
-              "ibc",
-              key,
-              Number(proofHeight.revisionHeight),
-            );
-            const nextSequenceReceive = Uint64.fromBytes(
-              [...proven.value],
-              "be",
-            ).toBigInt();
-            const proof = convertProofsToIcs23(proven.proof);
-            return {
-              nextSequenceReceive,
-              proof,
-              proofHeight,
-            };
-          },
+      transfer: {
+        denomTrace: async (hash: string) => transferQueryService.DenomTrace({ hash: hash }),
+        denomTraces: async (paginationKey?: Uint8Array) =>
+          transferQueryService.DenomTraces({
+            pagination: createPagination(paginationKey),
+          }),
+        allDenomTraces: async () => {
+          const denomTraces = [];
+          let response: QueryDenomTracesResponse;
+          let key: Uint8Array | undefined;
+          do {
+            response = await transferQueryService.DenomTraces({
+              pagination: createPagination(key),
+            });
+            denomTraces.push(...response.denomTraces);
+            key = response.pagination?.nextKey;
+          } while (key && key.length);
+          return QueryDenomTracesResponse.fromPartial({
+            denomTraces: denomTraces,
+          });
         },
-        client: {
-          state: async (clientId: string, proofHeight: Height) => {
-            const key = `clients/${clientId}/clientState`;
-            const proven = await base.queryRawProof(
-              "ibc",
-              toAscii(key),
-              Number(proofHeight.revisionHeight),
-            );
-            const clientState = Any.decode(proven.value);
-            const proof = convertProofsToIcs23(proven.proof);
-            return {
-              clientState,
-              proof,
-              proofHeight,
-            };
-          },
-          consensusState: async (
-            clientId: string,
-            consensusHeight: Height,
-            proofHeight: Height,
-          ) => {
-            const height = heightQueryString(consensusHeight);
-            const key = `clients/${clientId}/consensusStates/${height}`;
-            const proven = await base.queryRawProof(
-              "ibc",
-              toAscii(key),
-              Number(proofHeight.revisionHeight),
-            );
-            const consensusState = Any.decode(proven.value);
-            const proof = convertProofsToIcs23(proven.proof);
-            return {
-              consensusState,
-              proof,
-              proofHeight,
-            };
-          },
-        },
-        connection: {
-          connection: async (connectionId: string, proofHeight: Height) => {
-            const key = `connections/${connectionId}`;
-            const proven = await base.queryRawProof(
-              "ibc",
-              toAscii(key),
-              Number(proofHeight.revisionHeight),
-            );
-            const connection = ConnectionEnd.decode(proven.value);
-            const proof = convertProofsToIcs23(proven.proof);
-            return {
-              connection,
-              proof,
-              proofHeight,
-            };
-          },
-        },
+        params: async () => transferQueryService.Params({}),
       },
     },
   };
-}
-
-function convertProofsToIcs23(ops: ProofOps): Uint8Array {
-  const proofs = ops.ops.map((op) => CommitmentProof.decode(op.data));
-  const resp = MerkleProof.fromPartial({
-    proofs,
-  });
-  return MerkleProof.encode(resp).finish();
 }

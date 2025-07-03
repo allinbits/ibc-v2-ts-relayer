@@ -20,12 +20,10 @@ import {
 } from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
 import { PublicKey as ProtoPubKey } from "cosmjs-types/tendermint/crypto/keys";
 
+import { BaseIbcClient } from "../clients/BaseIbcClient";
 import { PacketWithMetadata } from "../endpoints/v1/endpoint";
+import { Ack, ChannelHandshake, ConnectionHandshakeProof } from "../types";
 
-export interface Ack {
-  readonly acknowledgement: Uint8Array;
-  readonly originalPacket: Packet;
-}
 
 export function createDeliverTxFailureMessage(
   result: DeliverTxResponse,
@@ -110,7 +108,7 @@ export function secondsFromDateNanos(
   return Math.floor(date.getTime() / 1000);
 }
 
-export function buildConsensusState(
+export function buildTendermintConsensusState(
   header: tendermint34.Header | tendermint37.Header,
 ): TendermintConsensusState {
   return TendermintConsensusState.fromPartial({
@@ -123,7 +121,7 @@ export function buildConsensusState(
 }
 
 // Note: we hardcode a number of assumptions, like trust level, clock drift, and assume revisionNumber is 1
-export function buildClientState(
+export function buildTendermintClientState(
   chainId: string,
   unbondingPeriodSec: number,
   trustPeriodSec: number,
@@ -377,4 +375,41 @@ export function presentPacketData(data: Uint8Array): Record<string, unknown> {
   } catch {
     return { hex: toHex(data) };
   }
+}
+
+export async function prepareConnectionHandshake(
+  src: BaseIbcClient,
+  dest: BaseIbcClient,
+  clientIdSrc: string,
+  clientIdDest: string,
+  connIdSrc: string,
+): Promise<ConnectionHandshakeProof> {
+  // ensure the last transaction was committed to the header (one block after it was included)
+  await src.waitOneBlock();
+  // update client on dest
+  const headerHeight = await dest.doUpdateClient(clientIdDest, src);
+
+  // get a proof (for the proven height)
+  const proof = await src.getConnectionProof(
+    clientIdSrc,
+    connIdSrc,
+    headerHeight,
+  );
+  return proof;
+}
+
+export async function prepareChannelHandshake(
+  src: BaseIbcClient,
+  dest: BaseIbcClient,
+  clientIdDest: string,
+  portId: string,
+  channelId: string,
+): Promise<ChannelHandshake> {
+  // ensure the last transaction was committed to the header (one block after it was included)
+  await src.waitOneBlock();
+  // update client on dest
+  const headerHeight = await dest.doUpdateClient(clientIdDest, src);
+  // get a proof (for the proven height)
+  const proof = await src.getChannelProof( portId, channelId , headerHeight);
+  return proof;
 }

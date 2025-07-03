@@ -1,8 +1,7 @@
 /* eslint-disable max-lines */
 import { MsgAcknowledgement as MsgAcknowledgementV2,MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2 } from "@clockworkgr/ibc-v2-client-ts/ibc.core.channel.v2/types/ibc/core/channel/v2/tx";
 import { MsgRegisterCounterparty } from "@clockworkgr/ibc-v2-client-ts/ibc.core.client.v2/types/ibc/core/client/v2/tx";
-import { toAscii, toBase64 } from "@cosmjs/encoding";
-import { EncodeObject, OfflineSigner, Registry } from "@cosmjs/proto-signing";
+import { OfflineSigner, Registry } from "@cosmjs/proto-signing";
 import {
   AuthExtension,
   BankExtension,
@@ -19,18 +18,11 @@ import {
   SigningStargateClientOptions,
   StakingExtension,
 } from "@cosmjs/stargate";
-import {
-  comet38,
-  CometClient,
-  connectComet,
-  ReadonlyDateWithNanoseconds,
-  tendermint34,
-  tendermint37,
-} from "@cosmjs/tendermint-rpc";
-import { arrayContentEquals, assert, sleep } from "@cosmjs/utils";
-import { Any } from "cosmjs-types/google/protobuf/any";
+import { BlockResultsResponse, CometClient, connectComet, ReadonlyDateWithNanoseconds, TxSearchResponse } from "@cosmjs/tendermint-rpc";
+import { sleep } from "@cosmjs/utils";
 import { MsgTransfer } from "cosmjs-types/ibc/applications/transfer/v1/tx";
 import { Order, Packet, State } from "cosmjs-types/ibc/core/channel/v1/channel";
+import { QueryNextSequenceReceiveResponse } from "cosmjs-types/ibc/core/channel/v1/query";
 import {
   MsgAcknowledgement,
   MsgChannelOpenAck,
@@ -41,82 +33,25 @@ import {
   MsgTimeout,
 } from "cosmjs-types/ibc/core/channel/v1/tx";
 import { Height } from "cosmjs-types/ibc/core/client/v1/client";
+import { QueryClientStateResponse, QueryConsensusStateResponse } from "cosmjs-types/ibc/core/client/v1/query";
 import {
   MsgCreateClient,
   MsgUpdateClient,
 } from "cosmjs-types/ibc/core/client/v1/tx";
 import { Version } from "cosmjs-types/ibc/core/connection/v1/connection";
+import { QueryConnectionResponse } from "cosmjs-types/ibc/core/connection/v1/query";
 import {
   MsgConnectionOpenAck,
   MsgConnectionOpenConfirm,
   MsgConnectionOpenInit,
   MsgConnectionOpenTry,
 } from "cosmjs-types/ibc/core/connection/v1/tx";
-import {
-  ClientState as TendermintClientState,
-  ConsensusState as TendermintConsensusState,
-  Header as TendermintHeader,
-} from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
-import {
-  blockIDFlagFromJSON,
-  Commit,
-  Header,
-  SignedHeader,
-} from "cosmjs-types/tendermint/types/types";
-import { ValidatorSet } from "cosmjs-types/tendermint/types/validator";
-import winston from "winston";
+import { ClientState, ConsensusState, Header } from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
+import { blockIDFlagFromJSON, SignedHeader } from "cosmjs-types/tendermint/types/types";
 
-import { Ack } from "../../types";
-import {
-  buildTendermintClientState,
-  buildTendermintConsensusState,
-  createDeliverTxFailureMessage,
-  mapRpcPubKeyToProto,
-  parseRevisionNumber,
-  presentPacketData,
-  subtractBlock,
-  timestampFromDateNanos,
-  toIntHeight,
-} from "../../utils/utils";
-import { IbcExtension, setupIbcExtension } from "./queries/ibc";
-type CometHeader = tendermint34.Header | tendermint37.Header | comet38.Header;
-type CometCommitResponse =
-  | tendermint34.CommitResponse
-  | tendermint37.CommitResponse
-  | comet38.CommitResponse;
-
-function deepCloneAndMutate<T extends Record<string, unknown>>(
-  object: T,
-  mutateFn: (deepClonedObject: T) => void,
-): Record<string, unknown> {
-  const deepClonedObject = structuredClone(object);
-  mutateFn(deepClonedObject);
-
-  return deepClonedObject;
-}
-
-function toBase64AsAny(...input: Parameters<typeof toBase64>) {
-  return toBase64(...input) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-}
-
-/**** These are needed to bootstrap the endpoints */
-/* Some of them are hardcoded various places, which should we make configurable? */
-// const DefaultTrustLevel = '1/3';
-// const MaxClockDrift = 10; // 10 seconds
-// const upgradePath = ['upgrade', 'upgradedIBCState'];
-// const allowUpgradeAfterExpiry = false;
-// const allowUpgradeAfterMisbehavior = false;
-
-// these are from the cosmos sdk implementation
-const defaultMerklePrefix = {
-  keyPrefix: toAscii("ibc"),
-};
-const defaultConnectionVersion: Version = {
-  identifier: "1",
-  features: ["ORDER_ORDERED", "ORDER_UNORDERED"],
-};
-// this is a sane default, but we can revisit it
-const defaultDelayPeriod = 0n;
+import { BlockSearchResponse, CometCommitResponse, CometHeader, CreateClientArgs } from "../../types";
+import { parseRevisionNumber, timestampFromDateNanos } from "../../utils/utils";
+import { BaseIbcClient, BaseIbcClientOptions } from "../BaseIbcClient";
 
 function ibcRegistry(): Registry {
   return new Registry([
@@ -145,84 +80,26 @@ function ibcRegistry(): Registry {
     ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer],
   ]);
 }
-
-/// This is the default message result with no extra data
-export interface MsgResult {
-  readonly events: readonly Event[];
-  /** Transaction hash (might be used as transaction ID). Guaranteed to be non-empty upper-case hex */
-  readonly transactionHash: string;
-  /** block height where this transaction was committed - only set if we send 'block' mode */
-  readonly height: number;
-}
-
-export type CreateClientResult = MsgResult & {
-  readonly clientId: string;
-};
-
-export type CreateConnectionResult = MsgResult & {
-  readonly connectionId: string;
-};
-
-export type CreateChannelResult = MsgResult & {
-  readonly channelId: string;
-};
-
-interface ConnectionHandshakeProof {
-  clientId: string;
-  connectionId: string;
-  clientState?: Any;
-  proofHeight: Height;
-  // proof of the state of the connection on remote chain
-  proofConnection: Uint8Array;
-  // proof of client state included in message
-  proofClient: Uint8Array;
-  // proof of client consensus state
-  proofConsensus: Uint8Array;
-  // last header height of this chain known by the remote chain
-  consensusHeight?: Height;
-}
-
-export interface ChannelHandshake {
-  id: ChannelInfo;
-  proofHeight: Height;
-  // proof of the state of the channel on remote chain
-  proof: Uint8Array;
-}
-
-export interface ChannelInfo {
-  readonly portId: string;
-  readonly channelId: string;
-}
-
-export type IbcClientOptions = SigningStargateClientOptions & {
-  logger: winston.Logger;
+export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {  
   gasPrice: GasPrice;
-  estimatedBlockTime: number;
-  estimatedIndexerTime: number;
 };
-export class IbcClient {
+export class TendermintIbcClient extends BaseIbcClient{
+  
   public readonly gasPrice: GasPrice;
   public readonly sign: SigningStargateClient;
+  public readonly tm: CometClient;
+
   public readonly query: QueryClient &
     AuthExtension &
     BankExtension &
     IbcExtension &
     StakingExtension;
-  public readonly tm: CometClient;
-  public readonly senderAddress: string;
-  public readonly logger: winston.Logger;
-
-  public readonly chainId: string;
-  public readonly revisionNumber: bigint;
-  public readonly estimatedBlockTime: number;
-  public readonly estimatedIndexerTime: number;
-
   public static async connectWithSigner(
     endpoint: string,
     signer: OfflineSigner,
-    senderAddress: string,
-    options: IbcClientOptions,
-  ): Promise<IbcClient> {
+    options: Partial<TendermintIbcClientOptions>
+  ): Promise<TendermintIbcClient> {
+    options.senderAddress = (await signer.getAccounts())[0].address;
     // override any registry setup, use the other options
     const mergedOptions = {
       ...options,
@@ -235,39 +112,24 @@ export class IbcClient {
     );
     const tmClient = await connectComet(endpoint);
     const chainId = await signingClient.getChainId();
-    return new IbcClient(
+    options.chainId = chainId;
+    options.revisionNumber = parseRevisionNumber(chainId);
+    return new TendermintIbcClient(
       signingClient,
       tmClient,
-      senderAddress,
-      chainId,
-      options,
+      options as TendermintIbcClientOptions,
     );
   }
 
   private constructor(
     signingClient: SigningStargateClient,
     tmClient: CometClient,
-    senderAddress: string,
-    chainId: string,
-    options: IbcClientOptions,
+    options: TendermintIbcClientOptions,
   ) {
+    super(options);
     this.sign = signingClient;
     this.tm = tmClient;
-    this.query = QueryClient.withExtensions(
-      tmClient,
-      setupAuthExtension,
-      setupBankExtension,
-      setupIbcExtension,
-      setupStakingExtension,
-    );
-    this.senderAddress = senderAddress;
-    this.chainId = chainId;
-    this.revisionNumber = parseRevisionNumber(chainId);
-
     this.gasPrice = options.gasPrice;
-    this.logger = options.logger;
-    this.estimatedBlockTime = options.estimatedBlockTime;
-    this.estimatedIndexerTime = options.estimatedIndexerTime;
   }
 
   public revisionHeight(height: number): Height {
@@ -1439,67 +1301,56 @@ export class IbcClient {
       height: result.height,
     };
   }
-}
 
-export interface CreateClientArgs {
-  clientState: TendermintClientState;
-  consensusState: TendermintConsensusState;
-}
-
-// this will query for the unbonding period.
-// if the trusting period is not set, it will use 2/3 of the unbonding period
-export async function buildCreateClientArgs(
-  src: IbcClient,
-  trustPeriodSec?: number | null,
-): Promise<CreateClientArgs> {
-  const header = await src.latestHeader();
-  const consensusState = buildTendermintConsensusState(header);
-  const unbondingPeriodSec = await src.getUnbondingPeriod();
-  if (trustPeriodSec === undefined || trustPeriodSec === null) {
-    trustPeriodSec = Math.floor((unbondingPeriodSec * 2) / 3);
+  registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<void> {
+    throw new Error("Method not implemented.");
   }
-  const clientState = buildTendermintClientState(
-    src.chainId,
-    unbondingPeriodSec,
-    trustPeriodSec,
-    src.revisionHeight(header.height),
-  );
-  return { consensusState, clientState };
-}
-
-export async function prepareConnectionHandshake(
-  src: IbcClient,
-  dest: IbcClient,
-  clientIdSrc: string,
-  clientIdDest: string,
-  connIdSrc: string,
-): Promise<ConnectionHandshakeProof> {
-  // ensure the last transaction was committed to the header (one block after it was included)
-  await src.waitOneBlock();
-  // update client on dest
-  const headerHeight = await dest.doUpdateClient(clientIdDest, src);
-
-  // get a proof (for the proven height)
-  const proof = await src.getConnectionProof(
-    clientIdSrc,
-    connIdSrc,
-    headerHeight,
-  );
-  return proof;
-}
-
-export async function prepareChannelHandshake(
-  src: IbcClient,
-  dest: IbcClient,
-  clientIdDest: string,
-  portId: string,
-  channelId: string,
-): Promise<ChannelHandshake> {
-  // ensure the last transaction was committed to the header (one block after it was included)
-  await src.waitOneBlock();
-  // update client on dest
-  const headerHeight = await dest.doUpdateClient(clientIdDest, src);
-  // get a proof (for the proven height)
-  const proof = await src.getChannelProof({ portId, channelId }, headerHeight);
-  return proof;
+  getTendermintConsensusState(clientId: string, height?: number): Promise<ConsensusState> {
+    throw new Error("Method not implemented.");
+  }
+  getTendermintClientState(clientId: string, height?: number): Promise<ClientState> {
+    throw new Error("Method not implemented.");
+  }
+  getReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
+    throw new Error("Method not implemented.");
+  }
+  getPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
+    throw new Error("Method not implemented.");
+  }
+  getPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<Uint8Array> {
+    throw new Error("Method not implemented.");
+  }
+  getNextSequenceRecvProof(portId: string, channelId: string, proofHeight: Height): Promise<QueryNextSequenceReceiveResponse> {
+    throw new Error("Method not implemented.");
+  }
+  getClientStateProof(clientId: string, proofHeight?: Height): Promise<QueryClientStateResponse & { proofHeight: Height; }> {
+    throw new Error("Method not implemented.");
+  }
+  getConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<QueryConsensusStateResponse> {
+    throw new Error("Method not implemented.");
+  }
+  updateClient(clientId: string, src: BaseIbcClient): Promise<Height> {
+    throw new Error("Method not implemented.");
+  }
+  getConnection(connectionId: string): Promise<QueryConnectionResponse> {
+    throw new Error("Method not implemented.");
+  }
+  getTendermintCommit(height?: number): Promise<CometCommitResponse> {
+    throw new Error("Method not implemented.");
+  }
+  searchTendermintBlocks(query: string): Promise<BlockSearchResponse> {
+    throw new Error("Method not implemented.");
+  }
+  getTendermintBlockResults(height: number): Promise<BlockResultsResponse> {
+    throw new Error("Method not implemented.");
+  }
+  searchTendermintTxs(query: string): Promise<TxSearchResponse> {
+    throw new Error("Method not implemented.");
+  }
+  buildTendermintHeader(lastHeight: number): Promise<Header> {
+    throw new Error("Method not implemented.");
+  }
+  buildCreateTendermintClientArgs(src: BaseIbcClient, trustPeriodSec?: number | null): Promise<CreateClientArgs> {
+    throw new Error("Method not implemented.");
+  }
 }

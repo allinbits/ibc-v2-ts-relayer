@@ -1,7 +1,7 @@
 import config from '../config';
 import { ChainType, RelayedHeights, RelayPaths } from '../types';
 
-const updateRelayedHeights = async (pathId: number, relayHeightA: bigint, relayHeightB: bigint, ackHeightA: bigint, ackHeightB: bigint) => {
+const updateRelayedHeights = async (pathId: number, relayHeightA: number, relayHeightB: number, ackHeightA: number, ackHeightB: number) => {
     const height = await getRelayedHeights(pathId);
     if (height) {
         if (typeof window != "undefined") {

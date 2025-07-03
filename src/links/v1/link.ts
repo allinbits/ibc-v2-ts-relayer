@@ -212,7 +212,7 @@ export class Link {
     // Check headers match consensus state (at least validators)
     const [consensusState, header] = await Promise.all([
       src.client.query.ibc.client.consensusStateTm(clientId, height),
-      dest.client.header(toIntHeight(height)),
+      dest.client.header(toIntHeight(height)),3
     ]);
     // ensure consensus and headers match for next validator hashes
     if (

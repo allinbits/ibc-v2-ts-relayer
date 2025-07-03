@@ -15,6 +15,7 @@ export class Relayer extends EventEmitter {
     private relayedHeights: Map<number, RelayedHeights> = new Map();
     private relayPaths: RelayPaths[] = [];
     private links = new Map<number,Link>();
+    private running: boolean = false;
     
     constructor(logger: winston.Logger) {
         super();
@@ -48,7 +49,11 @@ export class Relayer extends EventEmitter {
         this.relayPaths = await getRelayPaths();
     }
 
-    async start() {
+    async sleep(ms:number) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async init() {
         try {
             this.relayPaths = await getRelayPaths();
             if (this.relayPaths.length === 0) {
@@ -62,14 +67,14 @@ export class Relayer extends EventEmitter {
                     this.relayedHeights = new Map<number, RelayedHeights>();
                     let relayedHeights = await getRelayedHeights(path.id);
                     if (!relayedHeights) {
-                        await updateRelayedHeights(path.id, 0n, 0n, 0n, 0n);
+                        await updateRelayedHeights(path.id, 0, 0, 0, 0);
                         relayedHeights = {
                             id: 0,
                             relayPathId: path.id,
-                            relayHeightA: 0n,
-                            relayHeightB: 0n,
-                            ackHeightA: 0n,
-                            ackHeightB: 0n
+                            relayHeightA: 0,
+                            relayHeightB: 0,
+                            ackHeightA: 0,
+                            ackHeightB: 0
                         }
                         this.logger.info(`No relayed heights found for path ${path.id}. Initializing to zero.`);
                     }
@@ -86,10 +91,38 @@ export class Relayer extends EventEmitter {
             this.logger.error("Failed to get relay paths:", error);
         }
     }
-
-    stop() {
-        // Placeholder for stopping the relayer
-        console.log("Relayer stopped");
+    async start() {
+        this.running = true;
+        this.logger.info("Starting relayer...");
+        this.relayerLoop();
+    }
+    async stop() {
+        this.running = false;
+        this.logger.info("Stopping relayer...");
+    }
+    async relayerLoop(options = { poll: 5000, maxAgeDest: 86400, maxAgeSrc: 86400 }) {
+        while (this.running) {
+            try {
+                for (const [id, link] of this.links.entries()) {
+                    this.logger.info(`Checking relay path ${id}...`);
+                    let relayHeights = this.relayedHeights.get(id);
+                    if (relayHeights) {
+                        relayHeights = { ...relayHeights, ...await link.checkAndRelayPacketsAndAcks(
+                            relayHeights,
+                        2,
+                        6)};
+                        this.relayedHeights.set(id, relayHeights);
+                        updateRelayedHeights(id, relayHeights.relayHeightA, relayHeights.relayHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
+                        this.logger.info(`Updated relay heights for path ${id}:`, relayHeights);
+                    }
+                    await link.updateClientIfStale("A", options.maxAgeDest);
+                    await link.updateClientIfStale("B", options.maxAgeSrc);
+                }
+            } catch (e) {
+                console.error(`Caught error: `, e);
+            }
+            await this.sleep(options.poll);
+        }
     }
 
     relayMessage(message?: string) {
