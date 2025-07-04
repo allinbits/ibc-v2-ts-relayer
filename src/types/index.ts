@@ -1,10 +1,10 @@
+import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
+import { Packet } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+import { ClientState as TendermintClientState, ConsensusState as TendermintConsensusState } from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+import { ProofOps } from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof";
 import { Event } from "@cosmjs/stargate";
 import { comet38, tendermint34, tendermint37 } from "@cosmjs/tendermint-rpc";
-import { Any } from "cosmjs-types/google/protobuf/any";
-import { Packet } from "cosmjs-types/ibc/core/channel/v1/channel";
-import { Height } from "cosmjs-types/ibc/core/client/v1/client";
-import { ClientState as TendermintClientState, ConsensusState as TendermintConsensusState } from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
-import { ProofOps } from "cosmjs-types/tendermint/crypto/proof";
 
 export enum ChainType {
     Cosmos = "cosmos",
@@ -67,7 +67,7 @@ export type CreateChannelResult = MsgResult & {
   readonly channelId: string;
 };
 
-export interface ChannelHandshake {
+export interface ChannelHandshakeProof {
   id: ChannelInfo;
   proofHeight: Height;
   // proof of the state of the channel on remote chain
@@ -102,7 +102,11 @@ export interface CreateClientArgs {
   clientState: TendermintClientState;
   consensusState: TendermintConsensusState;
 }  
-
+export enum ClientType {
+  Tendermint = "tendermint",
+  Gno = "gno",
+  Ethereum = "ethereum",
+}
 export interface PacketWithMetadata {
   packet: Packet;
   // block it was in, must query proofs >= height
@@ -128,4 +132,14 @@ export interface ProvenQuery {
   readonly value: Uint8Array;
   readonly proof: ProofOps;
   readonly height: number;
+}
+export interface FullProof {
+  data: Any;
+  proof: Uint8Array;
+  proofHeight: Height;
+}
+
+export interface QueryOpts {
+  minHeight?: number;
+  maxHeight?: number;
 }

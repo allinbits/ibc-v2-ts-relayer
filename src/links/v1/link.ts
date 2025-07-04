@@ -1,28 +1,23 @@
 import { arrayContentEquals, isDefined } from "@cosmjs/utils";
-import { Order, Packet, State } from "cosmjs-types/ibc/core/channel/v1/channel";
-import { Height } from "cosmjs-types/ibc/core/client/v1/client";
+import { Order, Packet, State } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import winston from "winston";
 
 import {
-  buildCreateClientArgs,
-  ChannelInfo,
-  IbcClient,
+  decodeClientState,
+  parseAcksFromTxEvents,
   prepareChannelHandshake,
   prepareConnectionHandshake,
-} from "../../clients/tendermint/ibcV1client";
-import {
-  AckWithMetadata,
-  Endpoint,
-  PacketWithMetadata,
-  QueryOpts,
-} from "../../endpoints/v1/endpoint";
-import {
-  parseAcksFromTxEvents,
   secondsFromDateNanos,
   splitPendingPackets,
   timestampFromDateNanos,
   toIntHeight,
 } from "../../utils/utils";
+import { AckWithMetadata, ChannelInfo, ClientType, CometHeader, PacketWithMetadata, QueryOpts } from "../../types";
+import { BaseEndpoint } from "../../endpoints/BaseEndpoint";
+import { BaseIbcClient, isTendermint, isTendermintClientState } from "../../clients/BaseIbcClient";
+import { TendermintEndpoint } from "../../endpoints/TendermintEndpoint";
+import { TendermintIbcClient } from "../../clients/tendermint/IbcClient";
 
 /**
  * Many actions on link focus on a src and a dest. Rather than add two functions,
@@ -68,8 +63,8 @@ export interface RelayInfo {
  * if you don't know the client/connection IDs a priori.
  */
 export class Link {
-  public readonly endA: Endpoint;
-  public readonly endB: Endpoint;
+  public readonly endA: BaseEndpoint;
+  public readonly endB: BaseEndpoint;
   public readonly logger: winston.Logger;
 
   private readonly chainA: string;
@@ -108,8 +103,8 @@ export class Link {
    * @param nodeB
    */
   public static async createWithExistingConnections(
-    nodeA: IbcClient,
-    nodeB: IbcClient,
+    nodeA: BaseIbcClient,
+    nodeB: BaseIbcClient,
     connA: string,
     connB: string,
     logger: winston.Logger,
@@ -118,9 +113,11 @@ export class Link {
 
     const [{ connection: connectionA }, { connection: connectionB }] =
       await Promise.all([
-        nodeA.query.ibc.connection.connection(connA),
-        nodeB.query.ibc.connection.connection(connB),
+        nodeA.getConnection(connA),
+        nodeB.getConnection(connB),
       ]);
+
+    // The following are the basic checks we do to ensure the connections are valid
     if (!connectionA) {
       throw new Error(`[${chainA}] Connection not found for ID ${connA}`);
     }
@@ -160,23 +157,35 @@ export class Link {
         `Client ID ${connectionB.clientId} for connection with ID ${connB} does not match counterparty client ID ${connectionA.counterparty.clientId} for connection with ID ${connA}`,
       );
     }
-    const [clientStateA, clientStateB] = await Promise.all([
-      nodeA.query.ibc.client.stateTm(clientIdA),
-      nodeB.query.ibc.client.stateTm(clientIdB),
+    // An additional check for clients where client state contains a chain ID e.g. Tendermint
+    const [rawClientStateA, rawClientStateB] = await Promise.all([
+      nodeA.getLatestClientState(clientIdA),
+      nodeB.getLatestClientState(clientIdB),
     ]);
-    if (nodeA.chainId !== clientStateB.chainId) {
-      throw new Error(
-        `Chain ID ${nodeA.chainId} for connection with ID ${connA} does not match remote chain ID ${clientStateA.chainId}`,
-      );
+    const clientStateA = decodeClientState(rawClientStateA);
+    const clientStateB = decodeClientState(rawClientStateB);
+    if (isTendermintClientState(clientStateB)) {
+      if (nodeA.chainId !== clientStateB.chainId) {
+        throw new Error(
+          `Chain ID ${nodeA.chainId} for connection with ID ${connA} does not match remote chain ID ${clientStateB.chainId}`,
+        );
+      }
     }
-    if (nodeB.chainId !== clientStateA.chainId) {
-      throw new Error(
-        `Chain ID ${nodeB.chainId} for connection with ID ${connB} does not match remote chain ID ${clientStateB.chainId}`,
-      );
+    if (isTendermintClientState(clientStateA)) {
+      if (nodeB.chainId !== clientStateA.chainId) {
+        throw new Error(
+          `Chain ID ${nodeB.chainId} for connection with ID ${connB} does not match remote chain ID ${clientStateA.chainId}`,
+        );
+      }
     }
 
-    const endA = new Endpoint(nodeA, clientIdA, connA);
-    const endB = new Endpoint(nodeB, clientIdB, connB);
+    /*
+     * TODO: add additional checks for different light clients.
+     * e.g. solomachine, wasm etc.
+     * For now, we only support Tendermint, so we can skip this.
+     */
+    const endA = getEndpoint(nodeA, clientIdA, connA);
+    const endB = getEndpoint(nodeB, clientIdB, connB);
     const link = new Link(endA, endB, logger);
 
     await Promise.all([
@@ -241,8 +250,8 @@ export class Link {
    * @param nodeB
    */
   public static async createWithNewConnections(
-    nodeA: IbcClient,
-    nodeB: IbcClient,
+    nodeA: BaseIbcClient,
+    nodeB: BaseIbcClient,
     logger: winston.Logger,
     // number of seconds the client (on B pointing to A) is valid without update
     trustPeriodA?: number | null,
@@ -295,14 +304,14 @@ export class Link {
     );
     await nodeB.connOpenConfirm(connIdB, proofConfirm);
 
-    const endA = new Endpoint(nodeA, clientIdA, connIdA);
-    const endB = new Endpoint(nodeB, clientIdB, connIdB);
+    const endA = new TendermintEndpoint(nodeA, clientIdA, connIdA);
+    const endB = new TendermintEndpoint(nodeB, clientIdB, connIdB);
     return new Link(endA, endB, logger);
   }
 
   // you can use this if you already have the info out of bounds
   // FIXME: check the validity of that data?
-  public constructor(endA: Endpoint, endB: Endpoint, logger: winston.Logger) {
+  public constructor(endA: BaseEndpoint, endB: BaseEndpoint, logger: winston.Logger) {
     this.endA = endA;
     this.endB = endB;
     this.logger = logger;
@@ -322,7 +331,7 @@ export class Link {
   public async updateClient(sender: Side): Promise<Height> {
     this.logger.info(`Update Client on ${this.otherChain(sender)}`);
     const { src, dest } = this.getEnds(sender);
-    const height = await dest.client.doUpdateClient(dest.clientID, src.client);
+    const height = await dest.client.updateClient(dest.clientID, src.client);
     return height;
   }
 
@@ -344,7 +353,7 @@ export class Link {
       )}`,
     );
     const { src, dest } = this.getEnds(sender);
-    const knownHeader = await dest.client.query.ibc.client.consensusStateTm(
+    const knownHeader = await dest.client.getTendermintConsensusStateAtHeight(
       dest.clientID,
     );
     const currentHeader = await src.client.latestHeader();
@@ -353,7 +362,7 @@ export class Link {
     const knownSeconds = Number(knownHeader.timestamp?.seconds);
     if (knownSeconds) {
       const curSeconds = Number(
-        timestampFromDateNanos(currentHeader.time).seconds,
+        timestampFromDateNanos((currentHeader as CometHeader).time).seconds,
       );
       if (curSeconds - knownSeconds < maxAge) {
         return null;
@@ -381,14 +390,14 @@ export class Link {
       )} >= height ${minHeight}`,
     );
     const { src, dest } = this.getEnds(source);
-    const client = await dest.client.query.ibc.client.stateTm(dest.clientID);
+    const client = await dest.client.getLatestTendermintClientState(dest.clientID);
     // TODO: revisit where revision number comes from - this must be the number from the source chain
     const knownHeight = Number(client.latestHeight?.revisionHeight ?? 0);
     if (knownHeight >= minHeight && client.latestHeight !== undefined) {
       return client.latestHeight;
     }
 
-    const curHeight = (await src.client.latestHeader()).height;
+    const curHeight = (await src.client.latestHeader() as CometHeader).height;
     if (curHeight < minHeight) {
       await src.client.waitOneBlock();
     }
@@ -602,24 +611,13 @@ export class Link {
   ): Promise<PacketWithMetadata[]> {
     this.logger.verbose(`Get pending packets on ${this.chain(source)}`);
     const { src, dest } = this.getEnds(source);
-    const allPackets = await src.querySentPackets(opts);
+    const allPackets = await src.querySentPackets(opts.minHeight, opts.maxHeight);
 
     const toFilter = allPackets.map(({ packet }) => packet);
-    const query = async (
-      port: string,
-      channel: string,
-      sequences: readonly number[],
-    ) => {
-      const res = await dest.client.query.ibc.channel.unreceivedPackets(
-        port,
-        channel,
-        sequences,
-      );
-      return res.sequences.map((seq) => Number(seq));
-    };
+   
 
     // This gets the subset of packets that were already processed on the receiving chain
-    const unreceived = await this.filterUnreceived(toFilter, query, packetId);
+    const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPackets, packetId);
     const unreceivedPackets = allPackets.filter(({ packet }) =>
       unreceived[packetId(packet)].has(Number(packet.sequence)),
     );
@@ -630,7 +628,7 @@ export class Link {
         const { sourcePort, sourceChannel, sequence } = packet.packet;
         try {
           // this throws an error if no commitment there
-          await src.client.query.ibc.channel.packetCommitment(
+          await src.client.queryCommitments(
             sourcePort,
             sourceChannel,
             sequence,
@@ -650,25 +648,14 @@ export class Link {
   ): Promise<AckWithMetadata[]> {
     this.logger.verbose(`Get pending acks on ${this.chain(source)}`);
     const { src, dest } = this.getEnds(source);
-    const allAcks = await src.queryWrittenAcks(opts);
+    const allAcks = await src.queryWrittenAcks(opts.minHeight, opts.maxHeight);
     const filteredAcks =
       this.packetFilter !== null
         ? allAcks.filter((ack) => this.packetFilter?.(ack.originalPacket))
         : allAcks;
     const toFilter = filteredAcks.map(({ originalPacket }) => originalPacket);
-    const query = async (
-      port: string,
-      channel: string,
-      sequences: readonly number[],
-    ) => {
-      const res = await dest.client.query.ibc.channel.unreceivedAcks(
-        port,
-        channel,
-        sequences,
-      );
-      return res.sequences.map((seq) => Number(seq));
-    };
-    const unreceived = await this.filterUnreceived(toFilter, query, ackId);
+    
+    const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedAcks, ackId);
 
     return filteredAcks.filter(({ originalPacket: packet }) =>
       unreceived[ackId(packet)].has(Number(packet.sequence)),
@@ -719,14 +706,6 @@ export class Link {
     return unreceived;
   }
 
-  // Returns the last height that this side knows of the other blockchain
-  public async lastKnownHeader(side: Side): Promise<number> {
-    this.logger.verbose(`Get last known header on ${this.chain(side)}`);
-    const { src } = this.getEnds(side);
-    const client = await src.client.query.ibc.client.stateTm(src.clientID);
-    return Number(client.latestHeight?.revisionHeight ?? 0);
-  }
-
   // this will update the client if needed and relay all provided packets from src -> dest
   // if packets are all older than the last consensusHeight, then we don't update the client.
   //
@@ -754,7 +733,7 @@ export class Link {
       submit.map((packet) => src.client.getPacketProof(packet, headerHeight)),
     );
     const { events, height, transactionHash } =
-      await dest.client.receivePackets(submit, proofs, headerHeight);
+      await dest.client.receivePackets(submit, proofs.map(proof => proof.proof), headerHeight);
     const acks = parseAcksFromTxEvents(events);
     return acks.map((ack) => ({
       height,
@@ -789,11 +768,11 @@ export class Link {
     const headerHeight = await this.updateClientToHeight(source, neededHeight);
 
     const proofs = await Promise.all(
-      acks.map((ack) => src.client.getAckProof(ack, headerHeight)),
+      acks.map((ack) => src.client.getAckProof(ack.originalPacket, headerHeight)),
     );
     const { height } = await dest.client.acknowledgePackets(
       acks,
-      proofs,
+      proofs.map((proof) => proof.proof),
       headerHeight,
     );
     return height;
@@ -828,11 +807,11 @@ export class Link {
           acknowledgement: new Uint8Array(),
         };
         const { nextSequenceReceive: sequence } =
-          await dest.client.query.ibc.channel.nextSequenceReceive(
+          await dest.client.getNextSequenceRecv(
             packet.destinationPort,
             packet.destinationChannel,
           );
-        const proof = await dest.client.getTimeoutProof(fakeAck, headerHeight);
+        const proof = await dest.client.getTimeoutProof(fakeAck.originalPacket, headerHeight);
         return { proof, sequence };
       }),
     );
@@ -841,7 +820,7 @@ export class Link {
 
     const { height } = await src.client.timeoutPackets(
       rawPackets,
-      proofs,
+      proofs.map((proof) => proof.proof),
       seqs,
       headerHeight,
     );
@@ -870,36 +849,54 @@ const ackId = (packet: Packet) =>
   `${packet.sourcePort}${idDelim}${packet.sourceChannel}`;
 
 export interface EndpointPair {
-  readonly src: Endpoint;
-  readonly dest: Endpoint;
+  readonly src: BaseEndpoint;
+  readonly dest: BaseEndpoint;
 }
 
 export interface ChannelPair {
   readonly src: ChannelInfo;
   readonly dest: ChannelInfo;
 }
-
+function getEndpoint(  
+  client: BaseIbcClient,
+  clientId: string,
+  connectionId: string,
+): BaseEndpoint {
+  switch (client.clientType) {
+    case ClientType.Tendermint:
+      return new TendermintEndpoint(client as TendermintIbcClient, clientId, connectionId);
+    default:
+      throw new Error(`Unsupported client type: ${client.clientType}`);
+  }
+}
 async function createClients(
-  nodeA: IbcClient,
-  nodeB: IbcClient,
+  nodeA: BaseIbcClient,
+  nodeB: BaseIbcClient,
   // number of seconds the client (on B pointing to A) is valid without update
   trustPeriodA?: number | null,
   // number of seconds the client (on A pointing to B) is valid without update
   trustPeriodB?: number | null,
 ): Promise<string[]> {
   // client on B pointing to A
-  const args = await buildCreateClientArgs(nodeA, trustPeriodA);
-  const { clientId: clientIdB } = await nodeB.createTendermintClient(
-    args.clientState,
-    args.consensusState,
-  );
+  let clientIdA = "", clientIdB = "";
+  if (isTendermint(nodeA)) {
+    const args = await nodeA.buildCreateClientArgs(trustPeriodA);
+    const { clientId } = await nodeB.createTendermintClient(
+      args.clientState,
+      args.consensusState,
+    );
+    clientIdB = clientId;
+  }
 
   // client on A pointing to B
-  const args2 = await buildCreateClientArgs(nodeB, trustPeriodB);
-  const { clientId: clientIdA } = await nodeA.createTendermintClient(
-    args2.clientState,
-    args2.consensusState,
-  );
+  if (isTendermint(nodeB)) {
+    const args2 = await nodeB.buildCreateClientArgs(trustPeriodB);
+    const { clientId } = await nodeA.createTendermintClient(
+      args2.clientState,
+      args2.consensusState,
+    );
+    clientIdA = clientId;
+  }
 
   return [clientIdA, clientIdB];
 }

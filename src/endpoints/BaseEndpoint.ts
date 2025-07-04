@@ -1,7 +1,7 @@
 import { CommitResponse } from "@cosmjs/tendermint-rpc";
 
 import { BaseIbcClient } from "../clients/BaseIbcClient";
-import { AckWithMetadata, PacketWithMetadata } from "../types";
+import { AckWithMetadata, ClientType, PacketWithMetadata } from "../types";
 
 export abstract class BaseEndpoint {
   public readonly client: BaseIbcClient;
@@ -19,9 +19,6 @@ export abstract class BaseEndpoint {
   }
   
   abstract chainId(): string;
-  abstract getLatestCommit(): Promise<CommitResponse>;
-  protected abstract getPacketsFromBlockEvents(minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketWithMetadata[]>;  
-  protected abstract getPacketsFromTxs(minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketWithMetadata[]>;
   abstract querySentPackets(minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketWithMetadata[]>;
   abstract queryWrittenAcks(minHeight: number | undefined, maxHeight: number | undefined): Promise<AckWithMetadata[]>
 }

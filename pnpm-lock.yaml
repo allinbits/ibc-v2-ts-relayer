@@ -21,9 +21,9 @@ importers:
         specifier: ^3.17.0
         version: 3.17.0
     devDependencies:
-      '@clockworkgr/ibc-v2-client-ts':
-        specifier: ^0.0.1
-        version: 0.0.1(@cosmjs/proto-signing@0.33.1)(@cosmjs/stargate@0.33.1)(starknet@7.5.1)
+      '@atomone/cosmos-ibc-types':
+        specifier: ^1.0.3
+        version: 1.0.3
       '@cosmjs/encoding':
         specifier: ^0.33.1
         version: 0.33.1
@@ -75,11 +75,11 @@ importers:
 
 packages:
 
-  '@clockworkgr/ibc-v2-client-ts@0.0.1':
-    resolution: {integrity: sha512-ltytosMhjwbtkfhR6FxfENV3NQrwOs4JOVPMs8c+x7SjV0badLmBjreoaw7vEndlEOd3vfVjhvK28PqxKwE0Cg==}
-    peerDependencies:
-      '@cosmjs/proto-signing': 0.33.1
-      '@cosmjs/stargate': 0.33.1
+  '@atomone/cosmos-ibc-types@1.0.3':
+    resolution: {integrity: sha512-uTTLohh/DhKZkem1y4G3rVq+qhbGL7P7Od0NiDvKgL1M3iiT25Hf9NoOLw87AlCVkn9L3FV03Vt5jsMi6LySYA==}
+
+  '@bufbuild/protobuf@2.6.0':
+    resolution: {integrity: sha512-6cuonJVNOIL7lTj5zgo/Rc2bKAo4/GvN+rKCrUj7GdEHRzCk8zKOfFwUsL9nAVk5rSIsRmlgcpLzTRysopEeeg==}
 
   '@colors/colors@1.6.0':
     resolution: {integrity: sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA==}
@@ -671,9 +671,6 @@ packages:
   axios@1.10.0:
     resolution: {integrity: sha512-/1xYAC4MP/HEG+3duIhFr4ZQXR4sQXOIe+o6sdqzeykGLx6Upp/1p8MHqhINOvGeP7xyNHe7tsiJByc4SSVUxw==}
 
-  axios@1.9.0:
-    resolution: {integrity: sha512-re4CqKTJaURpzbLHtIi6XpDv20/CnpXOtjRY5/CU32L8gU8ek9UIivcfvSWvmKEngmVbrUtPpdDwWDWL7DNHvg==}
-
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -710,9 +707,6 @@ packages:
 
   buffer@5.7.1:
     resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
-
-  buffer@6.0.3:
-    resolution: {integrity: sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==}
 
   cac@6.7.14:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
@@ -962,10 +956,6 @@ packages:
   esutils@2.0.3:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
     engines: {node: '>=0.10.0'}
-
-  events@3.3.0:
-    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
-    engines: {node: '>=0.8.x'}
 
   expand-template@2.0.3:
     resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
@@ -1910,17 +1900,13 @@ packages:
 
 snapshots:
 
-  '@clockworkgr/ibc-v2-client-ts@0.0.1(@cosmjs/proto-signing@0.33.1)(@cosmjs/stargate@0.33.1)(starknet@7.5.1)':
+  '@atomone/cosmos-ibc-types@1.0.3':
     dependencies:
-      '@cosmjs/proto-signing': 0.33.1
-      '@cosmjs/stargate': 0.33.1
-      '@keplr-wallet/types': 0.12.244(starknet@7.5.1)
-      axios: 1.9.0
-      buffer: 6.0.3
-      events: 3.3.0
-    transitivePeerDependencies:
-      - debug
-      - starknet
+      '@bufbuild/protobuf': 2.6.0
+      '@noble/hashes': 1.8.0
+      '@types/node': 20.19.1
+
+  '@bufbuild/protobuf@2.6.0': {}
 
   '@colors/colors@1.6.0': {}
 
@@ -2505,14 +2491,6 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  axios@1.9.0:
-    dependencies:
-      follow-redirects: 1.15.9
-      form-data: 4.0.3
-      proxy-from-env: 1.1.0
-    transitivePeerDependencies:
-      - debug
-
   balanced-match@1.0.2: {}
 
   base64-js@1.5.1: {}
@@ -2549,11 +2527,6 @@ snapshots:
   brorand@1.1.0: {}
 
   buffer@5.7.1:
-    dependencies:
-      base64-js: 1.5.1
-      ieee754: 1.2.1
-
-  buffer@6.0.3:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
@@ -2866,8 +2839,6 @@ snapshots:
       '@types/estree': 1.0.8
 
   esutils@2.0.3: {}
-
-  events@3.3.0: {}
 
   expand-template@2.0.3: {}
 

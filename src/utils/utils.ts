@@ -1,3 +1,27 @@
+import { CommitmentProof, HashOp, LengthOp } from "@atomone/cosmos-ibc-types/build/cosmos/ics23/v1/proofs";
+import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
+import { Timestamp } from "@atomone/cosmos-ibc-types/build/google/protobuf/timestamp";
+import { Packet } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+import { MerkleProof } from "@atomone/cosmos-ibc-types/build/ibc/core/commitment/v1/commitment";
+import {
+  ClientState as SolomachineV2ClientState,
+  ConsensusState as SolomachineV2ConsensusState,
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v2/solomachine";
+import {
+  ClientState as SolomachineV3ClientState,
+  ConsensusState as SolomachineV3ConsensusState,
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v3/solomachine";
+import {
+  ClientState as TendermintClientState,
+  ConsensusState as TendermintConsensusState,
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+import {
+  ClientState as WasmClientState,
+  ConsensusState as WasmConsensusState,
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/wasm/v1/wasm";
+import { PublicKey as ProtoPubKey } from "@atomone/cosmos-ibc-types/build/tendermint/crypto/keys";
+import { ProofOps } from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof";
 import { fromUtf8, toBase64, toHex, toUtf8 } from "@cosmjs/encoding";
 import {
   DeliverTxResponse,
@@ -10,21 +34,10 @@ import {
   tendermint37,
   ValidatorPubkey as RpcPubKey,
 } from "@cosmjs/tendermint-rpc";
-import { CommitmentProof, HashOp, LengthOp } from "cosmjs-types/cosmos/ics23/v1/proofs";
-import { Timestamp } from "cosmjs-types/google/protobuf/timestamp";
-import { Packet } from "cosmjs-types/ibc/core/channel/v1/channel";
-import { Height } from "cosmjs-types/ibc/core/client/v1/client";
-import {
-  ClientState as TendermintClientState,
-  ConsensusState as TendermintConsensusState,
-} from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
-import { PublicKey as ProtoPubKey } from "cosmjs-types/tendermint/crypto/keys";
+import { arrayContentEquals } from "@cosmjs/utils";
 
 import { BaseIbcClient } from "../clients/BaseIbcClient";
-import { Ack, ChannelHandshake, ConnectionHandshakeProof, PacketWithMetadata } from "../types";
-import { arrayContentEquals } from "@cosmjs/utils";
-import { ProofOps } from "cosmjs-types/tendermint/crypto/proof";
-import { MerkleProof } from "cosmjs-types/ibc/core/commitment/v1/commitment";
+import { Ack, ChannelHandshakeProof, ConnectionHandshakeProof, PacketWithMetadata } from "../types";
 
 
 export function deepCloneAndMutate<T extends Record<string, unknown>>(
@@ -405,7 +418,7 @@ export async function prepareConnectionHandshake(
   const headerHeight = await dest.updateClient(clientIdDest, src);
 
   // get a proof (for the proven height)
-  const proof = await src.getConnectionProof(
+  const proof = await src.getConnectionHandshakeProof(
     clientIdSrc,
     connIdSrc,
     headerHeight,
@@ -419,13 +432,13 @@ export async function prepareChannelHandshake(
   clientIdDest: string,
   portId: string,
   channelId: string,
-): Promise<ChannelHandshake> {
+): Promise<ChannelHandshakeProof> {
   // ensure the last transaction was committed to the header (one block after it was included)
   await src.waitOneBlock();
   // update client on dest
   const headerHeight = await dest.updateClient(clientIdDest, src);
   // get a proof (for the proven height)
-  const proof = await src.getChannelProof( portId, channelId , headerHeight);
+  const proof = await src.getChannelHandshakeProof( portId, channelId , headerHeight);
   return proof;
 }
 
@@ -445,4 +458,37 @@ export function convertProofsToIcs23(ops: ProofOps): Uint8Array {
     proofs,
   });
   return MerkleProof.encode(resp).finish();
+}
+export function decodeClientState(
+  clientState: Any,
+) {
+  switch (clientState?.typeUrl) {
+    case "/ibc.lightclients.tendermint.v1.ClientState":
+      return TendermintClientState.decode(clientState.value);
+    case "/ibc.lightclients.solomachine.v2.ClientState":
+      return SolomachineV2ClientState.decode(clientState.value);
+    case "/ibc.lightclients.solomachine.v3.ClientState":
+      return SolomachineV3ClientState.decode(clientState.value);
+    case "/ibc.lightclients.wasm.v1.ClientState":
+      return WasmClientState.decode(clientState.value);
+    default:
+      throw new Error(`Unexpected client state type: ${clientState?.typeUrl}`);
+  }
+}
+
+export function decodeConsensusState(
+  consensusState: Any | undefined,
+) {
+  switch (consensusState?.typeUrl) {
+    case "/ibc.lightclients.tendermint.v1.ConsensusState":
+      return TendermintConsensusState.decode(consensusState.value);
+    case "/ibc.lightclients.solomachine.v2.ConsensusState":
+      return SolomachineV2ConsensusState.decode(consensusState.value);
+    case "/ibc.lightclients.solomachine.v3.ConsensusState":
+      return SolomachineV3ConsensusState.decode(consensusState.value);
+    case "/ibc.lightclients.wasm.v1.ConsensusState":
+      return WasmConsensusState.decode(consensusState.value);
+    default:
+      throw new Error(`Unexpected consensus state type: ${consensusState?.typeUrl}`);
+  }
 }

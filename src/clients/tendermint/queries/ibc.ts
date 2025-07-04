@@ -5,9 +5,9 @@ import {
   createProtobufRpcClient,
   QueryClient,
 } from "@cosmjs/stargate";
-import { CommitmentProof } from "cosmjs-types/cosmos/ics23/v1/proofs";
-import { Any } from "cosmjs-types/google/protobuf/any";
-import { Channel } from "cosmjs-types/ibc/core/channel/v1/channel";
+import { CommitmentProof } from "@atomone/cosmos-ibc-types/build/cosmos/ics23/v1/proofs";
+import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
+import { Channel } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
 import {
   QueryClientImpl as ChannelQuery,
   QueryChannelClientStateResponse,
@@ -24,8 +24,8 @@ import {
   QueryPacketReceiptResponse,
   QueryUnreceivedAcksResponse,
   QueryUnreceivedPacketsResponse,
-} from "cosmjs-types/ibc/core/channel/v1/query";
-import { Height } from "cosmjs-types/ibc/core/client/v1/client";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/query";
+import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import {
   QueryClientImpl as ClientQuery,
   QueryClientParamsResponse,
@@ -34,9 +34,9 @@ import {
   QueryConsensusStateRequest,
   QueryConsensusStateResponse,
   QueryConsensusStatesResponse,
-} from "cosmjs-types/ibc/core/client/v1/query";
-import { MerkleProof } from "cosmjs-types/ibc/core/commitment/v1/commitment";
-import { ConnectionEnd } from "cosmjs-types/ibc/core/connection/v1/connection";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/query";
+import { MerkleProof } from "@atomone/cosmos-ibc-types/build/ibc/core/commitment/v1/commitment";
+import { ConnectionEnd } from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/connection";
 import {
   QueryClientImpl as ConnectionQuery,
   QueryClientConnectionsResponse,
@@ -45,12 +45,12 @@ import {
   QueryConnectionConsensusStateResponse,
   QueryConnectionResponse,
   QueryConnectionsResponse,
-} from "cosmjs-types/ibc/core/connection/v1/query";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint";
-import { ProofOps } from "cosmjs-types/tendermint/crypto/proof";
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+import { ProofOps } from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof";
 
 function decodeTendermintClientStateAny(
   clientState: Any | undefined,
