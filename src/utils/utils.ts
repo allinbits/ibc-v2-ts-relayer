@@ -80,6 +80,10 @@ export function subtractBlock(height: Height, count = 1n): Height {
 
 const regexRevNum = new RegExp("-([1-9][0-9]*)$");
 
+export function heightQueryString(height: Height): string {
+  return `${height.revisionNumber}-${height.revisionHeight}`;
+}
+
 export function parseRevisionNumber(chainId: string): bigint {
   const match = chainId.match(regexRevNum);
   if (match && match.length >= 2) {

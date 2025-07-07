@@ -138,7 +138,11 @@ export interface FullProof {
   proof: Uint8Array;
   proofHeight: Height;
 }
-
+export interface DataProof {
+  data: Uint8Array;
+  proof: Uint8Array;
+  proofHeight: Height;
+}
 export interface QueryOpts {
   minHeight?: number;
   maxHeight?: number;

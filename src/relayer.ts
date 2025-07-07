@@ -2,13 +2,11 @@ import EventEmitter from "node:events";
 
 import winston from "winston";
 
+import { TendermintIbcClient } from "./clients/tendermint/IbcClient";
 import { Link } from "./links/v1/link";
 import { ChainType, RelayedHeights, RelayPaths } from "./types";
-import { addRelayPath, getRelayedHeights, getRelayPaths, updateRelayedHeights } from "./utils/storage";
-import { Endpoint } from "./endpoints/v1/endpoint";
-import { IbcClient } from "./clients/tendermint/ibcV1client";
-import { SigningStargateClient } from "@cosmjs/stargate";
 import { getSigner } from "./utils/signers";
+import { addRelayPath, getRelayedHeights, getRelayPaths, updateRelayedHeights } from "./utils/storage";
 
 export class Relayer extends EventEmitter {
     private logger: winston.Logger;
@@ -23,6 +21,42 @@ export class Relayer extends EventEmitter {
         this.on("error", (err) => {
             this.logger.error("Relayer error:", err);
         });
+    }
+    async addNewdRelayPath(
+        chainIdA: string,
+        nodeA: string,
+        chainIdB: string,
+        nodeB: string,
+        chainTypeA: ChainType,
+        chainTypeB: ChainType,
+        version: number = 1
+    ) {
+
+        const signerA = await getSigner(chainIdA);
+        const signerB = await getSigner(chainIdB);
+        const clientA = await  TendermintIbcClient.connectWithSigner(nodeA, signerA, { senderAddress: (await signerA.getAccounts())[0].address, logger: this.logger} );
+        const clientB = await  TendermintIbcClient.connectWithSigner(nodeB, signerB, { senderAddress: (await signerB.getAccounts())[0].address, logger: this.logger} );
+        const link = await Link.createWithNewConnections(
+            clientA,
+            clientB,
+            this.logger);
+
+        const path = await addRelayPath(
+            chainIdA,
+            nodeA,
+            chainIdB,
+            nodeB,
+            chainTypeA,
+            chainTypeB,
+            link.endA.clientID,
+            link.endB.clientID,
+            version
+        );
+        this.relayPaths = await getRelayPaths();
+        if (path) {
+            this.links.set(path.id, link);
+            this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
+        }
     }
     async addExistingRelayPath(
         chainIdA: string,
@@ -81,8 +115,8 @@ export class Relayer extends EventEmitter {
                     this.relayedHeights.set(path.id, relayedHeights);
                     const signerA = await getSigner(path.chainIdA);
                     const signerB = await getSigner(path.chainIdB);
-                    const clientA = await  IbcClient.connectWithSigner(path.nodeA, signerA, (await signerA.getAccounts())[0].address, { logger: this.logger} );
-                    const clientB = await  IbcClient.connectWithSigner(path.nodeB, signerB, (await signerB.getAccounts())[0].address, { logger: this.logger} );
+                    const clientA = await  TendermintIbcClient.connectWithSigner(path.nodeA, signerA, { senderAddress: (await signerA.getAccounts())[0].address, logger: this.logger} );
+                    const clientB = await  TendermintIbcClient.connectWithSigner(path.nodeB, signerB, { senderAddress: (await signerB.getAccounts())[0].address, logger: this.logger} );
                     this.links.set(path.id, await Link.createWithExistingConnections(clientA,clientB,path.clientA, path.clientB,this.logger));
                 };
             }

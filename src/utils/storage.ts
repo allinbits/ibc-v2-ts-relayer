@@ -36,7 +36,7 @@ const getRelayedHeights = async (pathId: number) => {
 const addRelayPath = async (chainIdA: string, nodeA: string, chainIdB: string, nodeB: string, chainTypeA: ChainType, chainTypeB: ChainType, clientIdA: string, clientIdB: string, version: number = 1) => {
     if (typeof window != "undefined") {
         const dexie = await import('./dexie');
-        dexie.db.relayPaths.add({
+        await  dexie.db.relayPaths.add({
             chainIdA,
             nodeA,
             chainIdB,
@@ -51,8 +51,8 @@ const addRelayPath = async (chainIdA: string, nodeA: string, chainIdB: string, n
         const sqlite = await import('./sqlite');
         const db = await sqlite.openDB(config.dbFile);
         await db.run('INSERT INTO relayPaths (chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientA, clientB, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version]);
-        return await getRelayPath(chainIdA, chainIdB, clientIdA, clientIdB, version);
     }
+    return await getRelayPath(chainIdA, chainIdB, clientIdA, clientIdB, version);
 }
 const getRelayPath = async (chainIdA: string, chainIdB: string, clientIdA: string, clientIdB: string, version: number = 1) => {
     if (typeof window != "undefined") {

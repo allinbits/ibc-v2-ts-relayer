@@ -1,16 +1,13 @@
 import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
 import { Order, Packet } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
-import { QueryNextSequenceReceiveResponse } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/query";
 import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import { QueryConnectionResponse } from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query";
 import { ClientState as TendermintClientState, ConsensusState as TendermintConsensusState, Header as TendermintHeader } from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
-import { SignedHeader } from "@atomone/cosmos-ibc-types/build/tendermint/types/types";
-import { ValidatorSet } from "@atomone/cosmos-ibc-types/build/tendermint/types/validator";
 import { ReadonlyDateWithNanoseconds } from "@cosmjs/tendermint-rpc";
 import winston from "winston";
 
-import { Ack, AckWithMetadata, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof,CreateChannelResult,CreateClientResult, CreateConnectionResult, FullProof, MsgResult, PacketWithMetadata } from "../types";
-import { decodeClientState } from "../utils/utils";
+import { Ack, AckWithMetadata, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof,CreateChannelResult,CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketWithMetadata } from "../types";
+import { decodeClientState, decodeConsensusState } from "../utils/utils";
 import { TendermintIbcClient } from "./tendermint/IbcClient";
 
 export type BaseIbcClientOptions = {
@@ -37,6 +34,13 @@ export function isTendermint(client: BaseIbcClient): client is TendermintIbcClie
 }
 export function isTendermintClientState(clientState: ReturnType<typeof decodeClientState>): clientState is TendermintClientState {
   if ((clientState as TendermintClientState).chainId) {
+    return true;
+  }else{
+    return false;
+  }
+}
+export function isTendermintConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is TendermintConsensusState {
+  if ((consensusState as TendermintConsensusState).nextValidatorsHash) {
     return true;
   }else{
     return false;
@@ -143,7 +147,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   abstract getRawReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<FullProof>;
   abstract getRawPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<FullProof>;
   abstract getRawPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<FullProof>;
-  abstract getRawNextSequenceRecvProof(portId: string, channelId: string, proofHeight: Height) : Promise<FullProof>;
+  abstract getRawNextSequenceRecvProof(portId: string, channelId: string, proofHeight: Height) : Promise<DataProof>;
   abstract getRawClientStateProof(clientId: string, proofHeight?: Height): Promise<FullProof>;
   abstract getRawConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<FullProof>;
   abstract getRawConnectionProof(connectionId:string, proofHeight: Height): Promise<FullProof>;
@@ -184,17 +188,9 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   /* 
    * Methods to get basic IBC connection and client information.
    */
-  abstract getConnection(connectionId: string): Promise<QueryConnectionResponse>;
+  abstract getConnection(connectionId: string): Promise<Partial<QueryConnectionResponse>>;
   abstract getLatestClientState(clientId: string): Promise<Any>;
+  abstract getConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<Any>;
+  abstract getNextSequenceRecv(portId: string, channelId: string) : Promise<bigint>;
 
-  abstract _getTendermintConsensusState(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<{ consensusState: TendermintConsensusState, proof: Uint8Array }>;
-  abstract _getTendermintClientState(clientId: string, proofHeight: Height): Promise<{ clientState: TendermintClientState, proof: Uint8Array }>;
-
-  abstract _getTendermintConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<TendermintConsensusState>;
-  
-
-
-  abstract _getNextSequenceRecv(portId: string, channelId: string) : Promise<QueryNextSequenceReceiveResponse>;
-  abstract _getValidatorSet(height: number): Promise<ValidatorSet>;
-  abstract _getSignedHeader(height?: number): Promise<SignedHeader>;
 }

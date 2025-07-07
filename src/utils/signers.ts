@@ -9,6 +9,6 @@ export const getSigner = async (chainId: string): Promise<OfflineSigner> => {
       throw new Error("Keplr extension is not installed");
     }
   }else{
-    return await DirectSecp256k1HdWallet.generate(12);
+    return await DirectSecp256k1HdWallet.fromMnemonic("other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy")
   }
 }

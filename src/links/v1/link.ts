@@ -1,10 +1,16 @@
-import { arrayContentEquals, isDefined } from "@cosmjs/utils";
 import { Order, Packet, State } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
 import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+import { arrayContentEquals, isDefined } from "@cosmjs/utils";
 import winston from "winston";
 
+import { BaseIbcClient, isTendermint, isTendermintClientState, isTendermintConsensusState } from "../../clients/BaseIbcClient";
+import { TendermintIbcClient } from "../../clients/tendermint/IbcClient";
+import { BaseEndpoint } from "../../endpoints/BaseEndpoint";
+import { TendermintEndpoint } from "../../endpoints/TendermintEndpoint";
+import { AckWithMetadata, ChannelInfo, ClientType, PacketWithMetadata, QueryOpts } from "../../types";
 import {
   decodeClientState,
+  decodeConsensusState,
   parseAcksFromTxEvents,
   prepareChannelHandshake,
   prepareConnectionHandshake,
@@ -13,11 +19,6 @@ import {
   timestampFromDateNanos,
   toIntHeight,
 } from "../../utils/utils";
-import { AckWithMetadata, ChannelInfo, ClientType, CometHeader, PacketWithMetadata, QueryOpts } from "../../types";
-import { BaseEndpoint } from "../../endpoints/BaseEndpoint";
-import { BaseIbcClient, isTendermint, isTendermintClientState } from "../../clients/BaseIbcClient";
-import { TendermintEndpoint } from "../../endpoints/TendermintEndpoint";
-import { TendermintIbcClient } from "../../clients/tendermint/IbcClient";
 
 /**
  * Many actions on link focus on a src and a dest. Rather than add two functions,
@@ -192,12 +193,12 @@ export class Link {
       link.assertHeadersMatchConsensusState(
         "A",
         clientIdA,
-        clientStateA.latestHeight,
+        clientStateA,
       ),
       link.assertHeadersMatchConsensusState(
         "B",
         clientIdB,
-        clientStateB.latestHeight,
+        clientStateB,
       ),
     ]);
 
@@ -209,36 +210,44 @@ export class Link {
    * for submitting double-sign evidence later
    *
    * @param proofSide the side holding the consensus proof, we check the header from the other side
-   * @param height the height of the consensus state and header we wish to compare
+   * @param clientState the clientState indicating the consensus state and header we wish to compare
    */
   public async assertHeadersMatchConsensusState(
     proofSide: Side,
     clientId: string,
-    height?: Height,
+    clientState: ReturnType<typeof decodeClientState>,
   ): Promise<void> {
     const { src, dest } = this.getEnds(proofSide);
 
-    // Check headers match consensus state (at least validators)
-    const [consensusState, header] = await Promise.all([
-      src.client.query.ibc.client.consensusStateTm(clientId, height),
-      dest.client.header(toIntHeight(height)),3
-    ]);
-    // ensure consensus and headers match for next validator hashes
-    if (
-      !arrayContentEquals(
-        consensusState.nextValidatorsHash,
-        header.nextValidatorsHash,
-      )
-    ) {
-      throw new Error(`NextValidatorHash doesn't match ConsensusState.`);
-    }
-    // ensure the committed apphash matches the actual node we have
-    const hash = consensusState.root?.hash;
-    if (!hash) {
-      throw new Error(`ConsensusState.root.hash missing.`);
-    }
-    if (!arrayContentEquals(hash, header.appHash)) {
-      throw new Error(`AppHash doesn't match ConsensusState.`);
+    // The following is for a Tendermint client. 
+    // TODO: add support for other client types
+    if (isTendermintClientState(clientState) && isTendermint(dest.client)) {      
+      const height = clientState.latestHeight;
+      // Check headers match consensus state (at least validators)
+      const [rawConsensusState, header] = await Promise.all([
+        src.client.getConsensusStateAtHeight(clientId, height),
+        dest.client.header(toIntHeight(height)),3
+      ]);
+      const consensusState = decodeConsensusState(rawConsensusState)
+      if (isTendermintConsensusState(consensusState)) {
+        // ensure consensus and headers match for next validator hashes
+        if (
+          !arrayContentEquals(
+            consensusState.nextValidatorsHash,
+            header.nextValidatorsHash,
+          )
+        ) {
+          throw new Error(`NextValidatorHash doesn't match ConsensusState.`);
+        }
+        // ensure the committed apphash matches the actual node we have
+        const hash = consensusState.root?.hash;
+        if (!hash) {
+          throw new Error(`ConsensusState.root.hash missing.`);
+        }
+        if (!arrayContentEquals(hash, header.appHash)) {
+          throw new Error(`AppHash doesn't match ConsensusState.`);
+        }
+      }
     }
   }
 
@@ -353,16 +362,30 @@ export class Link {
       )}`,
     );
     const { src, dest } = this.getEnds(sender);
-    const knownHeader = await dest.client.getTendermintConsensusStateAtHeight(
+    // The following checks are for Termendmint clients.
+    // TODO: Add support for other client types
+
+    if (!isTendermint(src.client)) {
+      throw new Error(
+        `updateClientIfStale only supported for Tendermint clients, got ${dest.client.clientType}`,
+      );
+    }
+    const rawKnownHeader = await dest.client.getConsensusStateAtHeight(
       dest.clientID,
     );
+    const knownHeader = decodeConsensusState(rawKnownHeader);
+    if (!isTendermintConsensusState(knownHeader)) {
+      throw new Error(
+        `Expected TendermintConsensusState, got ${rawKnownHeader.typeUrl}`,
+      );
+    }
     const currentHeader = await src.client.latestHeader();
 
     // quit now if we don't need to update
     const knownSeconds = Number(knownHeader.timestamp?.seconds);
     if (knownSeconds) {
       const curSeconds = Number(
-        timestampFromDateNanos((currentHeader as CometHeader).time).seconds,
+        timestampFromDateNanos(currentHeader.time).seconds,
       );
       if (curSeconds - knownSeconds < maxAge) {
         return null;
@@ -390,14 +413,27 @@ export class Link {
       )} >= height ${minHeight}`,
     );
     const { src, dest } = this.getEnds(source);
-    const client = await dest.client.getLatestTendermintClientState(dest.clientID);
+    // The following checks are for Termendmint clients.
+    // TODO: Add support for other client types
+    if (!isTendermint(src.client)) {
+      throw new Error(
+        `updateClientToHeight only supported for Tendermint clients, got ${src.client.clientType}`,
+      );
+    }
+    const rawClientState = await dest.client.getLatestClientState(dest.clientID);
+    const clientState = decodeClientState(rawClientState);
+    if (!isTendermintClientState(clientState)) {
+      throw new Error(
+        `Expected TendermintClientState, got ${rawClientState.typeUrl}`,
+      );
+    } 
     // TODO: revisit where revision number comes from - this must be the number from the source chain
-    const knownHeight = Number(client.latestHeight?.revisionHeight ?? 0);
-    if (knownHeight >= minHeight && client.latestHeight !== undefined) {
-      return client.latestHeight;
+    const knownHeight = Number(clientState.latestHeight?.revisionHeight ?? 0);
+    if (knownHeight >= minHeight && clientState.latestHeight !== undefined) {
+      return clientState.latestHeight;
     }
 
-    const curHeight = (await src.client.latestHeader() as CometHeader).height;
+    const curHeight = (await src.client.latestHeader()).height;
     if (curHeight < minHeight) {
       await src.client.waitOneBlock();
     }
@@ -806,7 +842,7 @@ export class Link {
           originalPacket: packet,
           acknowledgement: new Uint8Array(),
         };
-        const { nextSequenceReceive: sequence } =
+        const sequence =
           await dest.client.getNextSequenceRecv(
             packet.destinationPort,
             packet.destinationChannel,
