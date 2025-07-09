@@ -18,7 +18,7 @@ export const log = winston.createLogger({
       }),
       new winston.transports.File({ filename: "combined.log" }),
       new winston.transports.Console({
-        format: winston.format.combine(winston.format.splat(), winston.format.timestamp(), eclesiaFormat, winston.format.colorize({ all: true }))
+        format: winston.format.combine(winston.format.splat(), winston.format.metadata(), winston.format.timestamp(), eclesiaFormat, winston.format.colorize({ all: true }))
       })
     ]
   });

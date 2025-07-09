@@ -1,9 +1,4 @@
-import { toHex } from "@cosmjs/encoding";
-import { fromTendermintEvent } from "@cosmjs/stargate";
-
 import { BaseIbcClient } from "../clients/BaseIbcClient";
-import { AckWithMetadata,PacketWithMetadata } from "../types";
-import { parseAcksFromTxEvents, parsePacketsFromBlockResult, parsePacketsFromTendermintEvents } from "../utils/utils";
 import { BaseEndpoint } from "./BaseEndpoint";
 
 export class TendermintEndpoint extends BaseEndpoint {
@@ -11,7 +6,7 @@ export class TendermintEndpoint extends BaseEndpoint {
   public constructor(
     client: BaseIbcClient,
     clientID: string,
-    connectionID: string,
+    connectionID?: string,
   ) {
     super(client, clientID, connectionID);
   }
@@ -22,12 +17,20 @@ export class TendermintEndpoint extends BaseEndpoint {
 
   public async querySentPackets(minHeight: number | undefined, maxHeight: number | undefined) {
 
-    return await this.client.querySentPackets(this.connectionID,minHeight, maxHeight);
+    if (this.version === 1 && this.connectionID) {      
+      return await this.client.querySentPackets(this.connectionID, minHeight, maxHeight);
+    }else {
+      return await this.client.querySentPacketsV2(this.clientID, minHeight, maxHeight);
+    }
 
   }
   public async queryWrittenAcks(minHeight: number | undefined, maxHeight: number | undefined) {
 
-    return await this.client.queryWrittenAcks(this.connectionID,minHeight, maxHeight);
+    if (this.version === 1 && this.connectionID) {      
+      return await this.client.queryWrittenAcks(this.connectionID, minHeight, maxHeight);
+    }else {
+      return await this.client.queryWrittenAcksV2(this.clientID, minHeight, maxHeight);
+    }
 
   }
 

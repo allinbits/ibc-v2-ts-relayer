@@ -1,4 +1,4 @@
-const logLevel = process.env.LOG_LEVEL || "info";
+const logLevel = process.env.LOG_LEVEL || "debug";
 
 export default {
   logLevel: logLevel,

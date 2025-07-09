@@ -1,5 +1,6 @@
 import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
 import { Packet } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import { Packet as PacketV2 } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
 import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import { ClientState as TendermintClientState, ConsensusState as TendermintConsensusState } from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
 import { ProofOps } from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof";
@@ -77,6 +78,10 @@ export interface Ack {
   readonly acknowledgement: Uint8Array;
   readonly originalPacket: Packet;
 }
+export interface AckV2 {
+  readonly acknowledgement: Uint8Array;
+  readonly originalPacket: PacketV2;
+}
 export interface ChannelInfo {
   readonly portId: string;
   readonly channelId: string;
@@ -113,7 +118,28 @@ export interface PacketWithMetadata {
   height: number;
 }
 
+export interface PacketV2WithMetadata {
+  packet: PacketV2;
+  // block it was in, must query proofs >= height
+  height: number;
+}
+
 export type AckWithMetadata = Ack & {
+  // block the ack was in, must query proofs >= height
+  height: number;
+  /**
+   * The hash of the transaction in which the ack was found.
+   * Encoded as upper case hex.
+   */
+  txHash: string;
+  /**
+   * The events of the transaction in which the ack was found.
+   * Please note that the events do not necessarily belong to the ack.
+   */
+  txEvents: readonly Event[];
+};
+
+export type AckV2WithMetadata = AckV2 & {
   // block the ack was in, must query proofs >= height
   height: number;
   /**

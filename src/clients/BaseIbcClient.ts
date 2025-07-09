@@ -1,12 +1,13 @@
 import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
 import { Order, Packet } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import { Packet as PacketV2} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
 import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import { QueryConnectionResponse } from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query";
 import { ClientState as TendermintClientState, ConsensusState as TendermintConsensusState, Header as TendermintHeader } from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
 import { ReadonlyDateWithNanoseconds } from "@cosmjs/tendermint-rpc";
 import winston from "winston";
 
-import { Ack, AckWithMetadata, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof,CreateChannelResult,CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketWithMetadata } from "../types";
+import { Ack, AckV2, AckV2WithMetadata, AckWithMetadata, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof,CreateChannelResult,CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata } from "../types";
 import { decodeClientState, decodeConsensusState } from "../utils/utils";
 import { TendermintIbcClient } from "./tendermint/IbcClient";
 
@@ -143,11 +144,15 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
    * They return the proven value as a proto-encoded Any, the ICS23 proof as a Uint8Array and the proofHeight. 
    */
 
-  abstract getRawChannelProof(portId: string, channelId: string, proofHeight: Height): Promise<FullProof>;
-  abstract getRawReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<FullProof>;
-  abstract getRawPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<FullProof>;
-  abstract getRawPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<FullProof>;
-  abstract getRawNextSequenceRecvProof(portId: string, channelId: string, proofHeight: Height) : Promise<DataProof>;
+  abstract getRawChannelProof(portId: string, channelId: string, proofHeight: Height): Promise<DataProof>;
+  abstract getRawReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<DataProof>;
+  abstract getRawPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof>;
+  abstract getRawPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height) : Promise<DataProof>;
+
+  abstract getRawReceiptProofV2(clientId: string, sequence: bigint, proofHeight: Height) : Promise<DataProof>;
+  abstract getRawPacketCommitmentProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof>;
+  abstract getRawPacketAcknowledgementProofV2(clientId: string, sequence: bigint, proofHeight: Height) : Promise<DataProof>;
+
   abstract getRawClientStateProof(clientId: string, proofHeight?: Height): Promise<FullProof>;
   abstract getRawConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight?: Height): Promise<FullProof>;
   abstract getRawConnectionProof(connectionId:string, proofHeight: Height): Promise<FullProof>;
@@ -156,9 +161,12 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
    * Helper proof methods. These methods wrap the raw proof-fetching methods for packet operations simplifying calls by ensuring
    * the appropriate proofHeight is used based on packet data.
    */
-  abstract getPacketProof(packet: Packet, headerHeight: Height | number): Promise<FullProof>;
-  abstract getAckProof(packet: Packet, headerHeight: Height | number): Promise<FullProof>;
-  abstract getTimeoutProof(packet: Packet, headerHeight: Height | number): Promise<FullProof>;
+  abstract getPacketProof(packet: Packet, headerHeight: Height | number): Promise<DataProof>;
+  abstract getAckProof(packet: Packet, headerHeight: Height | number): Promise<DataProof>;
+  abstract getTimeoutProof(packet: Packet, headerHeight: Height | number): Promise<DataProof>;
+  abstract getPacketProofV2(packet: PacketV2, headerHeight: Height | number): Promise<DataProof>;
+  abstract getAckProofV2(packet: PacketV2, headerHeight: Height | number): Promise<DataProof>;
+  abstract getTimeoutProofV2(packet: PacketV2, headerHeight: Height | number): Promise<DataProof>;
 
   /*
    * Methods to build the header or client creation data to provide to counterparty clients
@@ -172,8 +180,11 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   * Packet handling methods. Rceived/ack/timeout packets are handled by the relayer and sent to the chain.
   */
   abstract receivePackets(packets: readonly Packet[], proofCommitments: readonly Uint8Array[], proofHeight?: Height): Promise<MsgResult>;
+  abstract receivePacketsV2(packets: readonly PacketV2[], proofCommitments: readonly Uint8Array[], proofHeight?: Height): Promise<MsgResult>;
   abstract acknowledgePackets(acks: readonly Ack[], proofAckeds: readonly Uint8Array[], proofHeight?: Height): Promise<MsgResult>;
+  abstract acknowledgePacketsV2(acks: readonly AckV2[], proofAckeds: readonly Uint8Array[], proofHeight?: Height): Promise<MsgResult>;
   abstract timeoutPackets(packets: Packet[], proofsUnreceived: Uint8Array[], nextSequenceRecv: bigint[], proofHeight: Height): Promise<MsgResult>;
+  abstract timeoutPacketsV2(packets: PacketV2[], proofsUnreceived: Uint8Array[], proofHeight: Height): Promise<MsgResult>;
 
   /*
    * Methods to query for sent or unreceived packets and acks for a specific connection.
@@ -181,14 +192,20 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
 
   abstract querySentPackets(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketWithMetadata[]>;
   abstract queryWrittenAcks(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckWithMetadata[]>;
+  abstract querySentPacketsV2(clientID: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketV2WithMetadata[]>;
+  abstract queryWrittenAcksV2(clientID: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckV2WithMetadata[]>;
   abstract queryUnreceivedPackets(portId: string, channelId: string, sequences: readonly number[]): Promise<number[]>;
   abstract queryUnreceivedAcks(portId: string, channelId: string, sequences: readonly number[]): Promise<number[]>;
   abstract queryCommitments(portId: string, channelId: string, sequence: bigint): Promise<Uint8Array>;
+  abstract queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]): Promise<number[]>;
+  abstract queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]): Promise<number[]>;
+  abstract queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array>;
   
   /* 
    * Methods to get basic IBC connection and client information.
    */
   abstract getConnection(connectionId: string): Promise<Partial<QueryConnectionResponse>>;
+  abstract getChannelV1Type(portId: string, channelId: string): Promise<Order>;
   abstract getLatestClientState(clientId: string): Promise<Any>;
   abstract getConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<Any>;
   abstract getNextSequenceRecv(portId: string, channelId: string) : Promise<bigint>;

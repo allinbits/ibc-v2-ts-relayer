@@ -1,5 +1,5 @@
 import config from '../config';
-import { ChainType, RelayedHeights, RelayPaths } from '../types';
+import { ChainType, RelayPaths } from '../types';
 
 const updateRelayedHeights = async (pathId: number, relayHeightA: number, relayHeightB: number, ackHeightA: number, ackHeightB: number) => {
     const height = await getRelayedHeights(pathId);
@@ -23,14 +23,33 @@ const updateRelayedHeights = async (pathId: number, relayHeightA: number, relayH
     }
 }
 const getRelayedHeights = async (pathId: number) => {
-
-    if (typeof window != "undefined") {
-        const dexie = await import('./dexie');
-        return await dexie.db.relayedHeights.where({ relayPathId: pathId }).first();
-    } else {
-        const sqlite = await import('./sqlite');
-        const db = await sqlite.openDB(config.dbFile);
-        return db.get('SELECT * FROM relayedHeights WHERE relayPathId = ?', [pathId]) as Promise<RelayedHeights>;
+    try {        
+        if (typeof window != "undefined") {
+            const dexie = await import('./dexie');
+            const res = await dexie.db.relayedHeights.where({ relayPathId: pathId }).first();
+            if (!res) {
+                throw new Error("Heights not found");
+            }
+            return res;
+        } else {
+            const sqlite = await import('./sqlite');
+            const db = await sqlite.openDB(config.dbFile);
+            const res = await db.get('SELECT * FROM relayedHeights WHERE relayPathId = ?', [pathId]);
+            if (!res) {
+                throw new Error("Heights not found");
+            }
+            return res;
+        }
+    } catch (_e) {
+        if (typeof window != "undefined") {
+            const dexie = await import('./dexie');
+            await dexie.db.relayedHeights.add({relayHeightA:0, relayHeightB: 0, ackHeightA: 0, ackHeightB: 0, relayPathId: pathId});                
+        } else {
+            const sqlite = await import('./sqlite');
+            const db = await sqlite.openDB(config.dbFile);
+            await db.run('INSERT INTO relayedHeights (relayHeightA, relayHeightB, ackHeightA, ackHeightB, relayPathId) VALUES (?, ?, ?, ?, ?)', [0, 0, 0, 0, pathId]);
+        }
+        return getRelayedHeights(pathId);
     }
 }
 const addRelayPath = async (chainIdA: string, nodeA: string, chainIdB: string, nodeB: string, chainTypeA: ChainType, chainTypeB: ChainType, clientIdA: string, clientIdB: string, version: number = 1) => {

@@ -1,4 +1,4 @@
-import { Order, Packet, State } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import { Packet } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
 import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import { arrayContentEquals, isDefined } from "@cosmjs/utils";
 import winston from "winston";
@@ -7,13 +7,11 @@ import { BaseIbcClient, isTendermint, isTendermintClientState, isTendermintConse
 import { TendermintIbcClient } from "../../clients/tendermint/IbcClient";
 import { BaseEndpoint } from "../../endpoints/BaseEndpoint";
 import { TendermintEndpoint } from "../../endpoints/TendermintEndpoint";
-import { AckWithMetadata, ChannelInfo, ClientType, PacketWithMetadata, QueryOpts } from "../../types";
+import { AckV2WithMetadata, ChannelInfo, ClientType, PacketV2WithMetadata, QueryOpts } from "../../types";
 import {
   decodeClientState,
   decodeConsensusState,
-  parseAcksFromTxEvents,
-  prepareChannelHandshake,
-  prepareConnectionHandshake,
+  parseAcksFromTxEventsV2,
   secondsFromDateNanos,
   splitPendingPackets,
   timestampFromDateNanos,
@@ -52,8 +50,8 @@ export interface RelayedHeights {
 export interface RelayInfo {
   packetsFromA: number;
   packetsFromB: number;
-  acksFromA: AckWithMetadata[];
-  acksFromB: AckWithMetadata[];
+  acksFromA: AckV2WithMetadata[];
+  acksFromB: AckV2WithMetadata[];
 }
 
 /**
@@ -94,115 +92,6 @@ export class Link {
     } else {
       return this.chainA;
     }
-  }
-
-  /**
-   * findConnection attempts to reuse an existing Client/Connection.
-   * If none exists, then it returns an error.
-   *
-   * @param nodeA
-   * @param nodeB
-   */
-  public static async createWithExistingConnections(
-    nodeA: BaseIbcClient,
-    nodeB: BaseIbcClient,
-    connA: string,
-    connB: string,
-    logger: winston.Logger,
-  ): Promise<Link> {
-    const [chainA, chainB] = [nodeA.chainId, nodeB.chainId];
-
-    const [{ connection: connectionA }, { connection: connectionB }] =
-      await Promise.all([
-        nodeA.getConnection(connA),
-        nodeB.getConnection(connB),
-      ]);
-
-    // The following are the basic checks we do to ensure the connections are valid
-    if (!connectionA) {
-      throw new Error(`[${chainA}] Connection not found for ID ${connA}`);
-    }
-    if (!connectionB) {
-      throw new Error(`[${chainB}] Connection not found for ID ${connB}`);
-    }
-    if (!connectionA.counterparty) {
-      throw new Error(
-        `[${chainA}] Counterparty not found for connection with ID ${connA}`,
-      );
-    }
-    if (!connectionB.counterparty) {
-      throw new Error(
-        `[${chainB}] Counterparty not found for connection with ID ${connB}`,
-      );
-    }
-    // ensure the connection is open
-    if (connectionA.state != State.STATE_OPEN) {
-      throw new Error(
-        `Connection on ${chainA} must be in state open, it has state ${connectionA.state}`,
-      );
-    }
-    if (connectionB.state != State.STATE_OPEN) {
-      throw new Error(
-        `Connection on ${chainB} must be in state open, it has state ${connectionB.state}`,
-      );
-    }
-
-    const [clientIdA, clientIdB] = [connectionA.clientId, connectionB.clientId];
-    if (clientIdA !== connectionB.counterparty.clientId) {
-      throw new Error(
-        `Client ID ${connectionA.clientId} for connection with ID ${connA} does not match counterparty client ID ${connectionB.counterparty.clientId} for connection with ID ${connB}`,
-      );
-    }
-    if (clientIdB !== connectionA.counterparty.clientId) {
-      throw new Error(
-        `Client ID ${connectionB.clientId} for connection with ID ${connB} does not match counterparty client ID ${connectionA.counterparty.clientId} for connection with ID ${connA}`,
-      );
-    }
-    // An additional check for clients where client state contains a chain ID e.g. Tendermint
-    const [rawClientStateA, rawClientStateB] = await Promise.all([
-      nodeA.getLatestClientState(clientIdA),
-      nodeB.getLatestClientState(clientIdB),
-    ]);
-    const clientStateA = decodeClientState(rawClientStateA);
-    const clientStateB = decodeClientState(rawClientStateB);
-    if (isTendermintClientState(clientStateB)) {
-      if (nodeA.chainId !== clientStateB.chainId) {
-        throw new Error(
-          `Chain ID ${nodeA.chainId} for connection with ID ${connA} does not match remote chain ID ${clientStateB.chainId}`,
-        );
-      }
-    }
-    if (isTendermintClientState(clientStateA)) {
-      if (nodeB.chainId !== clientStateA.chainId) {
-        throw new Error(
-          `Chain ID ${nodeB.chainId} for connection with ID ${connB} does not match remote chain ID ${clientStateA.chainId}`,
-        );
-      }
-    }
-
-    /*
-     * TODO: add additional checks for different light clients.
-     * e.g. solomachine, wasm etc.
-     * For now, we only support Tendermint, so we can skip this.
-     */
-    const endA = getEndpoint(nodeA, clientIdA, connA);
-    const endB = getEndpoint(nodeB, clientIdB, connB);
-    const link = new Link(endA, endB, logger);
-
-    await Promise.all([
-      link.assertHeadersMatchConsensusState(
-        "A",
-        clientIdA,
-        clientStateA,
-      ),
-      link.assertHeadersMatchConsensusState(
-        "B",
-        clientIdB,
-        clientStateB,
-      ),
-    ]);
-
-    return link;
   }
 
   /**
@@ -258,7 +147,7 @@ export class Link {
    * @param nodeA
    * @param nodeB
    */
-  public static async createWithNewConnections(
+  public static async createWithNewClientsV2(
     nodeA: BaseIbcClient,
     nodeB: BaseIbcClient,
     logger: winston.Logger,
@@ -273,48 +162,11 @@ export class Link {
       trustPeriodA,
       trustPeriodB,
     );
-
-    // wait a block to ensure we have proper proofs for creating a connection (this has failed on CI before)
     await Promise.all([nodeA.waitOneBlock(), nodeB.waitOneBlock()]);
-
-    // connectionInit on nodeA
-    const { connectionId: connIdA } = await nodeA.connOpenInit(
-      clientIdA,
-      clientIdB,
-    );
-
-    // connectionTry on nodeB
-    const proof = await prepareConnectionHandshake(
-      nodeA,
-      nodeB,
-      clientIdA,
-      clientIdB,
-      connIdA,
-    );
-    const { connectionId: connIdB } = await nodeB.connOpenTry(clientIdB, proof);
-
-    // connectionAck on nodeA
-    const proofAck = await prepareConnectionHandshake(
-      nodeB,
-      nodeA,
-      clientIdB,
-      clientIdA,
-      connIdB,
-    );
-    await nodeA.connOpenAck(connIdA, proofAck);
-
-    // connectionConfirm on dest
-    const proofConfirm = await prepareConnectionHandshake(
-      nodeA,
-      nodeB,
-      clientIdA,
-      clientIdB,
-      connIdA,
-    );
-    await nodeB.connOpenConfirm(connIdB, proofConfirm);
-
-    const endA = new TendermintEndpoint(nodeA, clientIdA, connIdA);
-    const endB = new TendermintEndpoint(nodeB, clientIdB, connIdB);
+    await nodeB.registerCounterParty(clientIdB,clientIdA,Buffer.from("ibc", "utf-8"));
+    await nodeA.registerCounterParty(clientIdA,clientIdB,Buffer.from("ibc", "utf-8"));
+    const endA = getEndpoint(nodeA, clientIdA);
+    const endB = getEndpoint(nodeB, clientIdB);
     return new Link(endA, endB, logger);
   }
 
@@ -438,92 +290,6 @@ export class Link {
       await src.client.waitOneBlock();
     }
     return this.updateClient(source);
-  }
-
-  public async createChannel(
-    sender: Side,
-    srcPort: string,
-    destPort: string,
-    ordering: Order,
-    version: string,
-  ): Promise<ChannelPair> {
-    this.logger.info(
-      `Create channel with sender ${this.chain(
-        sender,
-      )}: ${srcPort} => ${destPort}`,
-    );
-    const { src, dest } = this.getEnds(sender);
-    // init on src
-    if (src.version===1 && dest.version===1 && src.connectionID && dest.connectionID) {
-      const { channelId: channelIdSrc } = await src.client.channelOpenInit(
-        srcPort,
-        destPort,
-        ordering,
-        src.connectionID,
-        version,
-      );
-
-      // try on dest
-      const proof = await prepareChannelHandshake(
-        src.client,
-        dest.client,
-        dest.clientID,
-        srcPort,
-        channelIdSrc,
-      );
-
-      const { channelId: channelIdDest } = await dest.client.channelOpenTry(
-        destPort,
-        { portId: srcPort, channelId: channelIdSrc },
-        ordering,
-        dest.connectionID,
-        version,
-        version,
-        proof,
-      );
-
-      // ack on src
-      const proofAck = await prepareChannelHandshake(
-        dest.client,
-        src.client,
-        src.clientID,
-        destPort,
-        channelIdDest,
-      );
-      await src.client.channelOpenAck(
-        srcPort,
-        channelIdSrc,
-        channelIdDest,
-        version,
-        proofAck,
-      );
-
-      // confirm on dest
-      const proofConfirm = await prepareChannelHandshake(
-        src.client,
-        dest.client,
-        dest.clientID,
-        srcPort,
-        channelIdSrc,
-      );
-      await dest.client.channelOpenConfirm(destPort, channelIdDest, proofConfirm);
-
-      return {
-        src: {
-          portId: srcPort,
-          channelId: channelIdSrc,
-        },
-        dest: {
-          portId: destPort,
-          channelId: channelIdDest,
-        },
-      };
-    }else if (src.version===2 && dest.version===2) {
-      // version 2 channel creation
-      throw new Error("Please use v2/Link instead");
-    }else{
-      throw new Error("Invalid clients for channel creation, both sides must be version 1 or version 2");
-    }
   }
 
   /**
@@ -651,16 +417,16 @@ export class Link {
   public async getPendingPackets(
     source: Side,
     opts: QueryOpts = {},
-  ): Promise<PacketWithMetadata[]> {
+  ): Promise<PacketV2WithMetadata[]> {
     this.logger.verbose(`Get pending packets on ${this.chain(source)}`);
     const { src, dest } = this.getEnds(source);
-    const allPackets = await src.querySentPackets(opts.minHeight, opts.maxHeight) as PacketWithMetadata[];
+    const allPackets = await src.querySentPackets(opts.minHeight, opts.maxHeight) as PacketV2WithMetadata[];
 
     const toFilter = allPackets.map(({ packet }) => packet);
    
 
     // This gets the subset of packets that were already processed on the receiving chain
-    const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPackets.bind(dest.client), packetId); 
+    const unreceived = dest.version===1 ? await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId) : await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId)  
     const unreceivedPackets = allPackets.filter(({ packet }) =>
       unreceived[packetId(packet)].has(Number(packet.sequence)),
     );
@@ -668,12 +434,11 @@ export class Link {
     // However, some of these may have already been submitted as timeouts on the source chain. Check and filter
     const valid = await Promise.all(
       unreceivedPackets.map(async (packet) => {
-        const { sourcePort, sourceChannel, sequence } = packet.packet;
+        const { sourceClient, sequence } = packet.packet;
         try {
           // this throws an error if no commitment there
-          await src.client.queryCommitments(
-            sourcePort,
-            sourceChannel,
+          await src.client.queryCommitmentsV2(
+            sourceClient,
             sequence,
           );
           return packet;
@@ -688,17 +453,17 @@ export class Link {
   public async getPendingAcks(
     source: Side,
     opts: QueryOpts = {},
-  ): Promise<AckWithMetadata[]> {
+  ): Promise<AckV2WithMetadata[]> {
     this.logger.verbose(`Get pending acks on ${this.chain(source)}`);
     const { src, dest } = this.getEnds(source);
-    const allAcks = await src.queryWrittenAcks(opts.minHeight, opts.maxHeight) as AckWithMetadata[];
+    const allAcks = await src.queryWrittenAcks(opts.minHeight, opts.maxHeight) as AckV2WithMetadata[];
     const filteredAcks =
       this.packetFilter !== null
         ? allAcks.filter((ack) => this.packetFilter?.(ack.originalPacket))
         : allAcks;
     const toFilter = filteredAcks.map(({ originalPacket }) => originalPacket);
     
-    const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedAcks.bind(dest.client), ackId);
+    const unreceived =  await this.filterUnreceived(toFilter, dest.client.queryUnreceivedAcksV2.bind(dest.client), ackId);
 
     return filteredAcks.filter(({ originalPacket: packet }) =>
       unreceived[ackId(packet)].has(Number(packet.sequence)),
@@ -708,8 +473,7 @@ export class Link {
   private async filterUnreceived(
     packets: Packet[],
     unreceivedQuery: (
-      port: string,
-      channel: string,
+      client: string,
       sequences: readonly number[],
     ) => Promise<number[]>,
     idFunc: (packet: Packet) => string,
@@ -731,8 +495,8 @@ export class Link {
     const unreceivedResponses = await Promise.all(
       Object.entries(packetsPerDestination).map(
         async ([destination, sequences]) => {
-          const [port, channel] = destination.split(idDelim);
-          const notfound = await unreceivedQuery(port, channel, sequences);
+          const [client,_] = destination.split(idDelim);
+          const notfound = await unreceivedQuery(client, sequences);
           return { key: destination, sequences: notfound };
         },
       ),
@@ -748,15 +512,14 @@ export class Link {
     );
     return unreceived;
   }
-
   // this will update the client if needed and relay all provided packets from src -> dest
   // if packets are all older than the last consensusHeight, then we don't update the client.
   //
   // Returns all the acks that are associated with the just submitted packets
   public async relayPackets(
     source: Side,
-    packets: readonly PacketWithMetadata[],
-  ): Promise<AckWithMetadata[]> {
+    packets: readonly PacketV2WithMetadata[],
+  ): Promise<AckV2WithMetadata[]> {
     this.logger.info(
       `Relay ${packets.length} packets from ${this.chain(
         source,
@@ -773,11 +536,11 @@ export class Link {
 
     const submit = packets.map(({ packet }) => packet);
     const proofs = await Promise.all(
-      submit.map((packet) => src.client.getPacketProof(packet, headerHeight)),
+      submit.map((packet) => src.client.getPacketProofV2(packet, headerHeight)),
     );
     const { events, height, transactionHash } =
-      await dest.client.receivePackets(submit, proofs.map(proof => proof.proof), headerHeight);
-    const acks = parseAcksFromTxEvents(events);
+      await dest.client.receivePacketsV2(submit, proofs.map(proof => proof.proof), headerHeight);
+    const acks = parseAcksFromTxEventsV2(events);
     return acks.map((ack) => ({
       height,
       txHash: transactionHash,
@@ -793,7 +556,7 @@ export class Link {
   // Returns the block height the acks were included in, or null if no acks sent
   public async relayAcks(
     source: Side,
-    acks: readonly AckWithMetadata[],
+    acks: readonly AckV2WithMetadata[],
   ): Promise<number | null> {
     this.logger.info(
       `Relay ${acks.length} acks from ${this.chain(
@@ -811,9 +574,9 @@ export class Link {
     const headerHeight = await this.updateClientToHeight(source, neededHeight);
 
     const proofs = await Promise.all(
-      acks.map((ack) => src.client.getAckProof(ack.originalPacket, headerHeight)),
+      acks.map((ack) => src.client.getAckProofV2(ack.originalPacket, headerHeight)),
     );
-    const { height } = await dest.client.acknowledgePackets(
+    const { height } = await dest.client.acknowledgePacketsV2(
       acks,
       proofs.map((proof) => proof.proof),
       headerHeight,
@@ -825,7 +588,7 @@ export class Link {
   // We need to relay a proof from dest -> source
   public async timeoutPackets(
     source: Side,
-    packets: readonly PacketWithMetadata[],
+    packets: readonly PacketV2WithMetadata[],
   ): Promise<number | null> {
     this.logger.info(
       `Timeout ${packets.length} packets sent from ${this.chain(source)}`,
@@ -849,22 +612,15 @@ export class Link {
           originalPacket: packet,
           acknowledgement: new Uint8Array(),
         };
-        const sequence =
-          await dest.client.getNextSequenceRecv(
-            packet.destinationPort,
-            packet.destinationChannel,
-          );
-        const proof = await dest.client.getTimeoutProof(fakeAck.originalPacket, headerHeight);
-        return { proof, sequence };
+        const proof = await dest.client.getTimeoutProofV2(fakeAck.originalPacket, headerHeight);
+        return { proof };
       }),
     );
     const proofs = proofAndSeqs.map(({ proof }) => proof);
-    const seqs = proofAndSeqs.map(({ sequence }) => sequence);
 
-    const { height } = await src.client.timeoutPackets(
+    const { height } = await src.client.timeoutPacketsV2(
       rawPackets,
       proofs.map((proof) => proof.proof),
-      seqs,
       headerHeight,
     );
     return height;
@@ -887,10 +643,9 @@ export class Link {
 
 const idDelim = ":";
 const packetId = (packet: Packet) =>
-  `${packet.destinationPort}${idDelim}${packet.destinationChannel}`;
-
+  `${packet.destinationClient}${idDelim}${packet.sequence}`;
 const ackId = (packet: Packet) =>
-  `${packet.sourcePort}${idDelim}${packet.sourceChannel}`;
+  `${packet.sourceClient}${idDelim}${packet.sequence}`;
 
 export interface EndpointPair {
   readonly src: BaseEndpoint;

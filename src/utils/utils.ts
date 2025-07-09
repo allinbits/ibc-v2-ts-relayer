@@ -2,6 +2,7 @@ import { CommitmentProof, HashOp, LengthOp } from "@atomone/cosmos-ibc-types/bui
 import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
 import { Timestamp } from "@atomone/cosmos-ibc-types/build/google/protobuf/timestamp";
 import { Packet } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import { Packet as PacketV2 } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
 import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import { MerkleProof } from "@atomone/cosmos-ibc-types/build/ibc/core/commitment/v1/commitment";
 import {
@@ -22,7 +23,7 @@ import {
 } from "@atomone/cosmos-ibc-types/build/ibc/lightclients/wasm/v1/wasm";
 import { PublicKey as ProtoPubKey } from "@atomone/cosmos-ibc-types/build/tendermint/crypto/keys";
 import { ProofOps } from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof";
-import { fromUtf8, toBase64, toHex, toUtf8 } from "@cosmjs/encoding";
+import { fromHex, fromUtf8, toBase64, toHex } from "@cosmjs/encoding";
 import {
   DeliverTxResponse,
   Event,
@@ -37,7 +38,7 @@ import {
 import { arrayContentEquals } from "@cosmjs/utils";
 
 import { BaseIbcClient } from "../clients/BaseIbcClient";
-import { Ack, ChannelHandshakeProof, ConnectionHandshakeProof, PacketWithMetadata } from "../types";
+import { Ack, AckV2, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata } from "../types";
 
 
 export function deepCloneAndMutate<T extends Record<string, unknown>>(
@@ -226,11 +227,22 @@ export function parsePacketsFromBlockResult(
   ]);
 }
 
+export function parsePacketsFromBlockResultV2(
+  result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse,
+): PacketV2[] {
+  return parsePacketsFromTendermintEventsV2([
+    ...result.beginBlockEvents,
+    ...result.endBlockEvents,
+  ]);
+}
 /** Those events are normalized to strings already in CosmJS */
 export function parsePacketsFromEvents(events: readonly Event[]): Packet[] {
   return events.filter(({ type }) => type === "send_packet").map(parsePacket);
 }
 
+export function parsePacketsFromEventsV2(events: readonly Event[]): PacketV2[] {
+  return events.filter(({ type }) => type === "send_packet").map(parsePacketV2);
+}
 /**
  * Takes a list of events, finds the send_packet events, stringifies attributes
  * and parsed the events into `Packet`s.
@@ -240,7 +252,18 @@ export function parsePacketsFromTendermintEvents(
 ): Packet[] {
   return parsePacketsFromEvents(events.map(fromTendermintEvent));
 }
-
+export function parsePacketsFromTendermintEventsV2(
+  events: readonly (tendermint34.Event | tendermint37.Event)[],
+): PacketV2[] {
+  return parsePacketsFromEventsV2(events.map(fromTendermintEvent));
+}
+export  const isV2Packet = (packet: Packet | PacketV2): packet is PacketV2 =>{ 
+  if ((packet as PacketV2).destinationClient) {
+    return true;
+  }else{
+    return false;
+  }
+}
 export function parseHeightAttribute(attribute?: string): Height | undefined {
   // Note: With cosmjs-types>=0.9.0, I believe this no longer needs to return undefined under any circumstances
   // but will need more extensive testing before refactoring.
@@ -287,8 +310,8 @@ export function parsePacket({ type, attributes }: Event): Packet {
     /** identifies the channel end on the receiving chain. */
     destinationChannel: attributesObj.packet_dst_channel,
     /** actual opaque bytes transferred directly to the application module */
-    data: attributesObj.packet_data
-      ? toUtf8(attributesObj.packet_data)
+    data: attributesObj.packet_data_hex
+      ? fromHex(attributesObj.packet_data_hex)
       : undefined,
     /** block height after which the packet times out */
     timeoutHeight: parseHeightAttribute(attributesObj.packet_timeout_height),
@@ -297,12 +320,31 @@ export function parsePacket({ type, attributes }: Event): Packet {
   });
 }
 
+export function parsePacketV2({ type, attributes }: Event): PacketV2{
+  if (type !== "send_packet") {
+    throw new Error(`Cannot parse event of type ${type}`);
+  }
+  const attributesObj: Record<string, string> = attributes.reduce(
+    (acc, { key, value }) => ({
+      ...acc,
+      [key]: value,
+    }),
+    {},
+  );
+  const data = fromHex(attributesObj.encoded_packet_hex);
+  return PacketV2.decode(data);
+}
 export function parseAcksFromTxEvents(events: readonly Event[]): Ack[] {
   return events
     .filter(({ type }) => type === "write_acknowledgement")
     .map(parseAck);
 }
 
+export function parseAcksFromTxEventsV2(events: readonly Event[]): AckV2[] {
+  return events
+    .filter(({ type }) => type === "write_acknowledgement")
+    .map(parseAckV2);
+}
 export function parseAck({ type, attributes }: Event): Ack {
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
@@ -325,19 +367,40 @@ export function parseAck({ type, attributes }: Event): Ack {
     /** identifies the channel end on the receiving chain. */
     destinationChannel: attributesObj.packet_dst_channel,
     /** actual opaque bytes transferred directly to the application module */
-    data: toUtf8(attributesObj.packet_data ?? ""),
+    data: attributesObj.packet_data_hex ? fromHex(attributesObj.packet_data_hex) : undefined, 
     /** block height after which the packet times out */
     timeoutHeight: parseHeightAttribute(attributesObj.packet_timeout_height),
     /** block timestamp (in nanoseconds) after which the packet times out */
     timeoutTimestamp: may(BigInt, attributesObj.packet_timeout_timestamp),
   });
-  const acknowledgement = toUtf8(attributesObj.packet_ack ?? "");
+  const acknowledgement = fromHex(attributesObj.packet_ack_hex ?? "");
   return {
     acknowledgement,
     originalPacket,
   };
 }
 
+export function parseAckV2({ type, attributes }: Event): AckV2 {
+  if (type !== "write_acknowledgement") {
+    throw new Error(`Cannot parse event of type ${type}`);
+  }
+  const attributesObj: Record<string, string | undefined> = attributes.reduce(
+    (acc, { key, value }) => ({
+      ...acc,
+      [key]: value,
+    }),
+    {},
+  );
+  if (!attributesObj.encoded_packet_hex) {
+    throw new Error("Missing encoded_packet_hex in write_acknowledgement event");
+  }
+  const originalPacket = PacketV2.decode(fromHex(attributesObj.encoded_packet_hex));
+  const acknowledgement = fromHex(attributesObj.packet_ack_hex ?? "");
+  return {
+    acknowledgement,
+    originalPacket,
+  };
+}
 // return true if a > b, or a undefined
 export function heightGreater(a: Height | undefined, b: Height): boolean {
   if (
@@ -367,22 +430,34 @@ export function timeGreater(a: bigint | undefined, b: number): boolean {
   const valid = Number(a) > b * 1_000_000_000;
   return valid;
 }
+export function mergeUint8Arrays(...arrays: Uint8Array[]): Uint8Array {
+  const totalSize = arrays.reduce((acc, e) => acc + e.length, 0);
+  const merged = new Uint8Array(totalSize);
+
+  arrays.forEach((array, i, arrays) => {
+    const offset = arrays.slice(0, i).reduce((acc, e) => acc + e.length, 0);
+    merged.set(array, offset);
+  });
+
+  return merged;
+}
 
 // take height and time from receiving chain to see which packets have timed out
 // return [toSubmit, toTimeout].
 // you can advance height, time a block or two into the future if you wish a margin of error
-export function splitPendingPackets(
+export function splitPendingPackets<T extends (PacketWithMetadata | PacketV2WithMetadata)> (
   currentHeight: Height,
   currentTime: number, // in seconds
-  packets: readonly PacketWithMetadata[],
+  packets: readonly T[],
 ): {
-  readonly toSubmit: readonly PacketWithMetadata[];
-  readonly toTimeout: readonly PacketWithMetadata[];
+  readonly toSubmit: readonly T[];
+  readonly toTimeout: readonly T[];
 } {
   return packets.reduce(
     (acc, packet) => {
+      if (isV2Packet(packet.packet)) {
+        // no timeout height, so we can submit it
       const validPacket =
-        heightGreater(packet.packet.timeoutHeight, currentHeight) &&
         timeGreater(packet.packet.timeoutTimestamp, currentTime);
       return validPacket
         ? {
@@ -393,10 +468,25 @@ export function splitPendingPackets(
             ...acc,
             toTimeout: [...acc.toTimeout, packet],
           };
+      }else{
+
+        const validPacket =
+          heightGreater(packet.packet.timeoutHeight, currentHeight) &&
+          timeGreater(packet.packet.timeoutTimestamp, currentTime);
+        return validPacket
+          ? {
+              ...acc,
+              toSubmit: [...acc.toSubmit, packet],
+            }
+          : {
+              ...acc,
+              toTimeout: [...acc.toTimeout, packet],
+            };
+      }
     },
     {
-      toSubmit: [] as readonly PacketWithMetadata[],
-      toTimeout: [] as readonly PacketWithMetadata[],
+      toSubmit: [] as readonly T[],
+      toTimeout: [] as readonly T[],
     },
   );
 }
@@ -409,6 +499,13 @@ export function presentPacketData(data: Uint8Array): Record<string, unknown> {
   }
 }
 
+export function presentPacketDataV2(data: Uint8Array): Record<string, unknown> {
+  try {
+    return JSON.parse(fromUtf8(data));
+  } catch {
+    return { hex: toHex(data) };
+  }
+}
 export async function prepareConnectionHandshake(
   src: BaseIbcClient,
   dest: BaseIbcClient,

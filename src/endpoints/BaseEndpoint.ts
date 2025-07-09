@@ -1,24 +1,26 @@
-import { CommitResponse } from "@cosmjs/tendermint-rpc";
-
 import { BaseIbcClient } from "../clients/BaseIbcClient";
-import { AckWithMetadata, ClientType, PacketWithMetadata } from "../types";
+import { AckV2WithMetadata, AckWithMetadata, PacketV2WithMetadata, PacketWithMetadata } from "../types";
 
 export abstract class BaseEndpoint {
   public readonly client: BaseIbcClient;
   public readonly clientID: string;
-  public readonly connectionID: string;
-
+  public readonly connectionID: string | undefined;
+  public readonly version: 1 | 2 = 1; // Default to version 1 for compatibility
   public constructor(
     client: BaseIbcClient,
     clientID: string,
-    connectionID: string,
+    connectionID?: string,
   ) {
     this.client = client;
     this.clientID = clientID;
-    this.connectionID = connectionID;
+    if (connectionID) {
+      this.connectionID = connectionID;
+    }else{
+      this.version = 2;
+    }
   }
   
   abstract chainId(): string;
-  abstract querySentPackets(minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketWithMetadata[]>;
-  abstract queryWrittenAcks(minHeight: number | undefined, maxHeight: number | undefined): Promise<AckWithMetadata[]>
+  abstract querySentPackets(minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketWithMetadata[] | PacketV2WithMetadata[]>;
+  abstract queryWrittenAcks(minHeight: number | undefined, maxHeight: number | undefined): Promise<AckWithMetadata[] | AckV2WithMetadata[]>;
 }

@@ -4,6 +4,7 @@ import winston from "winston";
 
 import { TendermintIbcClient } from "./clients/tendermint/IbcClient";
 import { Link } from "./links/v1/link";
+import { Link as LinkV2 } from "./links/v2/link";
 import { ChainType, RelayedHeights, RelayPaths } from "./types";
 import { getSigner } from "./utils/signers";
 import { addRelayPath, getRelayedHeights, getRelayPaths, updateRelayedHeights } from "./utils/storage";
@@ -12,7 +13,7 @@ export class Relayer extends EventEmitter {
     private logger: winston.Logger;
     private relayedHeights: Map<number, RelayedHeights> = new Map();
     private relayPaths: RelayPaths[] = [];
-    private links = new Map<number,Link>();
+    private links = new Map<number,Link | LinkV2>();
     private running: boolean = false;
     
     constructor(logger: winston.Logger) {
@@ -36,27 +37,70 @@ export class Relayer extends EventEmitter {
         const signerB = await getSigner(chainIdB);
         const clientA = await  TendermintIbcClient.connectWithSigner(nodeA, signerA, { senderAddress: (await signerA.getAccounts())[0].address, logger: this.logger} );
         const clientB = await  TendermintIbcClient.connectWithSigner(nodeB, signerB, { senderAddress: (await signerB.getAccounts())[0].address, logger: this.logger} );
-        const link = await Link.createWithNewConnections(
-            clientA,
-            clientB,
-            this.logger);
+        if (version===1) {
+            const link = await Link.createWithNewConnections(
+                clientA,
+                clientB,
+                this.logger);
 
-        const path = await addRelayPath(
-            chainIdA,
-            nodeA,
-            chainIdB,
-            nodeB,
-            chainTypeA,
-            chainTypeB,
-            link.endA.clientID,
-            link.endB.clientID,
-            version
-        );
-        this.relayPaths = await getRelayPaths();
-        if (path) {
-            this.links.set(path.id, link);
-            this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
-        }
+            const path = await addRelayPath(
+                chainIdA,
+                nodeA,
+                chainIdB,
+                nodeB,
+                chainTypeA,
+                chainTypeB,
+                link.endA.connectionID ?? link.endA.clientID,
+                link.endB.connectionID ?? link.endB.clientID,
+                version
+            );
+            this.relayPaths = await getRelayPaths();
+        
+            if (path) {
+                this.links.set(path.id, link);
+                this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
+            }
+            await link.createChannel(
+                "A",
+                "transfer",
+                "transfer",
+                1,
+                "ics20-1"
+            );  
+        }else{
+            const link = await LinkV2.createWithNewClientsV2(
+                clientA,
+                clientB,
+                this.logger);
+
+            const path = await addRelayPath(
+                chainIdA,
+                nodeA,
+                chainIdB,
+                nodeB,
+                chainTypeA,
+                chainTypeB,
+                link.endA.connectionID ?? link.endA.clientID,
+                link.endB.connectionID ?? link.endB.clientID,
+                version
+            );
+            this.relayPaths = await getRelayPaths();
+        
+            if (path) {
+                this.links.set(path.id, link);
+                this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
+            }
+            /*
+            await link.createChannel(
+                "A",
+                "transfer",
+                "transfer",
+                1,
+                "ics20-1"
+            );  
+            */
+            
+        }            
     }
     async addExistingRelayPath(
         chainIdA: string,
@@ -139,6 +183,23 @@ export class Relayer extends EventEmitter {
             try {
                 for (const [id, link] of this.links.entries()) {
                     this.logger.info(`Checking relay path ${id}...`);
+                    if (!this.relayedHeights) {
+                        this.relayedHeights = new Map<number, RelayedHeights>();
+                    }
+                    let relayedHeights = await getRelayedHeights(id);
+                    if (!relayedHeights) {
+                        await updateRelayedHeights(id, 0, 0, 0, 0);
+                        relayedHeights = {
+                            id: 0,
+                            relayPathId: id,
+                            relayHeightA: 0,
+                            relayHeightB: 0,
+                            ackHeightA: 0,
+                            ackHeightB: 0
+                        }
+                        this.logger.info(`No relayed heights found for path ${id}. Initializing to zero.`);
+                    }
+                    this.relayedHeights.set(id, relayedHeights);
                     let relayHeights = this.relayedHeights.get(id);
                     if (relayHeights) {
                         relayHeights = { ...relayHeights, ...await link.checkAndRelayPacketsAndAcks(
@@ -161,7 +222,6 @@ export class Relayer extends EventEmitter {
 
     relayMessage(message?: string) {
         // Placeholder for relaying a message
-        console.log("Relaying message:", message);
         this.emit("messageRelayed", message);
     }
 }
