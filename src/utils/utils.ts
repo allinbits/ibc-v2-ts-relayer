@@ -466,7 +466,6 @@ export function splitPendingPackets<T extends (PacketWithMetadata | PacketV2With
     (acc, packet) => {
       if (isV2Packet(packet.packet)) {
         // no timeout height, so we can submit it
-        console.log(packet.packet.timeoutTimestamp, currentTime);
       const validPacket =
         timeGreaterV2(packet.packet.timeoutTimestamp, currentTime);
       return validPacket

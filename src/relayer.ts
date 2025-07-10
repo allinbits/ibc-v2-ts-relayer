@@ -181,7 +181,6 @@ export class Relayer extends EventEmitter {
                     }
                     
                     let relayedHeights = await getRelayedHeights(id);
-                    console.log(`Relayed heights for path ${id}:`, relayedHeights);
                     if (!relayedHeights) {
                         await updateRelayedHeights(id, 0, 0, 0, 0);
                         relayedHeights = {

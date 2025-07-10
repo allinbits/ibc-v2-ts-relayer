@@ -1226,7 +1226,6 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
-    console.log(result);
     return {
       events: result.events,
       transactionHash: result.transactionHash,

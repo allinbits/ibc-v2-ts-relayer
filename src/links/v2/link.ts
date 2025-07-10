@@ -536,7 +536,6 @@ export class Link {
     this.logger.verbose(`Get pending acks on ${this.chain(source)}`);
     const { src, dest } = this.getEnds(source);
     const allAcks = await src.queryWrittenAcks(opts.minHeight, opts.maxHeight) as AckV2WithMetadata[];
-    console.log(allAcks);
     const filteredAcks =
       this.packetFilter !== null
         ? allAcks.filter((ack) => this.packetFilter?.(ack.originalPacket))
