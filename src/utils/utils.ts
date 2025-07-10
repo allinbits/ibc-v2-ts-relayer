@@ -430,6 +430,15 @@ export function timeGreater(a: bigint | undefined, b: number): boolean {
   const valid = Number(a) > b * 1_000_000_000;
   return valid;
 }
+
+// in IBC v2 both a and b are in seconds
+export function timeGreaterV2(a: bigint | undefined, b: number): boolean {
+  if (a === undefined || a == 0n) {
+    return true;
+  }
+  const valid = Number(a) > b ;
+  return valid;
+}
 export function mergeUint8Arrays(...arrays: Uint8Array[]): Uint8Array {
   const totalSize = arrays.reduce((acc, e) => acc + e.length, 0);
   const merged = new Uint8Array(totalSize);
@@ -457,8 +466,9 @@ export function splitPendingPackets<T extends (PacketWithMetadata | PacketV2With
     (acc, packet) => {
       if (isV2Packet(packet.packet)) {
         // no timeout height, so we can submit it
+        console.log(packet.packet.timeoutTimestamp, currentTime);
       const validPacket =
-        timeGreater(packet.packet.timeoutTimestamp, currentTime);
+        timeGreaterV2(packet.packet.timeoutTimestamp, currentTime);
       return validPacket
         ? {
             ...acc,

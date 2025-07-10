@@ -426,7 +426,7 @@ export class Link {
    
 
     // This gets the subset of packets that were already processed on the receiving chain
-    const unreceived = dest.version===1 ? await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId) : await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId)  
+    const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId);
     const unreceivedPackets = allPackets.filter(({ packet }) =>
       unreceived[packetId(packet)].has(Number(packet.sequence)),
     );
