@@ -1,10 +1,16 @@
-/* eslint-disable max-lines-per-function */
+ 
 import { QueryNextSequenceSendResponse,QueryPacketCommitmentResponse,QueryUnreceivedAcksResponse, QueryUnreceivedPacketsResponse } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/query";
-import {QueryClientImpl as ChannelV2Query} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/query";
+import { QueryClientImpl as ChannelV2Query } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/query";
+import { QueryClientImpl as ClientV2Query,QueryCounterpartyInfoResponse } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/query";
 import { createProtobufRpcClient, QueryClient } from "@cosmjs/stargate";
 
 export interface IbcV2Extension {
   readonly ibc: {
+    readonly clientV2: {
+      readonly counterparty: (
+        clientId: string,
+      ) => Promise<QueryCounterpartyInfoResponse>;
+    },
     readonly channelV2: {      
       readonly packetCommitment: (
         clientId: string,
@@ -30,9 +36,14 @@ export function setupIbcV2Extension(base: QueryClient): IbcV2Extension {
   // Use these services to get easy typed access to query methods
   // These cannot be used for proof verification
   const channelQueryService = new ChannelV2Query(rpc);
+  const clientQueryService = new ClientV2Query(rpc);
 
   return {
     ibc: {
+      clientV2: {
+        counterparty: async (clientId: string) =>
+          clientQueryService.CounterpartyInfo({clientId}),
+      },
       channelV2: {
         packetCommitment: async (
           clientId: string,

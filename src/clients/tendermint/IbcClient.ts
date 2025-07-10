@@ -11,7 +11,7 @@ import {
   MsgRecvPacket,
   MsgTimeout,
 } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/tx";
-import {  Packet as PacketV2} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
+import {  Acknowledgement, Packet as PacketV2} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
 import { MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2 } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/tx";
 import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import {
@@ -1226,6 +1226,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
+    console.log(result);
     return {
       events: result.events,
       transactionHash: result.transactionHash,
@@ -1339,22 +1340,20 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const msgs = [];
     for (const i in acks) {
       const packet = acks[i].originalPacket;
-      const acknowledgement = acks[i].acknowledgement;
+      const acknowledgement = Acknowledgement.decode(acks[i].acknowledgement);
       // TODO: construct Ack Message correctly
       this.logger.verbose(
         `Ack packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`,
         {
           packet: packet.payloads,
-          ack: presentPacketData(acknowledgement),
+          ack: acknowledgement,
         },
       );
       const msg = {
         typeUrl: "/ibc.core.channel.v2.MsgAcknowledgement",
         value: MsgAcknowledgementV2.fromPartial({
           packet,
-          acknowledgement: {
-            appAcknowledgements: [acknowledgement]
-          },
+          acknowledgement,
           proofAcked: proofAckeds[i],
           proofHeight,
           signer: senderAddress,
@@ -1781,15 +1780,22 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
   }
   public async getConnection(connectionId: string): Promise<Partial<QueryConnectionResponse>> {
-
-
-    this.logger.debug(`Connection ${connectionId} found`);
+  
     const connection = await this.query.ibc.connection.connection(connectionId);
     this.logger.debug(`Connection ${connectionId} found`, connection);
     if (!connection.connection) {
       throw new Error(`No connection ${connectionId} found`);
     }
     return connection;
+  }
+  public async getCounterparty(clientId: string): Promise<string> {
+
+    const counterparty = await this.query.ibc.clientV2.counterparty(clientId);
+    this.logger.debug(`Client ${clientId} found`, counterparty);
+    if (!counterparty.counterpartyInfo) {
+      throw new Error(`No counterparty for ${clientId} found`);
+    }
+    return counterparty.counterpartyInfo.clientId;
   }
   public async searchTendermintBlocks(query: string): Promise<BlockSearchResponse> {
 
@@ -1854,7 +1860,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     
 
     // TODO: Get V2 acks from events
-    let query = `write_acknowledgement.packet_connection='${clientId}'`;
+    let query = `write_acknowledgement.packet_dest_client='${clientId}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
     }

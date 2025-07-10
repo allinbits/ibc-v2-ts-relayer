@@ -395,7 +395,7 @@ export function parseAckV2({ type, attributes }: Event): AckV2 {
     throw new Error("Missing encoded_packet_hex in write_acknowledgement event");
   }
   const originalPacket = PacketV2.decode(fromHex(attributesObj.encoded_packet_hex));
-  const acknowledgement = fromHex(attributesObj.packet_ack_hex ?? "");
+  const acknowledgement = fromHex(attributesObj.encoded_acknowledgement_hex ?? "");
   return {
     acknowledgement,
     originalPacket,

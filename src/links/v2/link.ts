@@ -170,6 +170,85 @@ export class Link {
     return new Link(endA, endB, logger);
   }
 
+  public static async createWithExistingClients(
+    nodeA: BaseIbcClient,
+    nodeB: BaseIbcClient,
+    clientIdA: string,
+    clientIdB: string,
+    logger: winston.Logger,
+  ): Promise<Link> {
+    const [chainA, chainB] = [nodeA.chainId, nodeB.chainId];
+
+    const [ connectionA, connectionB ] =
+      await Promise.all([
+        nodeA.getCounterparty(clientIdA),
+        nodeB.getCounterparty(clientIdB),
+      ]);
+
+    // The following are the basic checks we do to ensure the clients are valid
+    if (!connectionA) {
+      throw new Error(`[${chainA}] Counterparty not found for ID ${clientIdA}`);
+    }
+    if (!connectionB) {
+      throw new Error(`[${chainB}] Counterparty not found for ID ${clientIdB}`);
+    }
+
+    if (clientIdA !== connectionB) {
+      throw new Error(
+        `Client ID on [${chainA}] : ${clientIdA}  dos not match counterparty client ID on [${chainB}] : ${connectionB}`
+      );
+    }
+    if (clientIdB !== connectionA) {
+      throw new Error(
+        `Client ID on [${chainB}] : ${clientIdB}  dos not match counterparty client ID on [${chainA}] : ${connectionA}`
+      );
+    }
+    // An additional check for clients where client state contains a chain ID e.g. Tendermint
+    const [rawClientStateA, rawClientStateB] = await Promise.all([
+      nodeA.getLatestClientState(clientIdA),
+      nodeB.getLatestClientState(clientIdB),
+    ]);
+    const clientStateA = decodeClientState(rawClientStateA);
+    const clientStateB = decodeClientState(rawClientStateB);
+    if (isTendermintClientState(clientStateB)) {
+      if (nodeA.chainId !== clientStateB.chainId) {
+        throw new Error(
+          `Chain ID ${nodeA.chainId} for client with ID ${clientIdA} does not match remote chain ID ${clientStateB.chainId}`,
+        );
+      }
+    }
+    if (isTendermintClientState(clientStateA)) {
+      if (nodeB.chainId !== clientStateA.chainId) {
+        throw new Error(
+          `Chain ID ${nodeB.chainId} for client with ID ${clientIdB} does not match remote chain ID ${clientStateA.chainId}`,
+        );
+      }
+    }
+
+    /*
+     * TODO: add additional checks for different light clients.
+     * e.g. solomachine, wasm etc.
+     * For now, we only support Tendermint, so we can skip this.
+     */
+    const endA = getEndpoint(nodeA, clientIdA);
+    const endB = getEndpoint(nodeB, clientIdB);
+    const link = new Link(endA, endB, logger);
+
+    await Promise.all([
+      link.assertHeadersMatchConsensusState(
+        "A",
+        clientIdA,
+        clientStateA,
+      ),
+      link.assertHeadersMatchConsensusState(
+        "B",
+        clientIdB,
+        clientStateB,
+      ),
+    ]);
+
+    return link;
+  }
   // you can use this if you already have the info out of bounds
   // FIXME: check the validity of that data?
   public constructor(endA: BaseEndpoint, endB: BaseEndpoint, logger: winston.Logger) {
@@ -457,6 +536,7 @@ export class Link {
     this.logger.verbose(`Get pending acks on ${this.chain(source)}`);
     const { src, dest } = this.getEnds(source);
     const allAcks = await src.queryWrittenAcks(opts.minHeight, opts.maxHeight) as AckV2WithMetadata[];
+    console.log(allAcks);
     const filteredAcks =
       this.packetFilter !== null
         ? allAcks.filter((ack) => this.packetFilter?.(ack.originalPacket))

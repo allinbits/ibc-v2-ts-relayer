@@ -205,6 +205,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
    * Methods to get basic IBC connection and client information.
    */
   abstract getConnection(connectionId: string): Promise<Partial<QueryConnectionResponse>>;
+  abstract getCounterparty(clientId: string): Promise<string>;
   abstract getChannelV1Type(portId: string, channelId: string): Promise<Order>;
   abstract getLatestClientState(clientId: string): Promise<Any>;
   abstract getConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<Any>;

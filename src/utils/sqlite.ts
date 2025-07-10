@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS relayPaths (
 CREATE TABLE IF NOT EXISTS relayedHeights (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     relayPathId INTEGER NOT NULL,
-    relayHeightA INTEGER NOT NULL,
-    relayHeightB INTEGER NOT NULL,
+    packetHeightA INTEGER NOT NULL,
+    packetHeightB INTEGER NOT NULL,
     ackHeightA INTEGER NOT NULL,
     ackHeightB INTEGER NOT NULL,
     FOREIGN KEY (relayPathId) REFERENCES relayPaths(id)

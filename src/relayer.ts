@@ -84,22 +84,12 @@ export class Relayer extends EventEmitter {
                 link.endB.connectionID ?? link.endB.clientID,
                 version
             );
-            this.relayPaths = await getRelayPaths();
+           // this.relayPaths = await getRelayPaths();
         
             if (path) {
-                this.links.set(path.id, link);
+                //this.links.set(path.id, link);
                 this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
             }
-            /*
-            await link.createChannel(
-                "A",
-                "transfer",
-                "transfer",
-                1,
-                "ics20-1"
-            );  
-            */
-            
         }            
     }
     async addExistingRelayPath(
@@ -124,7 +114,6 @@ export class Relayer extends EventEmitter {
             clientIdB,
             version
         );
-        this.relayPaths = await getRelayPaths();
     }
 
     async sleep(ms:number) {
@@ -149,8 +138,8 @@ export class Relayer extends EventEmitter {
                         relayedHeights = {
                             id: 0,
                             relayPathId: path.id,
-                            relayHeightA: 0,
-                            relayHeightB: 0,
+                            packetHeightA: 0,
+                            packetHeightB: 0,
                             ackHeightA: 0,
                             ackHeightB: 0
                         }
@@ -161,7 +150,11 @@ export class Relayer extends EventEmitter {
                     const signerB = await getSigner(path.chainIdB);
                     const clientA = await  TendermintIbcClient.connectWithSigner(path.nodeA, signerA, { senderAddress: (await signerA.getAccounts())[0].address, logger: this.logger} );
                     const clientB = await  TendermintIbcClient.connectWithSigner(path.nodeB, signerB, { senderAddress: (await signerB.getAccounts())[0].address, logger: this.logger} );
-                    this.links.set(path.id, await Link.createWithExistingConnections(clientA,clientB,path.clientA, path.clientB,this.logger));
+                    if (path.version === 1) {
+                        this.links.set(path.id, await Link.createWithExistingConnections(clientA,clientB,path.clientA, path.clientB,this.logger));
+                    }else{
+                        this.links.set(path.id, await LinkV2.createWithExistingClients(clientA,clientB,path.clientA, path.clientB,this.logger));    
+                    }
                 };
             }
 
@@ -186,14 +179,16 @@ export class Relayer extends EventEmitter {
                     if (!this.relayedHeights) {
                         this.relayedHeights = new Map<number, RelayedHeights>();
                     }
+                    
                     let relayedHeights = await getRelayedHeights(id);
+                    console.log(`Relayed heights for path ${id}:`, relayedHeights);
                     if (!relayedHeights) {
                         await updateRelayedHeights(id, 0, 0, 0, 0);
                         relayedHeights = {
                             id: 0,
                             relayPathId: id,
-                            relayHeightA: 0,
-                            relayHeightB: 0,
+                            packetHeightA: 0,
+                            packetHeightB: 0,
                             ackHeightA: 0,
                             ackHeightB: 0
                         }
@@ -207,7 +202,7 @@ export class Relayer extends EventEmitter {
                         2,
                         6)};
                         this.relayedHeights.set(id, relayHeights);
-                        updateRelayedHeights(id, relayHeights.relayHeightA, relayHeights.relayHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
+                        updateRelayedHeights(id, relayHeights.packetHeightA, relayHeights.packetHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
                         this.logger.info(`Updated relay heights for path ${id}:`, relayHeights);
                     }
                     await link.updateClientIfStale("A", options.maxAgeDest);

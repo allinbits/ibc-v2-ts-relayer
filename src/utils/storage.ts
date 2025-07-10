@@ -7,15 +7,15 @@ const updateRelayedHeights = async (pathId: number, relayHeightA: number, relayH
         if (typeof window != "undefined") {
             const dexie = await import('./dexie');
             await dexie.db.relayedHeights.update( height.id, {
-                relayHeightA,
-                relayHeightB,
+                packetHeightA: relayHeightA,
+                packetHeightB: relayHeightB,
                 ackHeightA,
                 ackHeightB
             });
         } else {
             const sqlite = await import('./sqlite');
             const db = await sqlite.openDB(config.dbFile);
-            await db.run('UPDATE relayedHeights SET relayHeightA = ?, relayHeightB = ?, ackHeightA = ?, ackHeightB = ? WHERE id = ?',
+            await db.run('UPDATE relayedHeights SET packetHeightA = ?, packetHeightB = ?, ackHeightA = ?, ackHeightB = ? WHERE id = ?',
                 [relayHeightA, relayHeightB, ackHeightA, ackHeightB, height.id]);
         }   
     }else{
@@ -43,11 +43,11 @@ const getRelayedHeights = async (pathId: number) => {
     } catch (_e) {
         if (typeof window != "undefined") {
             const dexie = await import('./dexie');
-            await dexie.db.relayedHeights.add({relayHeightA:0, relayHeightB: 0, ackHeightA: 0, ackHeightB: 0, relayPathId: pathId});                
+            await dexie.db.relayedHeights.add({packetHeightA:0, packetHeightB: 0, ackHeightA: 0, ackHeightB: 0, relayPathId: pathId});                
         } else {
             const sqlite = await import('./sqlite');
             const db = await sqlite.openDB(config.dbFile);
-            await db.run('INSERT INTO relayedHeights (relayHeightA, relayHeightB, ackHeightA, ackHeightB, relayPathId) VALUES (?, ?, ?, ?, ?)', [0, 0, 0, 0, pathId]);
+            await db.run('INSERT INTO relayedHeights (packetHeightA, packetHeightB, ackHeightA, ackHeightB, relayPathId) VALUES (?, ?, ?, ?, ?)', [0, 0, 0, 0, pathId]);
         }
         return getRelayedHeights(pathId);
     }

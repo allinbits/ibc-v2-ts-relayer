@@ -27,8 +27,8 @@ export interface RelayPaths {
 export interface RelayedHeights {
     id: number;
     relayPathId: number;
-    relayHeightA: number;
-    relayHeightB: number;
+    packetHeightA: number;
+    packetHeightB: number;
     ackHeightA: number;
     ackHeightB: number;
 }
