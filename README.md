@@ -48,10 +48,12 @@ and the faucet port as needed.
 Then start both chains with `ignite chain serve`.
 
 The `src/index.ts` file is currently configured to look for 2 chains on `localhost:26657` and `localhost:26658` called `chaina` and `chainb` accordingly.
+It sets up an IBC v1 and an IBC v2 connection between them.
 Modify as needed.
 
 The `src/utils/signers.ts` file currently has the mnemonic for the relayer account hard-coded (reading from keyring pending). Again modify as needed.
 
 Once the above have been setup:
 
-`node dist/index.js` will start the relayer and do V1 handshaking between the 2 chains and start relaying messages.
+`node dist/index.js` will start the relayer and do V1 and v2 handshaking between the 2 chains and start relaying messages for the 2 paths (v1 and v2)
+
