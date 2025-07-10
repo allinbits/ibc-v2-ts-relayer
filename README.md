@@ -57,3 +57,40 @@ Once the above have been setup:
 
 `node dist/index.js` will start the relayer and do V1 and v2 handshaking between the 2 chains and start relaying messages for the 2 paths (v1 and v2)
 
+Below you will find the basic code (in Typescript) to craft an MsgSendPacket message in order to create an IBC v2 Transfer transaction:
+
+First we create the FungibleTokenPacketData (V2 transfer app) and proto-encode it to a Uint8Array:
+
+```
+      const packetData = FungibleTokenPacketData.encode(({
+        amount: <amount>,
+        denom: <denom>,
+        sender: <senderAddress>,
+        receiver: <receiverAddress>,
+        memo: <optionalMemo>,
+      } as FungibleTokenPacketData)).finish();
+```
+
+This can also be JSON or solidity ABI encoded (instead of proto-encoded) chosen by the encoding field in the payload struct.
+The payload struct is constructed as follows:
+
+```
+      const payloadV2 =  Payload.fromPartial({
+        sourcePort: 'transfer',
+        destinationPort: 'transfer',
+        version: 'ics20-1',
+        encoding: "application/x-protobuf", // can also be "application/json" or "application/x-solidity-abi"
+        value: packetData, // the byte[] above
+      });
+```
+
+Finally we build the message like so:
+
+```
+      const msg = MsgSendPacket.fromPartial({
+        sourceClient: <sourceClientId>, //e.g. "07-tendermint-1"
+        signer: <signerAddress>,
+        payloads: [payloadV2], // an array of payloads such as the one above
+        timeoutTimestamp: <unixTimestamp> // in SECONDS
+      })
+```
