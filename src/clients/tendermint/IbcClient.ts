@@ -1,7 +1,13 @@
 /* eslint-disable max-lines */
-import { Any } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
-import { MsgTransfer } from "@atomone/cosmos-ibc-types/build/ibc/applications/transfer/v1/tx";
-import { Order, Packet, State } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+import {
+  Any,
+} from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
+import {
+  MsgTransfer,
+} from "@atomone/cosmos-ibc-types/build/ibc/applications/transfer/v1/tx";
+import {
+  Order, Packet, State,
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
 import {
   MsgAcknowledgement,
   MsgChannelOpenAck,
@@ -11,32 +17,54 @@ import {
   MsgRecvPacket,
   MsgTimeout,
 } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/tx";
-import {  Acknowledgement, Packet as PacketV2} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
-import { MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2 } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/tx";
-import { Height } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+import {
+  Acknowledgement, Packet as PacketV2,
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
+import {
+  MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2,
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/tx";
+import {
+  Height,
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
 import {
   MsgCreateClient,
   MsgUpdateClient,
 } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/tx";
-import { MsgRegisterCounterparty } from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/tx";
-import { Version } from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/connection";
-import { QueryConnectionResponse } from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query";
+import {
+  MsgRegisterCounterparty,
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/tx";
+import {
+  Version,
+} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/connection";
+import {
+  QueryConnectionResponse,
+} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query";
 import {
   MsgConnectionOpenAck,
   MsgConnectionOpenConfirm,
   MsgConnectionOpenInit,
   MsgConnectionOpenTry,
 } from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/tx";
-import { ClientState, ConsensusState } from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+import {
+  ClientState, ConsensusState,
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
   Header as TendermintHeader,
 } from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
-import { Commit, Header, SignedHeader } from "@atomone/cosmos-ibc-types/build/tendermint/types/types";
-import { blockIDFlagFromJSON, ValidatorSet } from "@atomone/cosmos-ibc-types/build/tendermint/types/validator";
-import { fromHex, toAscii, toHex } from "@cosmjs/encoding";
-import { OfflineSigner, Registry } from "@cosmjs/proto-signing";
+import {
+  Commit, Header, SignedHeader,
+} from "@atomone/cosmos-ibc-types/build/tendermint/types/types";
+import {
+  blockIDFlagFromJSON, ValidatorSet,
+} from "@atomone/cosmos-ibc-types/build/tendermint/types/validator";
+import {
+  fromHex, toAscii, toHex,
+} from "@cosmjs/encoding";
+import {
+  OfflineSigner, Registry,
+} from "@cosmjs/proto-signing";
 import {
   AuthExtension,
   BankExtension,
@@ -54,45 +82,32 @@ import {
   SigningStargateClientOptions,
   StakingExtension,
 } from "@cosmjs/stargate";
-import { CometClient, connectComet, ReadonlyDateWithNanoseconds } from "@cosmjs/tendermint-rpc";
-import { arrayContentEquals, assert, sleep } from "@cosmjs/utils";
+import {
+  CometClient, connectComet, ReadonlyDateWithNanoseconds,
+} from "@cosmjs/tendermint-rpc";
+import {
+  arrayContentEquals, assert, sleep,
+} from "@cosmjs/utils";
 
-import { Ack, AckV2, AckV2WithMetadata, AckWithMetadata,BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientArgs, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse } from "../../types";
-import { buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight } from "../../utils/utils";
-import { IbcV2Extension, setupIbcV2Extension } from "../../v2queries/ibc";
-import { BaseIbcClient, BaseIbcClientOptions, isTendermint } from "../BaseIbcClient";
+import {
+  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientArgs, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
+} from "../../types";
+import {
+  buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight,
+} from "../../utils/utils";
+import {
+  IbcV2Extension, setupIbcV2Extension,
+} from "../../v2queries/ibc";
+import {
+  BaseIbcClient, BaseIbcClientOptions, isTendermint,
+} from "../BaseIbcClient";
 
 function ibcRegistry(): Registry {
-  return new Registry([
-    ...defaultRegistryTypes,
-    ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient],
-    ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient],
-    ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty],
-    ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit],
-    ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry],
-    ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck],
-    [
-      "/ibc.core.connection.v1.MsgConnectionOpenConfirm",
-      MsgConnectionOpenConfirm,
-    ],
-    ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit],
-    ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry],
-    ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck],
-    ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm],
-    ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket],
-    ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement],
-    ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout],
-    ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket],
-    ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2],
-    ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2],
-    ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2],
-    ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer],
-  ]);
+  return new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer]]);
 }
 export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
-  gasPrice: GasPrice;
+  gasPrice: GasPrice
 };
-
 
 const defaultMerklePrefix = {
   keyPrefix: toAscii("ibc"),
@@ -105,40 +120,38 @@ const defaultConnectionVersion: Version = {
 const defaultDelayPeriod = 0n;
 
 export interface TendermintIbcClientTypes {
-  header: CometHeader;
-  consensusState: TendermintConsensusState;
-  clientState: TendermintClientState;
-  clientArgs: CreateClientArgs;
-  lightClientHeader: TendermintHeader;
+  header: CometHeader
+  consensusState: TendermintConsensusState
+  clientState: TendermintClientState
+  clientArgs: CreateClientArgs
+  lightClientHeader: TendermintHeader
 }
 export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes> {
-
   public readonly gasPrice: GasPrice;
   public readonly sign: SigningStargateClient;
   public readonly tm: CometClient;
 
-  public readonly query: QueryClient &
-    AuthExtension &
-    BankExtension &
-    IbcExtension &
-    IbcV2Extension &
-    StakingExtension;
+  public readonly query: QueryClient
+    & AuthExtension
+    & BankExtension
+    & IbcExtension
+    & IbcV2Extension
+    & StakingExtension;
+
   public static async connectWithSigner(
     endpoint: string,
     signer: OfflineSigner,
-    options: Partial<TendermintIbcClientOptions>
+    options: Partial<TendermintIbcClientOptions>,
   ): Promise<TendermintIbcClient> {
     options.senderAddress = (await signer.getAccounts())[0].address;
     // override any registry setup, use the other options
-    options.gasPrice =  GasPrice.fromString('0.025token');
+    options.gasPrice = GasPrice.fromString("0.025token");
     const mergedOptions = {
       ...options,
       registry: ibcRegistry(),
     };
     const signingClient = await SigningStargateClient.connectWithSigner(
-      endpoint,
-      signer,
-      mergedOptions,
+      endpoint, signer, mergedOptions,
     );
     const tmClient = await connectComet(endpoint);
     const chainId = await signingClient.getChainId();
@@ -146,9 +159,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     options.clientType = ClientType.Tendermint;
     options.revisionNumber = parseRevisionNumber(chainId);
     return new TendermintIbcClient(
-      signingClient,
-      tmClient,
-      options as TendermintIbcClientOptions,
+      signingClient, tmClient, options as TendermintIbcClientOptions,
     );
   }
 
@@ -162,12 +173,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.tm = tmClient;
     this.gasPrice = options.gasPrice;
     this.query = QueryClient.withExtensions(
-      tmClient,
-      setupAuthExtension,
-      setupBankExtension,
-      setupIbcExtension,
-      setupStakingExtension,
-      setupIbcV2Extension
+      tmClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
     );
   }
 
@@ -260,18 +266,24 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
   /** Returns the unbonding period in seconds */
   public async getUnbondingPeriod(): Promise<number> {
-    const { params } = await this.query.staking.params();
+    const {
+      params,
+    } = await this.query.staking.params();
     const seconds = Number(params?.unbondingTime?.seconds ?? 0);
     if (!seconds) {
       throw new Error("No unbonding period found");
     }
-    this.logger.verbose("Queried unbonding period", { seconds });
+    this.logger.verbose("Queried unbonding period", {
+      seconds,
+    });
     return seconds;
   }
 
   public async getSignedHeader(height?: number): Promise<SignedHeader> {
-    const { header: rpcHeader, commit: rpcCommit } =
-      await this.getTendermintCommit(height);
+    const {
+      header: rpcHeader, commit: rpcCommit,
+    }
+      = await this.getTendermintCommit(height);
     const header = Header.fromPartial({
       ...rpcHeader,
       version: {
@@ -286,7 +298,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       },
     });
 
-    const signatures = rpcCommit.signatures.map((sig) => ({
+    const signatures = rpcCommit.signatures.map(sig => ({
       ...sig,
       timestamp: sig.timestamp && timestampFromDateNanos(sig.timestamp),
       blockIdFlag: blockIDFlagFromJSON(sig.blockIdFlag),
@@ -303,20 +315,26 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     // For the vote sign bytes, it checks (from the commit):
     //   Height, Round, BlockId, TimeStamp, ChainID
 
-    return { header, commit };
+    return {
+      header,
+      commit,
+    };
   }
+
   public async lastKnownHeight(clientId: string): Promise<number> {
     const rawClientState = await this.getLatestClientState(clientId);
     const clientState = ClientState.decode(rawClientState.value);
     return Number(clientState.latestHeight?.revisionHeight ?? 0);
-
   }
+
   public async getValidatorSet(height: number): Promise<ValidatorSet> {
     this.logger.verbose(`Get validator set for height ${height}`);
     // we need to query the header to find out who the proposer was, and pull them out
-    const { proposerAddress } = await this.header(height);
+    const {
+      proposerAddress,
+    } = await this.header(height);
     const validators = await this.tm.validatorsAll(height);
-    const mappedValidators = validators.validators.map((val) => ({
+    const mappedValidators = validators.validators.map(val => ({
       address: val.address,
       pubKey: mapRpcPubKeyToProto(val.pubkey),
       votingPower: val.votingPower,
@@ -325,10 +343,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         : undefined,
     }));
     const totalPower = validators.validators.reduce(
-      (accumulator, v) => accumulator + v.votingPower,
-      BigInt(0),
+      (accumulator, v) => accumulator + v.votingPower, BigInt(0),
     );
-    const proposer = mappedValidators.find((val) =>
+    const proposer = mappedValidators.find(val =>
       arrayContentEquals(val.address, proposerAddress),
     );
     return ValidatorSet.fromPartial({
@@ -366,23 +383,24 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       trustedValidators: await this.getValidatorSet(validatorHeight),
     });
   }
+
   public async getConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<Any> {
     const revisionHeight = consensusHeight ? Number(consensusHeight.revisionHeight) : undefined;
-    const consensusState =  await this.query.ibc.client.consensusState(clientId, revisionHeight);
+    const consensusState = await this.query.ibc.client.consensusState(clientId, revisionHeight);
     if (!consensusState.consensusState) {
       throw new Error(`Consensus state not found for client ID ${clientId} at height ${consensusHeight}`);
     }
     return consensusState.consensusState;
   }
-  public async getLatestClientState(clientId: string): Promise<Any> {
 
+  public async getLatestClientState(clientId: string): Promise<Any> {
     const clientState = await this.query.ibc.client.state(clientId);
     if (!clientState || !clientState.clientState) {
       throw new Error(`Client state not found for client ID ${clientId}`);
     }
-    return clientState.clientState;  
-    
+    return clientState.clientState;
   }
+
   // trustedHeight must be proven by the client on the destination chain
   // and include a proof for the connOpenInit (eg. must be 1 or more blocks after the
   // block connOpenInit Tx was in).
@@ -404,23 +422,26 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     } = await this.getRawClientStateProof(clientId, queryHeight);
 
     // This is the most recent state we have on this chain of the other
-    const { latestHeight: consensusHeight } =
-      await this.query.ibc.client.stateTm(clientId);
+    const {
+      latestHeight: consensusHeight,
+    }
+      = await this.query.ibc.client.stateTm(clientId);
     assert(consensusHeight);
 
     // get the init proof
-    const { proof: proofConnection } =
-      await this.getRawConnectionProof(
-        connectionId,
-        queryHeight,
+    const {
+      proof: proofConnection,
+    }
+      = await this.getRawConnectionProof(
+        connectionId, queryHeight,
       );
 
     // get the consensus proof
-    const { proof: proofConsensus } =
-      await this.getRawConsensusStateProof(
-        clientId,
-        consensusHeight,
-        queryHeight,
+    const {
+      proof: proofConsensus,
+    }
+      = await this.getRawConsensusStateProof(
+        clientId, consensusHeight, queryHeight,
       );
 
     return {
@@ -443,10 +464,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const proofHeight = this.ensureRevisionHeight(headerHeight);
     const queryHeight = subtractBlock(proofHeight, 1n);
 
-    const { proof } = await this.getRawChannelProof(
-      portId,
-      channelId,
-      queryHeight,
+    const {
+      proof,
+    } = await this.getRawChannelProof(
+      portId, channelId, queryHeight,
     );
 
     return {
@@ -467,10 +488,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const queryHeight = subtractBlock(proofHeight, 1n);
 
     const proof = await this.getRawPacketCommitmentProof(
-      packet.sourcePort,
-      packet.sourceChannel,
-      packet.sequence,
-      queryHeight,
+      packet.sourcePort, packet.sourceChannel, packet.sequence, queryHeight,
     );
 
     return proof;
@@ -484,10 +502,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const queryHeight = subtractBlock(proofHeight, 1n);
 
     const proof = await this.getRawPacketAcknowledgementProof(
-      originalPacket.destinationPort,
-      originalPacket.destinationChannel,
-      originalPacket.sequence,
-      queryHeight,
+      originalPacket.destinationPort, originalPacket.destinationChannel, originalPacket.sequence, queryHeight,
     );
     return proof;
   }
@@ -500,10 +515,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const queryHeight = subtractBlock(proofHeight, 1n);
 
     const proof = await this.getRawReceiptProof(
-      originalPacket.destinationPort,
-      originalPacket.destinationChannel,
-      originalPacket.sequence,
-      queryHeight,
+      originalPacket.destinationPort, originalPacket.destinationChannel, originalPacket.sequence, queryHeight,
     );
     return proof;
   }
@@ -516,9 +528,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const queryHeight = subtractBlock(proofHeight, 1n);
 
     const proof = await this.getRawPacketCommitmentProofV2(
-      packet.sourceClient,
-      packet.sequence,
-      queryHeight,
+      packet.sourceClient, packet.sequence, queryHeight,
     );
 
     return proof;
@@ -532,9 +542,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const queryHeight = subtractBlock(proofHeight, 1n);
 
     const proof = await this.getRawPacketAcknowledgementProofV2(
-      originalPacket.destinationClient,
-      originalPacket.sequence,
-      queryHeight,
+      originalPacket.destinationClient, originalPacket.sequence, queryHeight,
     );
     return proof;
   }
@@ -547,9 +555,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const queryHeight = subtractBlock(proofHeight, 1n);
 
     const proof = await this.getRawReceiptProofV2(
-      originalPacket.destinationClient,
-      originalPacket.sequence,
-      queryHeight,
+      originalPacket.destinationClient, originalPacket.sequence, queryHeight,
     );
     return proof;
   }
@@ -565,10 +571,12 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     clientId: string,
     src: BaseIbcClient,
   ): Promise<Height> {
-    const { latestHeight } = await this.query.ibc.client.stateTm(clientId);
+    const {
+      latestHeight,
+    } = await this.query.ibc.client.stateTm(clientId);
     let height: number = 0;
     if (isTendermint(src)) {
-      const header = await src.buildHeader(toIntHeight(latestHeight));    
+      const header = await src.buildHeader(toIntHeight(latestHeight));
       await this.updateTendermintClient(clientId, header);
       height = Number(header.signedHeader?.header?.height ?? 0);
     }
@@ -579,7 +587,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     clientState: TendermintClientState,
     consensusState: TendermintConsensusState,
   ): Promise<CreateClientResult> {
-    this.logger.verbose(`Create Tendermint client`);
+    this.logger.verbose("Create Tendermint client");
     const senderAddress = this.senderAddress;
     const createMsg = {
       typeUrl: "/ibc.core.client.v1.MsgCreateClient",
@@ -598,17 +606,15 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgCreateClient", createMsg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [createMsg],
-      "auto",
+      senderAddress, [createMsg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
 
     const clientId = result.events
-      .find((x) => x.type == "create_client")
-      ?.attributes.find((x) => x.key == "client_id")?.value;
+      .find(x => x.type == "create_client")
+      ?.attributes.find(x => x.key == "client_id")?.value;
     if (!clientId) {
       throw new Error("Could not read TX events.");
     }
@@ -640,8 +646,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     };
 
     this.logger.debug(
-      `MsgUpdateClient`,
-      deepCloneAndMutate(updateMsg, (mutableMsg) => {
+      "MsgUpdateClient", deepCloneAndMutate(updateMsg, (mutableMsg) => {
         if (mutableMsg.value.clientMessage?.value) {
           mutableMsg.value.clientMessage.value = toBase64AsAny(
             mutableMsg.value.clientMessage.value,
@@ -651,9 +656,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     );
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [updateMsg],
-      "auto",
+      senderAddress, [updateMsg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -684,20 +687,18 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         signer: senderAddress,
       }),
     };
-    this.logger.debug(`MsgConnectionOpenInit`, msg);
+    this.logger.debug("MsgConnectionOpenInit", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
 
     const connectionId = result.events
-      .find((x) => x.type == "connection_open_init")
-      ?.attributes.find((x) => x.key == "connection_id")?.value;
+      .find(x => x.type == "connection_open_init")
+      ?.attributes.find(x => x.key == "connection_id")?.value;
     if (!connectionId) {
       throw new Error("Could not read TX events.");
     }
@@ -750,8 +751,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
     this.logger.debug(
-      "MsgConnectionOpenTry",
-      deepCloneAndMutate(msg, (mutableMsg) => {
+      "MsgConnectionOpenTry", deepCloneAndMutate(msg, (mutableMsg) => {
         mutableMsg.value.proofClient = toBase64AsAny(
           mutableMsg.value.proofClient,
         );
@@ -763,17 +763,15 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     );
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
 
     const myConnectionId = result.events
-      .find((x) => x.type == "connection_open_try")
-      ?.attributes.find((x) => x.key == "connection_id")?.value;
+      .find(x => x.type == "connection_open_try")
+      ?.attributes.find(x => x.key == "connection_id")?.value;
     if (!myConnectionId) {
       throw new Error("Could not read TX events.");
     }
@@ -822,8 +820,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
     this.logger.debug(
-      "MsgConnectionOpenAck",
-      deepCloneAndMutate(msg, (mutableMsg) => {
+      "MsgConnectionOpenAck", deepCloneAndMutate(msg, (mutableMsg) => {
         mutableMsg.value.proofConsensus = toBase64AsAny(
           mutableMsg.value.proofConsensus,
         );
@@ -835,9 +832,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     );
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -855,7 +850,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   ): Promise<MsgResult> {
     this.logger.info(`Connection open confirm: ${myConnectionId}`);
     const senderAddress = this.senderAddress;
-    const { proofHeight, proofConnection: proofAck } = proof;
+    const {
+      proofHeight, proofConnection: proofAck,
+    } = proof;
     const msg = {
       typeUrl: "/ibc.core.connection.v1.MsgConnectionOpenConfirm",
       value: MsgConnectionOpenConfirm.fromPartial({
@@ -866,16 +863,13 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
     this.logger.debug(
-      "MsgConnectionOpenConfirm",
-      deepCloneAndMutate(msg, (mutableMsg) => {
+      "MsgConnectionOpenConfirm", deepCloneAndMutate(msg, (mutableMsg) => {
         mutableMsg.value.proofAck = toBase64AsAny(mutableMsg.value.proofAck);
       }),
     );
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -917,17 +911,15 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgChannelOpenInit", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
 
     const channelId = result.events
-      .find((x) => x.type == "channel_open_init")
-      ?.attributes.find((x) => x.key == "channel_id")?.value;
+      .find(x => x.type == "channel_open_init")
+      ?.attributes.find(x => x.key == "channel_id")?.value;
     if (!channelId) {
       throw new Error("Could not read TX events.");
     }
@@ -954,7 +946,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       `Channel open try: ${portId} => ${remote.portId} (${remote.channelId})`,
     );
     const senderAddress = this.senderAddress;
-    const { proofHeight, proof: proofInit } = proof;
+    const {
+      proofHeight, proof: proofInit,
+    } = proof;
     const msg = {
       typeUrl: "/ibc.core.channel.v1.MsgChannelOpenTry",
       value: MsgChannelOpenTry.fromPartial({
@@ -973,24 +967,21 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
     this.logger.debug(
-      "MsgChannelOpenTry",
-      deepCloneAndMutate(msg, (mutableMsg) => {
+      "MsgChannelOpenTry", deepCloneAndMutate(msg, (mutableMsg) => {
         mutableMsg.value.proofInit = toBase64AsAny(mutableMsg.value.proofInit);
       }),
     );
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
     }
 
     const channelId = result.events
-      .find((x) => x.type == "channel_open_try")
-      ?.attributes.find((x) => x.key == "channel_id")?.value;
+      .find(x => x.type == "channel_open_try")
+      ?.attributes.find(x => x.key == "channel_id")?.value;
     if (!channelId) {
       throw new Error("Could not read TX events.");
     }
@@ -1017,7 +1008,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       `Channel open ack for port ${portId}: ${channelId} => ${counterpartyChannelId}`,
     );
     const senderAddress = this.senderAddress;
-    const { proofHeight, proof: proofTry } = proof;
+    const {
+      proofHeight, proof: proofTry,
+    } = proof;
     const msg = {
       typeUrl: "/ibc.core.channel.v1.MsgChannelOpenAck",
       value: MsgChannelOpenAck.fromPartial({
@@ -1031,16 +1024,13 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
     this.logger.debug(
-      "MsgChannelOpenAck",
-      deepCloneAndMutate(msg, (mutableMsg) => {
+      "MsgChannelOpenAck", deepCloneAndMutate(msg, (mutableMsg) => {
         mutableMsg.value.proofTry = toBase64AsAny(mutableMsg.value.proofTry);
       }),
     );
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1061,7 +1051,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       `Chanel open confirm for port ${portId}: ${channelId} => ${proof.id.channelId}`,
     );
     const senderAddress = this.senderAddress;
-    const { proofHeight, proof: proofAck } = proof;
+    const {
+      proofHeight, proof: proofAck,
+    } = proof;
     const msg = {
       typeUrl: "/ibc.core.channel.v1.MsgChannelOpenConfirm",
       value: MsgChannelOpenConfirm.fromPartial({
@@ -1073,16 +1065,14 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
     this.logger.debug(
-      "MsgChannelOpenConfirm "+
-      deepCloneAndMutate(msg, (mutableMsg) => {
+      "MsgChannelOpenConfirm "
+      + deepCloneAndMutate(msg, (mutableMsg) => {
         mutableMsg.value.proofAck = toBase64AsAny(mutableMsg.value.proofAck);
       }),
     );
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1122,8 +1112,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     for (const i in packets) {
       const packet = packets[i];
       this.logger.verbose(
-        `Sending packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`,
-        presentPacketData(packet.data),
+        `Sending packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`, presentPacketData(packet.data),
       );
 
       const msg = {
@@ -1138,7 +1127,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       msgs.push(msg);
     }
     this.logger.debug("MsgRecvPacket(s)", {
-      msgs: msgs.map((msg) =>
+      msgs: msgs.map(msg =>
         deepCloneAndMutate(msg, (mutableMsg) => {
           mutableMsg.value.proofCommitment = toBase64AsAny(
             mutableMsg.value.proofCommitment,
@@ -1152,9 +1141,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       ),
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      msgs,
-      "auto",
+      senderAddress, msgs, "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1210,7 +1197,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       msgs.push(msg);
     }
     this.logger.debug("MsgRecvPacket(s)", {
-      msgs: msgs.map((msg) =>
+      msgs: msgs.map(msg =>
         deepCloneAndMutate(msg, (mutableMsg) => {
           mutableMsg.value.proofCommitment = toBase64AsAny(
             mutableMsg.value.proofCommitment,
@@ -1219,9 +1206,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       ),
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      msgs,
-      "auto",
+      senderAddress, msgs, "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1232,6 +1217,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       height: result.height,
     };
   }
+
   public acknowledgePacket(
     ack: Ack,
     proofAcked: Uint8Array,
@@ -1262,8 +1248,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       const acknowledgement = acks[i].acknowledgement;
 
       this.logger.verbose(
-        `Ack packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`,
-        {
+        `Ack packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`, {
           packet: presentPacketData(packet.data),
           ack: presentPacketData(acknowledgement),
         },
@@ -1281,7 +1266,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       msgs.push(msg);
     }
     this.logger.debug("MsgAcknowledgement(s)", {
-      msgs: msgs.map((msg) =>
+      msgs: msgs.map(msg =>
         deepCloneAndMutate(msg, (mutableMsg) => {
           mutableMsg.value.acknowledgement = toBase64AsAny(
             mutableMsg.value.acknowledgement,
@@ -1298,9 +1283,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       ),
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      msgs,
-      "auto",
+      senderAddress, msgs, "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1342,8 +1325,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       const acknowledgement = Acknowledgement.decode(acks[i].acknowledgement);
       // TODO: construct Ack Message correctly
       this.logger.verbose(
-        `Ack packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`,
-        {
+        `Ack packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`, {
           packet: packet.payloads,
           ack: acknowledgement,
         },
@@ -1361,12 +1343,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       msgs.push(msg);
     }
     this.logger.debug("MsgAcknowledgement(s)", {
-      msgs: msgs
+      msgs: msgs,
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      msgs,
-      "auto",
+      senderAddress, msgs, "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1377,6 +1357,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       height: result.height,
     };
   }
+
   public timeoutPacket(
     packet: Packet,
     proofUnreceived: Uint8Array,
@@ -1384,10 +1365,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     proofHeight: Height,
   ): Promise<MsgResult> {
     return this.timeoutPackets(
-      [packet],
-      [proofUnreceived],
-      [nextSequenceRecv],
-      proofHeight,
+      [packet], [proofUnreceived], [nextSequenceRecv], proofHeight,
     );
   }
 
@@ -1411,10 +1389,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     for (const i in packets) {
       const packet = packets[i];
       this.logger.verbose(
-        `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`,
-        presentPacketData(packet.data),
+        `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`, presentPacketData(packet.data),
       );
-      
+
       const channel = await this.getChannelV1Type(packet.destinationPort, packet.destinationChannel);
 
       const msg = {
@@ -1431,7 +1408,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     this.logger.debug("MsgTimeout", {
-      msgs: msgs.map((msg) =>
+      msgs: msgs.map(msg =>
         deepCloneAndMutate(msg, (mutableMsg) => {
           if (mutableMsg.value.packet?.data) {
             mutableMsg.value.packet.data = toBase64AsAny(
@@ -1445,9 +1422,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       ),
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      msgs,
-      "auto",
+      senderAddress, msgs, "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1458,24 +1433,25 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       height: result.height,
     };
   }
+
   public timeoutPacketV2(
     packet: PacketV2,
     proofUnreceived: Uint8Array,
     proofHeight: Height,
   ): Promise<MsgResult> {
     return this.timeoutPacketsV2(
-      [packet],
-      [proofUnreceived],
-      proofHeight,
+      [packet], [proofUnreceived], proofHeight,
     );
   }
+
   public async getChannelV1Type(portId: string, channelId: string): Promise<Order> {
     const channel = await this.query.ibc.channel.channel(portId, channelId);
     if (!channel || !channel.channel) {
       throw new Error(`Channel not found for port ${portId} and channel ${channelId}`);
     }
-    return channel.channel.ordering
+    return channel.channel.ordering;
   }
+
   public async timeoutPacketsV2(
     packets: PacketV2[],
     proofsUnreceived: Uint8Array[],
@@ -1492,11 +1468,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     for (const i in packets) {
       const packet = packets[i];
       this.logger.verbose(
-        `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`,
-        packet.payloads
+        `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`, packet.payloads,
       );
-      
-      
+
       const msg = {
         typeUrl: "/ibc.core.channel.v2.MsgTimeout",
         value: MsgTimeoutV2.fromPartial({
@@ -1510,12 +1484,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     this.logger.debug("MsgTimeout", {
-      msgs: msgs
+      msgs: msgs,
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      msgs,
-      "auto",
+      senderAddress, msgs, "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1526,13 +1498,15 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       height: result.height,
     };
   }
-  public async queryRawProof(store: string, queryKey: Uint8Array, proofHeight: number): Promise<ProvenQuery> {
 
-    const { key, value, height, proof, code, log } = await this.tm.abciQuery({
+  public async queryRawProof(store: string, queryKey: Uint8Array, proofHeight: number): Promise<ProvenQuery> {
+    const {
+      key, value, height, proof, code, log,
+    } = await this.tm.abciQuery({
       path: `/store/${store}/key`,
       data: queryKey,
       height: proofHeight,
-      prove: true
+      prove: true,
     });
 
     if (code) {
@@ -1564,6 +1538,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       },
     };
   }
+
   public async registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<MsgResult> {
     this.logger.verbose(
       `Register Counterparty : ${counterpartyClientId} => ${clientId}`,
@@ -1581,9 +1556,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgRegisterCounterparty", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress,
-      [msg],
-      "auto",
+      senderAddress, [msg], "auto",
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1591,54 +1564,68 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     return result;
   }
-  public async getTendermintConsensusState(clientId: string, consensusHeight: Height, proofHeight: Height): Promise<{ consensusState: ConsensusState, proof: Uint8Array }> {
 
+  public async getTendermintConsensusState(clientId: string, consensusHeight: Height, proofHeight: Height): Promise<{
+    consensusState: ConsensusState
+    proof: Uint8Array
+  }> {
     const state = await this.getRawConsensusStateProof(clientId, consensusHeight, proofHeight);
     if (!state.data) {
       throw new Error(`No consensus state found for client ${clientId} at height ${consensusHeight}`);
     }
-    return { consensusState: ConsensusState.decode(state.data.value), proof: state.proof };
-
+    return {
+      consensusState: ConsensusState.decode(state.data.value),
+      proof: state.proof,
+    };
   }
-  public async getTendermintClientState(clientId: string, proofHeight: Height): Promise<{ clientState: ClientState, proof: Uint8Array }> {
 
+  public async getTendermintClientState(clientId: string, proofHeight: Height): Promise<{
+    clientState: ClientState
+    proof: Uint8Array
+  }> {
     const state = await this.getRawClientStateProof(clientId, proofHeight);
     if (!state.data) {
       throw new Error(`No proven client state found for client ${clientId} at height ${proofHeight}`);
     }
-    return { clientState: ClientState.decode(state.data.value), proof: state.proof };
+    return {
+      clientState: ClientState.decode(state.data.value),
+      proof: state.proof,
+    };
   }
 
   public async getRawChannelProof(portId: string, channelId: string, proofHeight: Height): Promise<DataProof> {
-
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = toAscii(
       `channelEnds/ports/${portId}/channels/${channelId}`,
     );
     const proven = await this.queryRawProof(
-      "ibc",
-      key,
-      Number(proofHeight.revisionHeight),
+      "ibc", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
-    return { data: proven.value, proof, proofHeight };
+    return {
+      data: proven.value,
+      proof,
+      proofHeight,
+    };
   }
-  public async getRawReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
 
+  public async getRawReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = toAscii(
       `receipts/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
     );
     const proven = await this.queryRawProof(
-      "ibc",
-      key,
-      Number(proofHeight.revisionHeight),
+      "ibc", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
-    return { data: proven.value, proof, proofHeight };
+    return {
+      data: proven.value,
+      proof,
+      proofHeight,
+    };
   }
-  public async getRawReceiptProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
 
+  public async getRawReceiptProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const buf = Buffer.allocUnsafe(8);
     buf.writeBigUint64BE(sequence);
@@ -1646,140 +1633,153 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const sep = fromHex("02");
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = mergeUint8Arrays(toAscii(
-      `${clientId}`), sep, seq
+      `${clientId}`), sep, seq,
     );
     const proven = await this.queryRawProof(
-      "ibc",
-      key,
-      Number(proofHeight.revisionHeight),
+      "ibc", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
-    return { data: proven.value, proof, proofHeight };
+    return {
+      data: proven.value,
+      proof,
+      proofHeight,
+    };
   }
-  public async getRawPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
 
+  public async getRawPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = toAscii(
       `commitments/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
     );
     const proven = await this.queryRawProof(
-      "ibc",
-      key,
-      Number(proofHeight.revisionHeight),
+      "ibc", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
     this.logger.debug(proven);
-    return { data: proven.value, proof, proofHeight };
+    return {
+      data: proven.value,
+      proof,
+      proofHeight,
+    };
   }
-  public async getRawPacketCommitmentProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
 
+  public async getRawPacketCommitmentProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
     const buf = Buffer.allocUnsafe(8);
     buf.writeBigUint64BE(sequence);
     const seq = Uint8Array.from(buf);
     const sep = fromHex("01");
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = mergeUint8Arrays(toAscii(
-      `${clientId}`), sep, seq
+      `${clientId}`), sep, seq,
     );
     const proven = await this.queryRawProof(
-      "ibc",
-      key,
-      Number(proofHeight.revisionHeight),
+      "ibc", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
     this.logger.debug(proven);
-    return { data: proven.value, proof, proofHeight };
+    return {
+      data: proven.value,
+      proof,
+      proofHeight,
+    };
   }
-  public async getRawPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
 
+  public async getRawPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = toAscii(
       `acks/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
     );
     const proven = await this.queryRawProof(
-      "ibc",
-      key,
-      Number(proofHeight.revisionHeight),
+      "ibc", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
 
-    return { data: proven.value, proof, proofHeight };
+    return {
+      data: proven.value,
+      proof,
+      proofHeight,
+    };
   }
 
   public async getRawPacketAcknowledgementProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
-
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
-  
+
     const buf = Buffer.allocUnsafe(8);
     buf.writeBigUint64BE(sequence);
     const seq = Uint8Array.from(buf);
     const sep = fromHex("03");
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = mergeUint8Arrays(toAscii(
-      `${clientId}`), sep, seq
+      `${clientId}`), sep, seq,
     );
     const proven = await this.queryRawProof(
-      "ibc",
-      key,
-      Number(proofHeight.revisionHeight),
+      "ibc", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
 
-    return { data: proven.value, proof, proofHeight };
+    return {
+      data: proven.value,
+      proof,
+      proofHeight,
+    };
   }
-  public async getRawClientStateProof(clientId: string, proofHeight: Height): Promise<FullProof> {
 
+  public async getRawClientStateProof(clientId: string, proofHeight: Height): Promise<FullProof> {
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = `clients/${clientId}/clientState`;
     const proven = await this.queryRawProof(
-      "ibc",
-      toAscii(key),
-      Number(proofHeight.revisionHeight),
+      "ibc", toAscii(key), Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
 
-    return { data: Any.decode(proven.value), proof, proofHeight };
+    return {
+      data: Any.decode(proven.value),
+      proof,
+      proofHeight,
+    };
   }
-  public async getRawConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight: Height): Promise<FullProof> {
 
+  public async getRawConsensusStateProof(clientId: string, consensusHeight: Height, proofHeight: Height): Promise<FullProof> {
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const height = heightQueryString(consensusHeight);
     const key = `clients/${clientId}/consensusStates/${height}`;
     const proven = await this.queryRawProof(
-      "ibc",
-      toAscii(key),
-      Number(proofHeight.revisionHeight),
+      "ibc", toAscii(key), Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
-   
-    return { data: Any.decode(proven.value), proof, proofHeight };
+
+    return {
+      data: Any.decode(proven.value),
+      proof,
+      proofHeight,
+    };
   }
 
   public async getRawConnectionProof(connectionId: string, proofHeight: Height): Promise<FullProof> {
-
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = `connections/${connectionId}`;
     const proven = await this.queryRawProof(
-      "ibc",
-      toAscii(key),
-      Number(proofHeight.revisionHeight),
+      "ibc", toAscii(key), Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
 
-    return { data: Any.decode(proven.value), proof, proofHeight };
+    return {
+      data: Any.decode(proven.value),
+      proof,
+      proofHeight,
+    };
   }
+
   public async getNextSequenceRecv(portId: string, channelId: string): Promise<bigint> {
-    
     const sequence = await this.query.ibc.channel.nextSequenceReceive(portId, channelId);
     this.logger.debug(`Next sequence receive for port ${portId} and channel ${channelId}`, sequence);
     if (!sequence) {
       throw new Error(`No next sequence receive found for port ${portId} and channel ${channelId}`);
     }
     return sequence.nextSequenceReceive;
-
   }
+
   public async getConnection(connectionId: string): Promise<Partial<QueryConnectionResponse>> {
-  
     const connection = await this.query.ibc.connection.connection(connectionId);
     this.logger.debug(`Connection ${connectionId} found`, connection);
     if (!connection.connection) {
@@ -1787,8 +1787,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
     return connection;
   }
-  public async getCounterparty(clientId: string): Promise<string> {
 
+  public async getCounterparty(clientId: string): Promise<string> {
     const counterparty = await this.query.ibc.clientV2.counterparty(clientId);
     this.logger.debug(`Client ${clientId} found`, counterparty);
     if (!counterparty.counterpartyInfo) {
@@ -1796,42 +1796,43 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
     return counterparty.counterpartyInfo.clientId;
   }
+
   public async searchTendermintBlocks(query: string): Promise<BlockSearchResponse> {
-
-    const search = await this.tm.blockSearchAll({ query });
+    const search = await this.tm.blockSearchAll({
+      query,
+    });
     return search;
-
   }
-  public async getTendermintBlockResults(height: number): Promise<BlockResultsResponse> {
 
+  public async getTendermintBlockResults(height: number): Promise<BlockResultsResponse> {
     const result = await this.tm.blockResults(height);
     return result;
-
   }
+
   public async searchTendermintTxs(query: string): Promise<TxSearchResponse> {
-
-    const search = await this.tm.txSearchAll({ query });
+    const search = await this.tm.txSearchAll({
+      query,
+    });
     return search;
-
   }
+
   public async querySentPackets(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketWithMetadata[]> {
-    
-    const txsPackets = await this.getPacketsFromTxs(connectionId, minHeight, maxHeight );
+    const txsPackets = await this.getPacketsFromTxs(connectionId, minHeight, maxHeight);
     const eventsPackets = await this.getPacketsFromBlockEvents(connectionId, minHeight, maxHeight);
     return ([] as PacketWithMetadata[])
       .concat(...txsPackets)
       .concat(...eventsPackets);
   }
+
   public async querySentPacketsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketV2WithMetadata[]> {
-    
-    const txsPackets = await this.getPacketsFromTxsV2(clientId, minHeight, maxHeight );
+    const txsPackets = await this.getPacketsFromTxsV2(clientId, minHeight, maxHeight);
     const eventsPackets = await this.getPacketsFromBlockEventsV2(clientId, minHeight, maxHeight);
     return ([] as PacketV2WithMetadata[])
       .concat(...txsPackets)
       .concat(...eventsPackets);
   }
+
   public async queryWrittenAcks(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckWithMetadata[]> {
-    
     let query = `write_acknowledgement.packet_connection='${connectionId}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
@@ -1841,7 +1842,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const search = await this.searchTendermintTxs(query);
-    const out = search.txs.flatMap(({ height, result, hash }) => {
+    const out = search.txs.flatMap(({
+      height, result, hash,
+    }) => {
       const events = result.events.map(fromTendermintEvent);
       // const sender = logs.findAttribute(parsedLogs, 'message', 'sender').value;
       return parseAcksFromTxEvents(events).map(
@@ -1855,9 +1858,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
     return out;
   }
-  public async queryWrittenAcksV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckV2WithMetadata[]> {
-    
 
+  public async queryWrittenAcksV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckV2WithMetadata[]> {
     // TODO: Get V2 acks from events
     let query = `write_acknowledgement.packet_dest_client='${clientId}'`;
     if (minHeight) {
@@ -1868,7 +1870,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const search = await this.searchTendermintTxs(query);
-    const out = search.txs.flatMap(({ height, result, hash }) => {
+    const out = search.txs.flatMap(({
+      height, result, hash,
+    }) => {
       const events = result.events.map(fromTendermintEvent);
       // const sender = logs.findAttribute(parsedLogs, 'message', 'sender').value;
       return parseAcksFromTxEventsV2(events).map(
@@ -1882,55 +1886,50 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
     return out;
   }
+
   public async queryUnreceivedPackets(portId: string, channelId: string, sequences: readonly number[]) {
     const res = await this.query.ibc.channel.unreceivedPackets(
-        portId,
-        channelId,
-        sequences,
-      );
-      return res.sequences.map((seq) => Number(seq));
+      portId, channelId, sequences,
+    );
+    return res.sequences.map(seq => Number(seq));
   }
+
   public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]) {
     const res = await this.query.ibc.channelV2.unreceivedPackets(
-        clientId,
-        sequences,
-      );
-      return res.sequences.map((seq) => Number(seq));
+      clientId, sequences,
+    );
+    return res.sequences.map(seq => Number(seq));
   }
+
   public async queryCommitments(portId: string, channelId: string, sequence: bigint): Promise<Uint8Array> {
-    
     const res = await this.query.ibc.channel.packetCommitment(
-      portId,
-      channelId,
-      Number(sequence),
+      portId, channelId, Number(sequence),
     );
     return res.commitment;
   }
+
   public async queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array> {
-    
     const res = await this.query.ibc.channelV2.packetCommitment(
-      clientId,
-      Number(sequence),
+      clientId, Number(sequence),
     );
     return res.commitment;
   }
+
   public async queryUnreceivedAcks(portId: string, channelId: string, sequences: readonly number[]) {
     const res = await this.query.ibc.channel.unreceivedAcks(
-        portId,
-        channelId,
-        sequences,
-      );
-      return res.sequences.map((seq) => Number(seq));
+      portId, channelId, sequences,
+    );
+    return res.sequences.map(seq => Number(seq));
   }
+
   public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]) {
     const res = await this.query.ibc.channelV2.unreceivedAcks(
-        clientId,
-        sequences,
-      );
-      return res.sequences.map((seq) => Number(seq));
+      clientId, sequences,
+    );
+    return res.sequences.map(seq => Number(seq));
   }
-  public async buildCreateClientArgs(trustPeriodSec?: number | null): Promise<CreateClientArgs> {
 
+  public async buildCreateClientArgs(trustPeriodSec?: number | null): Promise<CreateClientArgs> {
     const header = await this.latestHeader();
     const consensusState = buildTendermintConsensusState(header);
     const unbondingPeriodSec = await this.getUnbondingPeriod();
@@ -1938,12 +1937,12 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       trustPeriodSec = Math.floor((unbondingPeriodSec * 2) / 3);
     }
     const clientState = buildTendermintClientState(
-      this.chainId,
-      unbondingPeriodSec,
-      trustPeriodSec,
-      this.revisionHeight(header.height),
+      this.chainId, unbondingPeriodSec, trustPeriodSec, this.revisionHeight(header.height),
     );
-    return { consensusState, clientState };
+    return {
+      consensusState,
+      clientState,
+    };
   }
 
   async getPacketsFromBlockEvents(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined) {
@@ -1957,10 +1956,12 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const search = await this.searchTendermintBlocks(query);
     const resultsNested = await Promise.all(
-      search.blocks.map(async ({ block }) => {
+      search.blocks.map(async ({
+        block,
+      }) => {
         const height = block.header.height;
         const result = await this.getTendermintBlockResults(height);
-        return parsePacketsFromBlockResult(result).map((packet) => ({
+        return parsePacketsFromBlockResult(result).map(packet => ({
           packet,
           height,
           sender: "",
@@ -1970,8 +1971,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     return ([] as PacketWithMetadata[]).concat(...resultsNested);
   }
-  async getPacketsFromTxs(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined) {
 
+  async getPacketsFromTxs(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined) {
     let query = `send_packet.packet_connection='${connectionId}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
@@ -1982,14 +1983,17 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const search = await this.searchTendermintTxs(query);
     const resultsNested = search.txs.map(
-      ({ height, result }): PacketWithMetadata[] =>
-        parsePacketsFromTendermintEvents(result.events).map((packet) => ({
+      ({
+        height, result,
+      }): PacketWithMetadata[] =>
+        parsePacketsFromTendermintEvents(result.events).map(packet => ({
           packet,
           height,
         })),
     );
     return resultsNested.flat();
   }
+
   async getPacketsFromBlockEventsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined) {
     let query = `send_packet.packet_source_client='${clientId}'`;
     if (minHeight) {
@@ -2001,10 +2005,12 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const search = await this.searchTendermintBlocks(query);
     const resultsNested = await Promise.all(
-      search.blocks.map(async ({ block }) => {
+      search.blocks.map(async ({
+        block,
+      }) => {
         const height = block.header.height;
         const result = await this.getTendermintBlockResults(height);
-        return parsePacketsFromBlockResultV2(result).map((packet) => ({
+        return parsePacketsFromBlockResultV2(result).map(packet => ({
           packet,
           height,
           sender: "",
@@ -2014,8 +2020,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     return ([] as PacketV2WithMetadata[]).concat(...resultsNested);
   }
-  async getPacketsFromTxsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined) {
 
+  async getPacketsFromTxsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined) {
     let query = `send_packet.packet_source_client='${clientId}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
@@ -2026,8 +2032,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const search = await this.searchTendermintTxs(query);
     const resultsNested = search.txs.map(
-      ({ height, result }): PacketV2WithMetadata[] =>
-        parsePacketsFromTendermintEventsV2(result.events).map((packet) => ({
+      ({
+        height, result,
+      }): PacketV2WithMetadata[] =>
+        parsePacketsFromTendermintEventsV2(result.events).map(packet => ({
           packet,
           height,
         })),

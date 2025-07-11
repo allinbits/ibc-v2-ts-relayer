@@ -1,32 +1,47 @@
 import eslint from "@eslint/js";
-import stylisticTs from "@stylistic/eslint-plugin";
+import stylistic from "@stylistic/eslint-plugin";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tseslint from "typescript-eslint";
 
-export default tseslint.config(
-  eslint.configs.recommended,
+export default tseslint.config([
+  {
+    name: "app/files-to-lint",
+    files: ["**/*.{ts,mts,tsx,js,mjs}", "eslint.config.mjs"],
+  },
+  {
+    name: "app/files-to-ignore",
+    ignores: ["**/lib/**", "**/dist-ssr/**", "**/dist/**", "**/coverage/**"],
+  },
   {
     plugins: {
-      "@stylistic/ts": stylisticTs,
+      "@stylistic": stylistic,
     },
   },
-  ...tseslint.configs.recommended,
-  {
-    files: ["src/**/*.js", "src/**/*.ts", "src/**/*.tsx"],
-    languageOptions: {
-      parserOptions: {
-        parser: tseslint.parser,
-        project: "./tsconfig.json",
-      },
-      globals: {
-        NodeJS: true,
-        chrome: true,
-      },
-    },
-  },
+  eslint.configs.recommended,
+  tseslint.configs.recommended,
+  stylistic.configs.customize(),
   {
     rules: {
-      "no-unused-vars": "off",
+      "@stylistic/array-element-newline": [
+        "error",
+        {
+          multiline: true,
+        },
+      ],
+      "@stylistic/array-bracket-newline": [
+        "error",
+        {
+          multiline: true,
+        },
+      ],
+      "@stylistic/object-curly-newline": ["error", "always"],
+      "@stylistic/object-curly-spacing": ["error", "always"],
+      "@stylistic/object-property-newline": "error",
+      "@stylistic/indent": ["error", 2],
+      "@stylistic/quote-props": ["error", "as-needed"],
+      "@stylistic/block-spacing": ["error", "always"],
+      "@stylistic/semi": ["error", "always"],
+      "@stylistic/quotes": ["error", "double"],
       "@typescript-eslint/no-unused-vars": [
         "error", // or "error"
         {
@@ -37,11 +52,19 @@ export default tseslint.config(
       ],
       "max-lines": [
         "warn",
-        { max: 800, skipBlankLines: true, skipComments: true },
+        {
+          max: 700,
+          skipBlankLines: true,
+          skipComments: true,
+        },
       ],
       "max-lines-per-function": [
         "warn",
-        { max: 150, skipBlankLines: true, skipComments: true },
+        {
+          max: 350,
+          skipBlankLines: true,
+          skipComments: true,
+        },
       ],
     },
   },
@@ -55,6 +78,7 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["node_modules/*", "**/*.js", "dist/*"],
-  }
+    ignores: ["node_modules/*", "dist/*"],
+  },
+],
 );

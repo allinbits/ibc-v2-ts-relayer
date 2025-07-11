@@ -1,15 +1,17 @@
-import { open } from 'sqlite'
-import sqlite3 from 'sqlite3'
+import {
+  open,
+} from "sqlite";
+import sqlite3 from "sqlite3";
 
-// this is a top-level await 
+// this is a top-level await
 export const openDB = async (dbFile: string) => {
-    // open the database
-    const db = await open({
-        filename: dbFile,
-        driver: sqlite3.Database
-    });
+  // open the database
+  const db = await open({
+    filename: dbFile,
+    driver: sqlite3.Database,
+  });
 
-    const baseSchema = `
+  const baseSchema = `
 CREATE TABLE IF NOT EXISTS relayPaths (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chainIdA TEXT NOT NULL,
@@ -31,6 +33,6 @@ CREATE TABLE IF NOT EXISTS relayedHeights (
     ackHeightB INTEGER NOT NULL,
     FOREIGN KEY (relayPathId) REFERENCES relayPaths(id)
 );`;
-    await db.exec(baseSchema);
-    return db;
+  await db.exec(baseSchema);
+  return db;
 };
