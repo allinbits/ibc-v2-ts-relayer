@@ -481,7 +481,7 @@ test(
 );
 
 test(
-  "can parse strange revision numbers", (t) => {
+  "can parse strange revision numbers", () => {
     // all of these should give 0
     const strangers = ["", "-", "hello-", "hello-123-", "hello-0123", "hello-00123", "hello-1.23"];
     for (const strange of strangers) {
@@ -497,7 +497,7 @@ function nanosFromDateTime(time: ReadonlyDateWithNanoseconds): bigint {
 }
 
 test(
-  "time-based timeouts properly", (t) => {
+  "time-based timeouts properly", () => {
     const time1 = fromRfc3339WithNanoseconds("2021-03-12T12:34:56.123456789Z");
     const time2 = fromRfc3339WithNanoseconds("2021-03-12T12:36:56.543543543Z");
     const time3 = fromRfc3339WithNanoseconds("2021-03-12T12:36:13Z");
@@ -510,41 +510,38 @@ test(
     const greaterThanNull = timeGreater(
       undefined, secondsFromDateNanos(time1),
     );
-    t.is(
-      greaterThanNull, true,
-    );
+    expect(greaterThanNull).toBe(true);
 
     const greaterThanPast = timeGreater(
       nanos2, sec1,
     );
-    t.is(
-      greaterThanPast, true,
-    );
+    expect(greaterThanPast).toBe(true);
+
     const greaterThanFuture = timeGreater(
       nanos1, sec2,
     );
-    t.is(
-      greaterThanFuture, false,
+    expect(
+      greaterThanFuture).toBe(false,
     );
 
     // nanos seconds beat seconds if present
     const greaterThanSelfWithNanos = timeGreater(
       nanos1, sec1,
     );
-    t.is(
-      greaterThanSelfWithNanos, true,
+    expect(
+      greaterThanSelfWithNanos).toBe(true,
     );
     const greaterThanSelf = timeGreater(
       nanosFromDateTime(time3), secondsFromDateNanos(time3),
     );
-    t.is(
-      greaterThanSelf, false,
+    expect(
+      greaterThanSelf).toBe(false,
     );
   },
 );
 
 test(
-  "height based timeouts properly", (t) => {
+  "height based timeouts properly", () => {
     const height1a = {
       revisionHeight: BigInt(12345),
       revisionNumber: BigInt(1),
@@ -558,65 +555,63 @@ test(
       revisionNumber: BigInt(2),
     };
 
-    t.assert(heightGreater(
+    expect(heightGreater(
       height1b, height1a,
-    ));
-    t.assert(heightGreater(
+    )).toBeTruthy();
+    expect(heightGreater(
       height2a, height1b,
-    ));
-    t.assert(heightGreater(
+    )).toBeTruthy();
+    expect(heightGreater(
       undefined, height2a,
-    ));
+    )).toBeTruthy();
 
-    t.false(heightGreater(
+    expect(heightGreater(
       height1b, height1b,
-    ));
-    t.false(heightGreater(
+    )).toBeFalsy();
+    expect(heightGreater(
       height1a, height1b,
-    ));
+    )).toBeFalsy();
   },
 );
 
 test(
-  "Properly determines height-based timeouts", (t) => {
+  "Properly determines height-based timeouts", () => {
     // proper heights
-    t.deepEqual(
-      parseHeightAttribute("1-34"), {
-        revisionNumber: BigInt(1),
-        revisionHeight: BigInt(34),
-      },
-    );
-    t.deepEqual(
-      parseHeightAttribute("17-3456"), {
-        revisionNumber: BigInt(17),
-        revisionHeight: BigInt(3456),
-      },
-    );
+    expect(
+      parseHeightAttribute("1-34")).toEqual({
+      revisionNumber: BigInt(1),
+      revisionHeight: BigInt(34),
+    });
+    expect(
+      parseHeightAttribute("17-3456")).toEqual({
+      revisionNumber: BigInt(17),
+      revisionHeight: BigInt(3456),
+    });
 
     // handles revision number 0 properly (this is allowed)
-    t.deepEqual(
-      parseHeightAttribute("0-1724"), {
+    expect(
+      parseHeightAttribute("0-1724")).toEqual(
+      {
         revisionNumber: BigInt(0),
         revisionHeight: BigInt(1724),
       },
     );
 
     // missing heights
-    t.is(
-      parseHeightAttribute(""), undefined,
-    );
-    t.is(
-      parseHeightAttribute(), undefined,
-    );
+    expect(
+      parseHeightAttribute("")).toBeUndefined();
+    expect(
+
+      parseHeightAttribute()).toBeUndefined();
 
     // bad format
-    t.is(
-      parseHeightAttribute("some-random-string"), undefined,
-    );
+    expect(
+
+      parseHeightAttribute("some-random-string")).toBeUndefined();
 
     // zero value is defined as missing
-    t.is(
-      parseHeightAttribute("0-0"), undefined,
+    expect(
+      parseHeightAttribute("0-0")).toBeUndefined(
     );
   },
 );
