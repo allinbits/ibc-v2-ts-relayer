@@ -394,10 +394,7 @@ test(
       "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
         destinationChannel: "channel-10",
         data: fromHex("7b226166746572223a2231363636313639303033343133353738323639222c2273656e646572223a226a756e6f3134796632347066637a63736c636864723034753570327977397a7866366376733376686539723973726635706736793270376e7164716e376b6e222c226a6f625f6964223a2273696d6f6e2d726f6c6c2d31227d"),
-        timeoutHeight: {
-          revisionHeight: BigInt("0"),
-          revisionNumber: BigInt("0"),
-        },
+        timeoutHeight: undefined,
         timeoutTimestamp: BigInt("1666172600413578269"),
       },
     );
@@ -410,10 +407,7 @@ test(
       "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
       destinationChannel: "channel-10",
       data: fromHex("7b226166746572223a2231363636313639303033343133353738323639222c2273656e646572223a226a756e6f3134796632347066637a63736c636864723034753570327977397a7866366376733376686539723973726635706736793270376e7164716e376b6e222c226a6f625f6964223a2273696d6f6e2d726f6c6c2d32227d"),
-      timeoutHeight: {
-        revisionHeight: BigInt("0"),
-        revisionNumber: BigInt("0"),
-      },
+      timeoutHeight: undefined,
       timeoutTimestamp: BigInt("1666172600413578269"),
     },
     );
@@ -426,10 +420,7 @@ test(
       "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
       destinationChannel: "channel-10",
       data: fromHex("7b226166746572223a2231363636313639303033343133353738323639222c2273656e646572223a226a756e6f3134796632347066637a63736c636864723034753570327977397a7866366376733376686539723973726635706736793270376e7164716e376b6e222c226a6f625f6964223a2273696d6f6e2d726f6c6c2d33227d"),
-      timeoutHeight: {
-        revisionHeight: BigInt("0"),
-        revisionNumber: BigInt("0"),
-      },
+      timeoutHeight: undefined,
       timeoutTimestamp: BigInt("1666172600413578269"),
     },
     );
@@ -454,10 +445,7 @@ test(
       "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
       destinationChannel: "channel-10",
       data: fromHex("7b226166746572223a2231363636313634303335383536383731313133222c2273656e646572223a226a756e6f313970616d30766e636c32733365746e34653772717876707132676b797539776732637a66767370683664677670303066737278717a6a74357372222c226a6f625f6964223a22646170702d312d31363636313634303137227d"),
-      timeoutHeight: {
-        revisionHeight: BigInt("0"),
-        revisionNumber: BigInt("0"),
-      },
+      timeoutHeight: undefined,
       timeoutTimestamp: BigInt("1666167632856871113"),
     },
     );

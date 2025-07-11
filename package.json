@@ -37,6 +37,7 @@
     "@keplr-wallet/types": "^0.12.250",
     "@stylistic/eslint-plugin": "^5.1.0",
     "@types/node": "^20.14.8",
+    "@vitest/coverage-istanbul": "^3.2.4",
     "cosmjs-types": "^0.9.0",
     "eslint": "^9.30.1",
     "eslint-plugin-simple-import-sort": "^12.1.1",
