@@ -45,8 +45,8 @@ test("Expect addRelayPath and getRelayPath to work correctly", async () => {
   expect(relayPathV2?.version).toBe(2);
 });
 test("Expect getRelayPath to return undefined for non-existent relay path", async () => {
-  const chainIdA = "chainA";
-  const chainIdB = "chainB";
+  const chainIdA = "chainC";
+  const chainIdB = "chainD";
   const clientIdA = "clientA";
   const clientIdB = "clientB";
 
