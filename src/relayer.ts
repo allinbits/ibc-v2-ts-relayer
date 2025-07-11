@@ -1,6 +1,6 @@
 import EventEmitter from "node:events";
 
-import winston from "winston";
+import * as winston from "winston";
 
 import {
   TendermintIbcClient,

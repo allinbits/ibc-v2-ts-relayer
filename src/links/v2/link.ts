@@ -7,7 +7,7 @@ import {
 import {
   arrayContentEquals, isDefined,
 } from "@cosmjs/utils";
-import winston from "winston";
+import * as winston from "winston";
 
 import {
   BaseIbcClient, isTendermint, isTendermintClientState, isTendermintConsensusState,

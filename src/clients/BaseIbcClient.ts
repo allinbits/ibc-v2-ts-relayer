@@ -19,7 +19,7 @@ import {
 import {
   ReadonlyDateWithNanoseconds,
 } from "@cosmjs/tendermint-rpc";
-import winston from "winston";
+import * as winston from "winston";
 
 import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata,

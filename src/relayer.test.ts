@@ -5,7 +5,7 @@ import {
   it,
   vi,
 } from "vitest";
-import winston from "winston";
+import * as winston from "winston";
 
 import {
   Relayer,
@@ -13,17 +13,18 @@ import {
 import {
   ChainType,
 } from "./types";
+import {
+  addRelayPath, getRelayPaths,
+} from "./utils/storage";
 
 // Mocks
 globalThis.setTimeout = vi.fn(fn => fn()) as unknown as typeof setTimeout;
 
 vi.mock("winston", () => ({
-  default: {
-    createLogger: vi.fn(() => ({
-      info: vi.fn(),
-      error: vi.fn(),
-    })),
-  },
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    error: vi.fn(),
+  })),
 }));
 
 vi.mock("./clients/tendermint/IbcClient", () => ({
@@ -128,8 +129,7 @@ describe("Relayer", () => {
   });
 
   it("should initialize with no relay paths", async () => {
-    const getRelayPaths = require("./utils/storage").getRelayPaths;
-    getRelayPaths.mockResolvedValueOnce([]);
+    vi.mocked(getRelayPaths).mockResolvedValueOnce([]);
     await relayer.init();
     expect(logger.info).toHaveBeenCalledWith(
       "No relay paths found. Please add a relay path to start relaying messages.",
@@ -140,7 +140,7 @@ describe("Relayer", () => {
     await relayer.init();
     expect(logger.info).toHaveBeenCalledWith("Found 1 relay paths.");
     expect(logger.info).toHaveBeenCalledWith(
-      "Relay Path: chainA (typeA) <-> chainB (typeB)",
+      "Relay Path: chainA (cosmos) <-> chainB (cosmos)",
     );
   });
 
@@ -149,7 +149,7 @@ describe("Relayer", () => {
       "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 1,
     );
     expect(logger.info).toHaveBeenCalledWith(
-      "Added new relay path: chainA (typeA) <-> chainB (typeB)",
+      "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
     );
   });
 
@@ -158,7 +158,7 @@ describe("Relayer", () => {
       "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 2,
     );
     expect(logger.info).toHaveBeenCalledWith(
-      "Added new relay path: chainA (typeA) <-> chainB (typeB)",
+      "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
     );
   });
 
@@ -166,7 +166,6 @@ describe("Relayer", () => {
     await relayer.addExistingRelayPath(
       "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
     );
-    const addRelayPath = require("./utils/storage").addRelayPath;
     expect(addRelayPath).toHaveBeenCalledWith(
       "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
     );
@@ -175,11 +174,9 @@ describe("Relayer", () => {
   it("should start and stop the relayer", async () => {
     relayer.relayerLoop = vi.fn();
     await relayer.start();
-    // @ts-expect-error: testing private property
     expect(relayer["running"]).toBe(true);
     expect(logger.info).toHaveBeenCalledWith("Starting relayer...");
     await relayer.stop();
-    // @ts-expect-error: testing private property
     expect(relayer["running"]).toBe(false);
     expect(logger.info).toHaveBeenCalledWith("Stopping relayer...");
   });

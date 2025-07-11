@@ -1,3 +1,7 @@
+// @vitest-environment happy-dom
+
+import "fake-indexeddb/auto";
+
 import {
   expect, test,
 } from "vitest";
