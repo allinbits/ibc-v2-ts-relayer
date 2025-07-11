@@ -1,3 +1,4 @@
+/* istanbul ignore file -- @preserve */
 import {
   Any,
 } from "@atomone/cosmos-ibc-types/build/google/protobuf/any";

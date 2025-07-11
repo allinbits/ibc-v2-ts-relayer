@@ -1,3 +1,4 @@
+/* istanbul ignore file -- @preserve */
 import {
   BaseIbcClient,
 } from "../clients/BaseIbcClient";
