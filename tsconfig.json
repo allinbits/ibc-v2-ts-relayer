@@ -10,6 +10,10 @@
       "resolveJsonModule": true,
       "moduleResolution": "node",
       "allowArbitraryExtensions": true,
-      "skipLibCheck": true
-    }
+      "skipLibCheck": true,      
+    },
+    "include": [
+      "src/**/*.ts",
+      "src/**/*.json"
+    ],
   }

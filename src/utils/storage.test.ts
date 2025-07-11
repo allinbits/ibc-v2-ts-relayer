@@ -53,4 +53,4 @@ test("Expect getRelayPath to return undefined for non-existent relay path", asyn
   // Attempt to get a non-existent relay path
   const relayPath = await getRelayPath(chainIdA, chainIdB, clientIdA, clientIdB);
   expect(relayPath).toBeUndefined();
-}); 
+});
