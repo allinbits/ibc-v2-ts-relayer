@@ -21,7 +21,7 @@ jobs:
     - name: Build the project
       run: pnpm build
     - name: Set up ignite
-      run: git clone https://github.com/ignite/cli.git && cd cli && make install
+      run: curl https://get.ignite.com/cli@nightly! | bash
     - name: Scaffold chain mars
       run: ignite scaffold chain mars --no-module -p ${{ runner.temp }}/mars
     - name: Scaffold chain venus
@@ -30,10 +30,8 @@ jobs:
       run: |
         cp scripts/config-mars.yml ${{ runner.temp }}/mars/config.yml
         cp scripts/config-venus.yml ${{ runner.temp }}/venus/config.yml
-    - name: Build chain mars
-      run: cd ${{ runner.temp }}/mars && ignite c init && ignite c serve &
-    - name: Build chain venus
-      run: cd ${{ runner.temp }}/venus && ignite c init && ignite c serve &
-
-    - name: Run e2e tests
-      run: pnpm test:e2e
+    - name: Build chains and run tests
+      run: | 
+        cd ${{ runner.temp }}/mars && ignite c init && ignite c serve &
+        cd ${{ runner.temp }}/venus && ignite c init && ignite c serve &
+        cd ${{ github.workspace }} && pnpm test:e2e
