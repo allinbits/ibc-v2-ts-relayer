@@ -34,8 +34,8 @@ jobs:
         cp scripts/config-venus.yml ${{ runner.temp }}/venus/config.yml
     - name: Build chains and run tests
       run: | 
-        cd ${{ runner.temp }}/mars && go mod tidy && ignite c serve  --skip-proto --verbose &
-        cd ${{ runner.temp }}/venus && go mod tidy && ignite c serve  --skip-proto --verbose &
+        cd ${{ runner.temp }}/mars && go mod tidy && ignite c serve  --skip-proto --verbose < /dev/null &
+        cd ${{ runner.temp }}/venus && go mod tidy && ignite c serve  --skip-proto --verbose < /dev/null &
         cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
         cd ${{ github.workspace }} && pnpm test:e2e
       
