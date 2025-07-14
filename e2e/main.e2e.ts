@@ -1,4 +1,11 @@
 import {
+  QueryClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension,
+} from "@cosmjs/stargate";
+import {
+  connectComet,
+} from "@cosmjs/tendermint-rpc";
+import {
+  expect,
   test,
 } from "vitest";
 
@@ -11,11 +18,13 @@ import {
 import {
   log,
 } from "../src/utils/logging";
+import {
+  setupIbcV2Extension,
+} from "../src/v2queries/ibc";
 
 const relayer = new Relayer(log);
 
 const init = async () => {
-  await relayer.addNewdRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 1);
   await relayer.addNewdRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
   await relayer.init();
   await relayer.start();
@@ -23,5 +32,21 @@ const init = async () => {
 
 test("Start relayer and. run E2E tests", async () => {
   await init();
+  // Wait for the relayer to initialize and start
   console.log("Relayer initialized and started successfully.");
-}, 60000);
+  const tmClientA = await connectComet("http://localhost:26657");
+  const tmClientB = await connectComet("http://localhost:26658");
+
+  const queryA = QueryClient.withExtensions(
+    tmClientA, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
+  );
+  const queryB = QueryClient.withExtensions(
+    tmClientB, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
+  );
+  const counterA = await queryA.ibc.clientV2.counterparty("07-tendermint-0");
+  expect(counterA).toBeDefined();
+  expect(counterA.counterpartyInfo?.clientId).toBe("07-tendermint-0");
+  const counterB = await queryB.ibc.clientV2.counterparty("07-tendermint-0");
+  expect(counterB).toBeDefined();
+  expect(counterB.counterpartyInfo?.clientId).toBe("07-tendermint-0");
+}, 120000);
