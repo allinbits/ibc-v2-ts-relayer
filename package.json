@@ -8,7 +8,7 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "test": "vitest run",
-    "test:e2e": "vitest run --config vitest.config.e2e.ts",
+    "test:e2e": "vitest run --config vitest.config.e2e.ts --silent=false",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
@@ -47,6 +47,7 @@
     "jsdom": "^26.1.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.36.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wait-on": "^8.0.3"
   }
 }
