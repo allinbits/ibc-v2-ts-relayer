@@ -32,7 +32,7 @@ jobs:
         cp scripts/config-venus.yml ${{ runner.temp }}/venus/config.yml
     - name: Build chains and run tests
       run: | 
-        cd ${{ runner.temp }}/mars && ignite c init && ignite c serve &
-        cd ${{ runner.temp }}/venus && ignite c init && ignite c serve &
+        cd ${{ runner.temp }}/mars && ignite c serve --verbose &
+        cd ${{ runner.temp }}/venus && ignite c serve --verbose &
         cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
         cd ${{ github.workspace }} && pnpm test:e2e
