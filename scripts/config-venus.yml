@@ -1,0 +1,18 @@
+validation: sovereign
+version: 1
+accounts:
+    - name: alice
+      mnemonic: other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy
+      coins:
+        - 2000000000udenom
+    - name: bob
+      coins:
+        - 1000000000udenom
+faucet:
+    name: bob
+    coins:
+        - 100000udenom
+default_denom: udenom
+validators:
+    - name: alice
+      bonded: 100000000udenom
