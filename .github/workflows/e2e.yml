@@ -38,3 +38,7 @@ jobs:
         cd ${{ runner.temp }}/venus && ignite c serve  --skip-proto --verbose &
         cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
         cd ${{ github.workspace }} && pnpm test:e2e
+      
+      env:
+        DO_NOT_TRACK: 1
+        GOFLAGS: "-buildvcs=false"
