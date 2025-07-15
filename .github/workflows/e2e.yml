@@ -26,6 +26,7 @@ jobs:
       run: |
             cd ${{ runner.temp }}
             git clone https://github.com/ignite/cli.git
+            cd cli
             git checkout julien/deamon
             git pull
             make install
