@@ -24,8 +24,9 @@ jobs:
       run: pnpm build
     - name: Set up ignite
       run: |
+            cd ${{ runner.temp }}
             git clone https://github.com/ignite/cli.git
-            git checkout origin/julien/deamon
+            git checkout julien/deamon
             git pull
             make install
     - name: Scaffold chain mars
