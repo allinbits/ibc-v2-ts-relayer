@@ -25,7 +25,7 @@ jobs:
     - name: Set up ignite
       run: |
             git clone https://github.com/ignite/cli.git
-            git checkout julien/deamon
+            git checkout origin/julien/deamon
             git pull
             make install
     - name: Scaffold chain mars
