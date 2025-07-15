@@ -44,5 +44,4 @@ jobs:
         cd ${{ github.workspace }} && pnpm test:e2e
       
       env:
-        DO_NOT_TRACK: 1
         GOFLAGS: "-buildvcs=false"
