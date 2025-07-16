@@ -182,7 +182,6 @@ describe("Relayer", () => {
   });
 
   it("should emit messageRelayed event", () => {
-    // @ts-expect-error: EventEmitter typing
     relayer.on("messageRelayed", (msg: string) => {
       expect(msg).toBe("test");
     });

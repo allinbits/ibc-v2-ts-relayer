@@ -145,7 +145,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   ): Promise<TendermintIbcClient> {
     options.senderAddress = (await signer.getAccounts())[0].address;
     // override any registry setup, use the other options
-    options.gasPrice = GasPrice.fromString("0.025token");
+    options.gasPrice = GasPrice.fromString("0.025udenom");
     const mergedOptions = {
       ...options,
       registry: ibcRegistry(),
