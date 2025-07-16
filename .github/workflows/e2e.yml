@@ -41,7 +41,9 @@ jobs:
     - name: Build chains and run tests
       run: | 
         cd ${{ runner.temp }}/mars && go mod tidy && ignite c serve  --skip-proto --output-file mars.log &
+        echo "Mars started..."
         cd ${{ runner.temp }}/venus && go mod tidy && ignite c serve  --skip-proto --output-file venus.log &
+        echo "Venus started..."
         cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
         cd ${{ github.workspace }} && pnpm test:e2e
       
