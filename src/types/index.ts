@@ -40,6 +40,12 @@ export interface RelayPaths {
   clientB: string
   version: number
 }
+export interface ChainFees {
+  id: number
+  chainId: string
+  gasPrice: number
+  gasDenom: string
+}
 export interface RelayedHeights {
   id: number
   relayPathId: number

@@ -1,5 +1,8 @@
 import EventEmitter from "node:events";
 
+import {
+  Entry,
+} from "@napi-rs/keyring";
 import * as winston from "winston";
 
 import {
@@ -18,7 +21,8 @@ import {
   getSigner,
 } from "./utils/signers";
 import {
-  addRelayPath, getRelayedHeights, getRelayPaths, updateRelayedHeights,
+  addChainFees,
+  addRelayPath, getChainFees, getRelayedHeights, getRelayPaths, updateRelayedHeights,
 } from "./utils/storage";
 
 export class Relayer extends EventEmitter {
@@ -47,13 +51,17 @@ export class Relayer extends EventEmitter {
   ) {
     const signerA = await getSigner(chainIdA);
     const signerB = await getSigner(chainIdB);
+    const feesA = await getChainFees(chainIdA);
+    const feesB = await getChainFees(chainIdB);
     const clientA = await TendermintIbcClient.connectWithSigner(nodeA, signerA, {
       senderAddress: (await signerA.getAccounts())[0].address,
       logger: this.logger,
+      gasPrice: feesA.gasPrice + feesA.gasDenom,
     });
     const clientB = await TendermintIbcClient.connectWithSigner(nodeB, signerB, {
       senderAddress: (await signerB.getAccounts())[0].address,
       logger: this.logger,
+      gasPrice: feesB.gasPrice + feesB.gasDenom,
     });
     if (version === 1) {
       const link = await Link.createWithNewConnections(
@@ -86,6 +94,24 @@ export class Relayer extends EventEmitter {
         this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
       }
     }
+  }
+
+  async addMnemonic(
+    mnemonic: string,
+    chainId: string,
+  ) {
+    const entry = new Entry("menmonic", chainId);
+    entry.setPassword(mnemonic);
+    this.logger.info(`Mnemonic added for chain ID: ${chainId}`);
+  }
+
+  async addGasPrice(
+    chainId: string,
+    gasPrice: string,
+    gasDenom: string,
+  ) {
+    addChainFees(chainId, parseFloat(gasPrice), gasDenom);
+    this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}`);
   }
 
   async addExistingRelayPath(
@@ -137,13 +163,17 @@ export class Relayer extends EventEmitter {
           this.relayedHeights.set(path.id, relayedHeights);
           const signerA = await getSigner(path.chainIdA);
           const signerB = await getSigner(path.chainIdB);
+          const feesA = await getChainFees(path.chainIdA);
+          const feesB = await getChainFees(path.chainIdB);
           const clientA = await TendermintIbcClient.connectWithSigner(path.nodeA, signerA, {
             senderAddress: (await signerA.getAccounts())[0].address,
             logger: this.logger,
+            gasPrice: feesA.gasPrice + feesA.gasDenom,
           });
           const clientB = await TendermintIbcClient.connectWithSigner(path.nodeB, signerB, {
             senderAddress: (await signerB.getAccounts())[0].address,
             logger: this.logger,
+            gasPrice: feesB.gasPrice + feesB.gasDenom,
           });
           if (path.version === 1) {
             this.links.set(path.id, await Link.createWithExistingConnections(clientA, clientB, path.clientA, path.clientB, this.logger));

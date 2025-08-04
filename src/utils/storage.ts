@@ -3,6 +3,44 @@ import {
   ChainType, RelayPaths,
 } from "../types";
 
+const addChainFees = async (chainId: string, gasPrice: number, gasDenom: string) => {
+  if (typeof window != "undefined") {
+    const dexie = await import("./dexie");
+    await dexie.db.chainFees.add({
+      chainId,
+      gasPrice,
+      gasDenom,
+    });
+  }
+  else {
+    const sqlite = await import("./sqlite");
+    const db = await sqlite.openDB(config.dbFile);
+    await db.run("INSERT INTO chainFees (chainId, gasPrice, gasDenom) VALUES (?, ?, ?)", [chainId, gasPrice, gasDenom]);
+  }
+  return await getChainFees(chainId);
+};
+const getChainFees = async (chainId: string) => {
+  if (typeof window != "undefined") {
+    const dexie = await import("./dexie");
+    const res = await dexie.db.chainFees.where({
+      chainId,
+    }).first();
+    if (!res) {
+      throw new Error("Chain fees not found");
+    }
+    return res;
+  }
+  else {
+    const sqlite = await import("./sqlite");
+    const db = await sqlite.openDB(config.dbFile);
+    const res = await db.get("SELECT * FROM chainFees WHERE chainId = ?", [chainId]);
+    if (!res) {
+      throw new Error("Chain fees not found");
+    }
+    return res;
+  }
+};
+
 const updateRelayedHeights = async (pathId: number, relayHeightA: number, relayHeightB: number, ackHeightA: number, ackHeightB: number) => {
   const height = await getRelayedHeights(pathId);
   if (height) {
@@ -117,7 +155,9 @@ const getRelayPaths = async () => {
   }
 };
 export {
+  addChainFees,
   addRelayPath,
+  getChainFees,
   getRelayedHeights,
   getRelayPath,
   getRelayPaths,
