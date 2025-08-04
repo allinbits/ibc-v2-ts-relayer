@@ -32,6 +32,13 @@ CREATE TABLE IF NOT EXISTS relayedHeights (
     ackHeightA INTEGER NOT NULL,
     ackHeightB INTEGER NOT NULL,
     FOREIGN KEY (relayPathId) REFERENCES relayPaths(id)
+);
+CREATE TABLE IF NOT EXISTS chainFees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chainId TEXT NOT NULL,
+    gasPrice DOUBLE NOT NULL,
+    gasDenom TEXT NOT NULL,
+    UNIQUE (chainId) ON CONFLICT REPLACE
 );`;
   await db.exec(baseSchema);
   return db;

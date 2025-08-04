@@ -1,6 +1,9 @@
 import {
   DirectSecp256k1HdWallet, OfflineSigner,
 } from "@cosmjs/proto-signing";
+import {
+  Entry,
+} from "@napi-rs/keyring";
 
 export const getSigner = async (chainId: string): Promise<OfflineSigner> => {
   if (typeof window !== "undefined") {
@@ -13,6 +16,11 @@ export const getSigner = async (chainId: string): Promise<OfflineSigner> => {
     }
   }
   else {
-    return await DirectSecp256k1HdWallet.fromMnemonic("other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");
+    const entry = new Entry("menmonic", chainId);
+    const mnem = entry.getPassword();
+    if (!mnem) {
+      throw new Error("Mnemonic not found in keyring");
+    }
+    return await DirectSecp256k1HdWallet.fromMnemonic(mnem);
   }
 };

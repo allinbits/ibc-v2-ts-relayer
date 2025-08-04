@@ -25,6 +25,14 @@ import {
 const relayer = new Relayer(log);
 
 const init = async () => {
+  await relayer.addMnemonic(
+    "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy",
+    "mars");
+  await relayer.addMnemonic(
+    "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy",
+    "venus");
+  await relayer.addGasPrice("mars", "0.025", "udenom");
+  await relayer.addGasPrice("venus", "0.025", "udenom");
   await relayer.addNewdRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
   await relayer.init();
   await relayer.start();
