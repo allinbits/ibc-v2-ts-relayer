@@ -144,6 +144,9 @@ export class Relayer extends EventEmitter {
       else {
         this.logger.info(`Found ${this.relayPaths.length} relay paths.`);
         for (let i = 0; i < this.relayPaths.length; i++) {
+          if (this.links.has(this.relayPaths[i].id)) {
+            continue;
+          }
           const path = this.relayPaths[i];
           this.logger.info(`Relay Path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
           this.relayedHeights = new Map<number, RelayedHeights>();
@@ -207,6 +210,7 @@ export class Relayer extends EventEmitter {
   }) {
     while (this.running) {
       try {
+        this.init();
         for (const [id, link] of this.links.entries()) {
           this.logger.info(`Checking relay path ${id}...`);
           if (!this.relayedHeights) {

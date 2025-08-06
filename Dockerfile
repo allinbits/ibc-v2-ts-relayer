@@ -11,6 +11,7 @@ WORKDIR /usr/src/app
 
 # Copy the rest of the source files into the image.
 COPY . .
+RUN rm -rf node_modules
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.npm to speed up subsequent builds.
@@ -22,5 +23,7 @@ RUN --mount=type=cache,target=/root/.npm \
     pnpm install && \
     pnpm build
 
-ENTRYPOINT ["node","dist/index.js" ]
-CMD        [ "-V" ]
+RUN chmod +x ./scripts/ibc-v2-ts-relayer
+ENV PATH="/usr/src/app/scripts:$PATH"
+ENTRYPOINT ["ibc-v2-ts-relayer"]
+CMD        [ "relay" ]
