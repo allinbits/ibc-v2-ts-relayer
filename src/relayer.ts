@@ -100,7 +100,7 @@ export class Relayer extends EventEmitter {
     mnemonic: string,
     chainId: string,
   ) {
-    const entry = new Entry("menmonic", chainId);
+    const entry = new Entry("mnemonic", chainId);
     entry.setPassword(mnemonic);
     this.logger.info(`Mnemonic added for chain ID: ${chainId}`);
   }
