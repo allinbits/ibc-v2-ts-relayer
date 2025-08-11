@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine 
+FROM node:iron-alpine3.21
 
 # Use production node environment by default.
 # ENV NODE_ENV production
@@ -22,7 +22,6 @@ RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm typescript && \
     pnpm install && \
     pnpm build
-
 RUN chmod +x ./scripts/ibc-v2-ts-relayer
 ENV PATH="/usr/src/app/scripts:$PATH"
 ENTRYPOINT ["ibc-v2-ts-relayer"]
