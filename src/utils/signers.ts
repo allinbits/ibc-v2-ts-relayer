@@ -16,7 +16,7 @@ export const getSigner = async (chainId: string): Promise<OfflineSigner> => {
     }
   }
   else {
-    const entry = new Entry("menmonic", chainId);
+    const entry = new Entry("mnemonic", chainId);
     const mnem = entry.getPassword();
     if (!mnem) {
       throw new Error("Mnemonic not found in keyring");

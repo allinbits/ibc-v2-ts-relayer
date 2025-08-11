@@ -41,7 +41,6 @@ program.command("relay")
   .description("Relay packets between chains")
   .action(async () => {
     const relayer = new Relayer(log);
-    await relayer.init();
     await relayer.start();
   });
 

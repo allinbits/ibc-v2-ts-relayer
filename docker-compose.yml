@@ -1,0 +1,6 @@
+services:
+  relayer:
+    build:
+      context: .
+    environment:
+      NODE_ENV: production
