@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -e
+
+#https://medium.com/@Aenon/bash-location-of-current-script-76db7fd2e388
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+sudo setcap cap_ipc_lock=+ep `which gnome-keyring-daemon`
+echo $DBUS_SESSION_BUS_ADDRESS > /etc/DBUS_SESSION_BUS_ADDRESS
+
+killall -q -9 "$(whoami)" gnome-keyring-daemon || echo ''
+
+#based on https://unix.stackexchange.com/a/602935
+eval $(echo -n "$" \
+           | gnome-keyring-daemon --unlock \
+           | sed -e 's/^/export /')
+
+echo '' >&2
+
+"$@"
