@@ -1,4 +1,7 @@
 import {
+  Bech32PrefixResponse,
+} from "@atomone/cosmos-ibc-types/build/cosmos/auth/v1beta1/query";
+import {
   CommitmentProof, HashOp, LengthOp,
 } from "@atomone/cosmos-ibc-types/build/cosmos/ics23/v1/proofs";
 import {
@@ -48,8 +51,10 @@ import {
   DeliverTxResponse,
   Event,
   fromTendermintEvent,
+  QueryClient,
 } from "@cosmjs/stargate";
 import {
+  connectComet,
   ReadonlyDateWithNanoseconds,
   tendermint34,
   tendermint37,
@@ -63,8 +68,21 @@ import {
   BaseIbcClient,
 } from "../clients/BaseIbcClient";
 import {
-  Ack, AckV2, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata,
+  Ack, AckV2, ChainType, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types";
+
+export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
+  if (chainType === ChainType.Cosmos) {
+    const tmClient = await connectComet(node);
+    const client = QueryClient.withExtensions(tmClient);
+
+    const res = await client.queryAbci("/cosmos.auth.v1beta1.Query/Bech32Prefix", new Uint8Array());
+    return Bech32PrefixResponse.decode(res.value).bech32Prefix;
+  }
+  else {
+    return "";
+  }
+}
 
 export function deepCloneAndMutate<T extends Record<string, unknown>>(
   object: T,

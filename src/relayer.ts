@@ -24,6 +24,9 @@ import {
   addChainFees,
   addRelayPath, getChainFees, getRelayedHeights, getRelayPaths, updateRelayedHeights,
 } from "./utils/storage";
+import {
+  getPrefix,
+} from "./utils/utils";
 
 export class Relayer extends EventEmitter {
   private logger: winston.Logger;
@@ -49,8 +52,14 @@ export class Relayer extends EventEmitter {
     chainTypeB: ChainType,
     version: number = 1,
   ) {
-    const signerA = await getSigner(chainIdA);
-    const signerB = await getSigner(chainIdB);
+    const prefixA = await getPrefix(chainTypeA, nodeA);
+    const prefixB = await getPrefix(chainTypeB, nodeB);
+    const signerA = await getSigner(chainIdA, {
+      prefix: prefixA,
+    });
+    const signerB = await getSigner(chainIdB, {
+      prefix: prefixB,
+    });
     const feesA = await getChainFees(chainIdA);
     const feesB = await getChainFees(chainIdB);
     const clientA = await TendermintIbcClient.connectWithSigner(nodeA, signerA, {
