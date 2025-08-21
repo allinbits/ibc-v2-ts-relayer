@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:iron-alpine3.21
+FROM node:current-alpine3.22
 
 # Use production node environment by default.
 # ENV NODE_ENV production
@@ -23,6 +23,15 @@ RUN --mount=type=cache,target=/root/.npm \
     pnpm install && \
     pnpm build
 RUN chmod +x ./scripts/ibc-v2-ts-relayer
+RUN apk add gnome-keyring
+RUN apk add dbus
+RUN apk add bash
+RUN apk add libcap
+RUN apk add --no-cache sudo
+RUN cp ./scripts/with_keyring /etc/with_keyring
+RUN cp ./scripts/keyring_session /etc/keyring_session
+RUN chmod +x /etc/with_keyring
+RUN chmod +x /etc/keyring_session
 ENV PATH="/usr/src/app/scripts:$PATH"
-ENTRYPOINT ["ibc-v2-ts-relayer"]
-CMD        [ "relay" ]
+ENTRYPOINT ["/etc/with_keyring"]
+CMD        [ "ibc-v2-ts-relayer", "relay" ]

@@ -110,7 +110,7 @@ export class Relayer extends EventEmitter {
     gasPrice: string,
     gasDenom: string,
   ) {
-    addChainFees(chainId, parseFloat(gasPrice), gasDenom);
+    await addChainFees(chainId, parseFloat(gasPrice), gasDenom);
     this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}`);
   }
 
