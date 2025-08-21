@@ -25,18 +25,18 @@ jobs:
     - name: Set up ignite
       run: curl https://get.ignite.com/cli@nightly! | bash
     - name: Scaffold chain mars
-      run: ignite scaffold chain mars --no-module -p ${{ runner.temp }}/mars
+      run: ignite scaffold chain mars --address-prefix mars --no-module -p ${{ runner.temp }}/mars
     - name: Scaffold chain venus
-      run: ignite scaffold chain venus --no-module -p ${{ runner.temp }}/venus
+      run: ignite scaffold chain venus --address-prefix venus--no-module -p ${{ runner.temp }}/venus
     - name: Copy configs
       run: |
         cp scripts/config-mars.yml ${{ runner.temp }}/mars/config.yml
         cp scripts/config-venus.yml ${{ runner.temp }}/venus/config.yml
     - name: Build chains and run tests
       run: | 
-        cd ${{ runner.temp }}/mars && go mod tidy && ignite c serve  --skip-proto --output-file mars.log &
+        cd ${{ runner.temp }}/mars && ignite c serve  --skip-proto --output-file mars.log &
         echo "Mars started..."
-        cd ${{ runner.temp }}/venus && go mod tidy && ignite c serve  --skip-proto --output-file venus.log &
+        cd ${{ runner.temp }}/venus && ignite c serve  --skip-proto --output-file venus.log &
         echo "Venus started..."
         cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
         cd ${{ github.workspace }} && pnpm test:e2e
