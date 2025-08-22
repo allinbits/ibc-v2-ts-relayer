@@ -173,8 +173,14 @@ export class Relayer extends EventEmitter {
             this.logger.info(`No relayed heights found for path ${path.id}. Initializing to zero.`);
           }
           this.relayedHeights.set(path.id, relayedHeights);
-          const signerA = await getSigner(path.chainIdA);
-          const signerB = await getSigner(path.chainIdB);
+          const prefixA = await getPrefix(path.chainTypeA, path.nodeA);
+          const prefixB = await getPrefix(path.chainTypeB, path.nodeB);
+          const signerA = await getSigner(path.chainIdA, {
+            prefix: prefixA,
+          });
+          const signerB = await getSigner(path.chainIdB, {
+            prefix: prefixB,
+          });
           const feesA = await getChainFees(path.chainIdA);
           const feesB = await getChainFees(path.chainIdB);
           const clientA = await TendermintIbcClient.connectWithSigner(path.nodeA, signerA, {
