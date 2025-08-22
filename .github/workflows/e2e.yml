@@ -18,12 +18,17 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 20
+
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
     - name: Install dependencies
       run: npm install -g pnpm && pnpm install
     - name: Build the project
       run: pnpm build
+    - name: Pull Docker images
+      run: docker-compose pull
     - name: Bring up chains
-      run: docker compose up
+      run: docker-compose up --build
     - name: Build chains and run tests
       run: |
         cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
