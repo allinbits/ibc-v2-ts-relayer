@@ -21,7 +21,7 @@ jobs:
     - name: Build the project
       run: pnpm build
     - name: Install docker-compose
-      run: apt install docker-compose
+      run: sudo apt install docker-compose
     - name: Pull Docker images
       run: docker-compose pull
     - name: Bring up chains
