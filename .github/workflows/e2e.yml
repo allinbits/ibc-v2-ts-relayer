@@ -25,7 +25,7 @@ jobs:
     - name: Pull Docker images
       run: docker-compose pull
     - name: Bring up chains
-      run: docker-compose up --build
+      run: docker-compose up --build -d
     - name: Build chains and run tests
       run: |
         cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
