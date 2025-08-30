@@ -31,5 +31,5 @@ jobs:
       run: pnpm build
     - name: Build chains and run tests
       run: |
-            cd ${{ github.workspace }} && ./node_modules/.bin/wait-on http://127.0.0.1:1317 && ./node_modules/.bin/wait-on http://127.0.0.1:1318 && ./node_modules/.bin/wait-on http://127.0.0.1:26657 && ./node_modules/.bin/wait-on http://127.0.0.1:26658
+            cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
             cd ${{ github.workspace }} && pnpm test:e2e
