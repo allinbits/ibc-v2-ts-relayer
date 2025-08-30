@@ -73,6 +73,7 @@ import {
 
 export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
   if (chainType === ChainType.Cosmos) {
+    console.log(node);
     const tmClient = await connectComet(node);
     const client = QueryClient.withExtensions(tmClient);
 
