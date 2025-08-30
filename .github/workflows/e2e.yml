@@ -15,7 +15,7 @@ jobs:
           - "1317:1317"
           - "26657:26657" 
       venus:
-        image: clockworkgr/mars
+        image: clockworkgr/venus
         ports:
           - "1318:1317"
           - "26658:26657" 
