@@ -34,15 +34,15 @@ const init = async () => {
     "venus");
   await relayer.addGasPrice("mars", "0.025", "udenom");
   await relayer.addGasPrice("venus", "0.025", "udenom");
-  await relayer.addNewdRelayPath("mars", "http://mars:26657", "venus", "http://venus:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
+  await relayer.addNewdRelayPath("mars", "http://127.0.0.1:26657", "venus", "http://127.0.0.1:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
 };
 
 test("Start relayer and. run E2E tests", async () => {
   await init();
   // Wait for the relayer to initialize and start
   console.log("Relayer initialized and started successfully.");
-  const tmClientA = await connectComet("http://localhost:26657");
-  const tmClientB = await connectComet("http://localhost:26658");
+  const tmClientA = await connectComet("http://127.0.0.1:26657");
+  const tmClientB = await connectComet("http://127.0.0.1:26658");
 
   const queryA = QueryClient.withExtensions(
     tmClientA, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
