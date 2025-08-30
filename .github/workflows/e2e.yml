@@ -8,29 +8,28 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    services:
+      mars:
+        image: clockworkgr/mars
+        ports:
+          - "1317:1317"
+          - "26657:26657" 
+      venus:
+        image: clockworkgr/mars
+        ports:
+          - "1318:1317"
+          - "26658:26657" 
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
         node-version: 20
 
-    - uses: satackey/action-docker-layer-caching@v0.0.11
-      continue-on-error: true
     - name: Install dependencies
       run: npm install -g pnpm && pnpm install
     - name: Build the project
       run: pnpm build
-    - name: Install docker-compose
-      run: sudo apt install docker-compose
-    - name: Pull Docker images
-      run: docker-compose pull
-    - name: Bring up chains
-      run: docker-compose up --build -d
     - name: Build chains and run tests
       run: |
-        cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
+        cd ${{ github.workspace }} && ./node_modules/.bin/wait-on http://mars:1317 && ./node_modules/.bin/wait-on http://venus:1318 && ./node_modules/.bin/wait-on http://mars:26657 && ./node_modules/.bin/wait-on http://venus:26658
         cd ${{ github.workspace }} && pnpm test:e2e
-    - name: Bring down chains
-      run: docker compose down
-      env:
-        GOFLAGS: "-buildvcs=false"

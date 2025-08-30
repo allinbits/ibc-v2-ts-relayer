@@ -34,7 +34,7 @@ const init = async () => {
     "venus");
   await relayer.addGasPrice("mars", "0.025", "udenom");
   await relayer.addGasPrice("venus", "0.025", "udenom");
-  await relayer.addNewdRelayPath("mars", "http://127.0.0.1:26657", "venus", "http://127.0.0.1:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
+  await relayer.addNewdRelayPath("mars", "http://mars:26657", "venus", "http://venus:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
 };
 
 test("Start relayer and. run E2E tests", async () => {
