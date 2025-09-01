@@ -33,8 +33,6 @@ jobs:
     - name: Build the project
       run: pnpm build
     - name: Build chains and run tests
-      run: |
-            docker exec  mars cat ignite.log
-            docker ps
-            netstat -l
+      run: |            
+            cd ${{ github.workspace }} && ./node_modules/.bin/wait-on  http://localhost:1317 && ./node_modules/.bin/wait-on  http://localhost:1318 && ./node_modules/.bin/wait-on  http://localhost:26657 && ./node_modules/.bin/wait-on  http://localhost:26658
             cd ${{ github.workspace }} && pnpm test:e2e
