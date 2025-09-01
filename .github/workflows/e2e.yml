@@ -32,6 +32,6 @@ jobs:
     - name: Build chains and run tests
       run: |
             cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
-            docker exec -it mars /bin/sh -c "cat ignite.log"
+            docker exec -it clockworkgr/mars /bin/sh -c "cat ignite.log"
             netstat -l
             cd ${{ github.workspace }} && pnpm test:e2e
