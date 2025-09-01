@@ -34,7 +34,7 @@ jobs:
       run: pnpm build
     - name: Build chains and run tests
       run: |
-            docker exec -it mars cat ignite.log
+            docker exec  mars cat ignite.log
             docker ps
             netstat -l
             cd ${{ github.workspace }} && pnpm test:e2e
