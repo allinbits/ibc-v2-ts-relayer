@@ -145,7 +145,7 @@ describe("Relayer", () => {
   });
 
   it("should add a new relay path (v1)", async () => {
-    await relayer.addNewdRelayPath(
+    await relayer.addNewRelayPath(
       "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 1,
     );
     expect(logger.info).toHaveBeenCalledWith(
@@ -154,7 +154,7 @@ describe("Relayer", () => {
   });
 
   it("should add a new relay path (v2)", async () => {
-    await relayer.addNewdRelayPath(
+    await relayer.addNewRelayPath(
       "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 2,
     );
     expect(logger.info).toHaveBeenCalledWith(

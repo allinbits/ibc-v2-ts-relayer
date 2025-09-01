@@ -43,7 +43,7 @@ export class Relayer extends EventEmitter {
     });
   }
 
-  async addNewdRelayPath(
+  async addNewRelayPath(
     chainIdA: string,
     nodeA: string,
     chainIdB: string,

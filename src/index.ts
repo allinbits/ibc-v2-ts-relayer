@@ -72,7 +72,7 @@ program.command("add-path")
   .addOption(ibcVersionTypeOption)
   .action(async (options) => {
     const relayer = new Relayer(log);
-    await relayer.addNewdRelayPath(
+    await relayer.addNewRelayPath(
       options.source,
       options.sourceUrl,
       options.destination,
