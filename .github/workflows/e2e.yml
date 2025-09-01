@@ -12,13 +12,13 @@ jobs:
       mars:
         image: clockworkgr/mars
         ports:
-          - "1317:1317"
-          - "26657:26657" 
+          - 1317:1317
+          - 26657:26657
       venus:
         image: clockworkgr/venus
         ports:
-          - "1318:1317"
-          - "26658:26657" 
+          - 1318:1317
+          - 26658:26657
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
