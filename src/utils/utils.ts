@@ -74,11 +74,17 @@ import {
 export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
   if (chainType === ChainType.Cosmos) {
     console.log(node);
-    const tmClient = await connectComet(node);
-    const client = QueryClient.withExtensions(tmClient);
-
-    const res = await client.queryAbci("/cosmos.auth.v1beta1.Query/Bech32Prefix", new Uint8Array());
-    return Bech32PrefixResponse.decode(res.value).bech32Prefix;
+    try {
+      const tmClient = await connectComet(node);
+      const client = QueryClient.withExtensions(tmClient);
+      const res = await client.queryAbci("/cosmos.auth.v1beta1.Query/Bech32Prefix", new Uint8Array());
+      return Bech32PrefixResponse.decode(res.value).bech32Prefix;
+    }
+    catch (e) {
+      console.error(e);
+      console.trace();
+      throw e;
+    }
   }
   else {
     return "";
