@@ -1,3 +1,13 @@
+volumes:
+  mars-apps:
+    driver: local
+  mars-data:
+    driver: local
+  venus-apps:
+    driver: local
+  venus-data:
+    driver: local
+
 services:
   mars:
     image: clockworkgr/mars
@@ -10,9 +20,68 @@ services:
       - "1318:1317"
       - "26658:26657" 
   relayer:
+    image: ghcr.io/allinbits/ibc-v2-ts-relayer:dev
+    container_name: ts-relayer
     build:
       context: .
     cap_add:
         - IPC_LOCK
     environment:
       NODE_ENV: production
+    cap_add:
+      - IPC_LOCK
+    depends_on:
+      mars:
+        condition: service_healthy
+      venus:
+        condition: service_healthy
+  
+  mars:
+    image: ignitehq/cli:latest
+    restart: unless-stopped
+    container_name: mars
+    tty: true
+    entrypoint: ["/entrypoint.sh"]
+    ports:
+      # - "26656:26656"
+      - "26657:26657"
+      - "1318:1318"
+    volumes:
+      - mars-apps:/apps
+      - mars-data:/home/tendermint
+      - ./docker/chains/mars/config.yml:/config.yaml
+      - ./docker/chains/entrypoint.sh:/entrypoint.sh
+    environment:
+      CHAIN_NAME: mars
+      DO_NOT_TRACK: "1"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+  
+  venus:
+    image: ignitehq/cli:latest
+    restart: unless-stopped
+    container_name: venus
+    tty: true
+    entrypoint: ["/entrypoint.sh"]
+    ports:
+      # - "26656:26656"
+      - "36657:26657"
+      - "2318:1318"
+    volumes:
+      - venus-apps:/apps
+      - venus-data:/home/tendermint
+      - ./docker/chains/venus/config.yml:/config.yaml
+      - ./docker/chains/entrypoint.sh:/entrypoint.sh
+    environment:
+      CHAIN_NAME: venus
+      DO_NOT_TRACK: "1"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
