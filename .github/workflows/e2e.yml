@@ -22,6 +22,9 @@ jobs:
           - 1318:1317
           - 26658:26657
     steps:
+    - name: get runner ip addresses
+      id: ip
+      uses: haythem/public-ip@v1.2
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
@@ -44,4 +47,4 @@ jobs:
         docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-mnemonic -c venus "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
         docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c mars 0.025udenom
         docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c venus 0.025udenom
-        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-path -s mars -d venus --surl http://host.docker.internal:26657 --durl http://host.docker.internal:26658
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-path -s mars -d venus --surl http://${{ steps.ip.outputs.ipv4 }}:26657 --durl http://${{ steps.ip.outputs.ipv4 }}:26658
