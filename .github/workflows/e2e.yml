@@ -8,38 +8,43 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    services:
+      mars:
+        image: clockworkgr/mars
+        options: --name mars
+        ports:
+          - 1317:1317
+          - 26657:26657
+      venus:
+        image: clockworkgr/venus
+        options: --name venus
+        ports:
+          - 1318:1317
+          - 26658:26657
     steps:
+    - name: get runner ip addresses
+      id: ip
+      uses: haythem/public-ip@v1.2
     - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
-      with:
-        go-version: 1.24
-
-    - uses: bufbuild/buf-setup-action@v1.50.0
     - uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 20.x
+        check-latest: true
+
     - name: Install dependencies
       run: npm install -g pnpm && pnpm install
     - name: Build the project
       run: pnpm build
-    - name: Set up ignite
-      run: curl https://get.ignite.com/cli@nightly! | bash
-    - name: Scaffold chain mars
-      run: ignite scaffold chain mars --no-module -p ${{ runner.temp }}/mars
-    - name: Scaffold chain venus
-      run: ignite scaffold chain venus --no-module -p ${{ runner.temp }}/venus
-    - name: Copy configs
-      run: |
-        cp scripts/config-mars.yml ${{ runner.temp }}/mars/config.yml
-        cp scripts/config-venus.yml ${{ runner.temp }}/venus/config.yml
     - name: Build chains and run tests
-      run: | 
-        cd ${{ runner.temp }}/mars && go mod tidy && ignite c serve  --skip-proto --output-file mars.log &
-        echo "Mars started..."
-        cd ${{ runner.temp }}/venus && go mod tidy && ignite c serve  --skip-proto --output-file venus.log &
-        echo "Venus started..."
-        cd ${{ github.workspace }} && ./node_modules/.bin/wait-on tcp:1317 && ./node_modules/.bin/wait-on tcp:1318 && ./node_modules/.bin/wait-on tcp:26657 && ./node_modules/.bin/wait-on tcp:26658
-        cd ${{ github.workspace }} && pnpm test:e2e
-      
-      env:
-        GOFLAGS: "-buildvcs=false"
+      run: |            
+            cd ${{ github.workspace }} && ./node_modules/.bin/wait-on  http://localhost:1317 && ./node_modules/.bin/wait-on  http://localhost:1318 && ./node_modules/.bin/wait-on  http://localhost:26657 && ./node_modules/.bin/wait-on  http://localhost:26658
+            cd ${{ github.workspace }} && pnpm test:e2e
+    - name: Dockerize relayer and run commands
+      run: |
+        cd ${{ github.workspace }} && docker build -t ts-relayer .
+        docker run -d --name ts-relayer --cap-add IPC_LOCK ts-relayer
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-mnemonic -c mars "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-mnemonic -c venus "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c mars 0.025udenom
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c venus 0.025udenom
+        

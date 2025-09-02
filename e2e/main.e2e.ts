@@ -34,7 +34,11 @@ const init = async () => {
     "venus");
   await relayer.addGasPrice("mars", "0.025", "udenom");
   await relayer.addGasPrice("venus", "0.025", "udenom");
-  await relayer.addNewdRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
+  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
+};
+
+const addV1 = async () => {
+  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 1);
 };
 
 test("Start relayer and. run E2E tests", async () => {
@@ -56,4 +60,13 @@ test("Start relayer and. run E2E tests", async () => {
   const counterB = await queryB.ibc.clientV2.counterparty("07-tendermint-0");
   expect(counterB).toBeDefined();
   expect(counterB.counterpartyInfo?.clientId).toBe("07-tendermint-0");
+  await addV1();
+  const counterA_v1 = await queryA.ibc.channel.channel("transfer", "channel-0");
+  expect(counterA_v1).toBeDefined();
+  expect(counterA_v1.channel?.counterparty.channelId).toBe("channel-0");
+  expect(counterA_v1.channel?.counterparty.portId).toBe("transfer");
+  const counterB_v1 = await queryB.ibc.channel.channel("transfer", "channel-0");
+  expect(counterB_v1).toBeDefined();
+  expect(counterB_v1.channel?.counterparty.channelId).toBe("channel-0");
+  expect(counterB_v1.channel?.counterparty.portId).toBe("transfer");
 }, 120000);

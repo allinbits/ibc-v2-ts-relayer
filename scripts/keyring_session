@@ -6,13 +6,18 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 sudo setcap cap_ipc_lock=+ep `which gnome-keyring-daemon`
-echo $DBUS_SESSION_BUS_ADDRESS > /etc/DBUS_SESSION_BUS_ADDRESS
+if [ -f "/etc/DBUS_SESSION_BUS_ADDRESS" ]; then
+  DBUS_SESSION_BUS_ADDRESS=$(cat /etc/DBUS_SESSION_BUS_ADDRESS)
+  export DBUS_SESSION_BUS_ADDRESS
+else
+  echo $DBUS_SESSION_BUS_ADDRESS > /etc/DBUS_SESSION_BUS_ADDRESS
+fi
 
-killall -q -9 "$(whoami)" gnome-keyring-daemon || echo ''
+#killall -q -9 "$(whoami)" gnome-keyring-daemon || echo ''
 
 #based on https://unix.stackexchange.com/a/602935
 eval $(echo -n "$" \
-           | gnome-keyring-daemon --unlock \
+           | gnome-keyring-daemon -r --unlock >/dev/null 2>&1 \
            | sed -e 's/^/export /')
 
 echo '' >&2

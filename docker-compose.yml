@@ -1,6 +1,18 @@
 services:
+  mars:
+    image: clockworkgr/mars
+    ports:
+      - "1317:1317"
+      - "26657:26657" 
+  venus:
+    image: clockworkgr/venus
+    ports:
+      - "1318:1317"
+      - "26658:26657" 
   relayer:
     build:
       context: .
+    cap_add:
+        - IPC_LOCK
     environment:
       NODE_ENV: production

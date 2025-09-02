@@ -5,7 +5,9 @@ import {
   Entry,
 } from "@napi-rs/keyring";
 
-export const getSigner = async (chainId: string): Promise<OfflineSigner> => {
+export const getSigner = async (chainId: string, options?: {
+  prefix: string
+}): Promise<OfflineSigner> => {
   if (typeof window !== "undefined") {
     if (window.keplr) {
       await window.keplr.enable(chainId);
@@ -21,6 +23,6 @@ export const getSigner = async (chainId: string): Promise<OfflineSigner> => {
     if (!mnem) {
       throw new Error("Mnemonic not found in keyring");
     }
-    return await DirectSecp256k1HdWallet.fromMnemonic(mnem);
+    return await DirectSecp256k1HdWallet.fromMnemonic(mnem, options);
   }
 };

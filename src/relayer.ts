@@ -24,6 +24,9 @@ import {
   addChainFees,
   addRelayPath, getChainFees, getRelayedHeights, getRelayPaths, updateRelayedHeights,
 } from "./utils/storage";
+import {
+  getPrefix,
+} from "./utils/utils";
 
 export class Relayer extends EventEmitter {
   private logger: winston.Logger;
@@ -40,7 +43,11 @@ export class Relayer extends EventEmitter {
     });
   }
 
-  async addNewdRelayPath(
+  async getRelayPaths() {
+    return getRelayPaths();
+  }
+
+  async addNewRelayPath(
     chainIdA: string,
     nodeA: string,
     chainIdB: string,
@@ -49,8 +56,14 @@ export class Relayer extends EventEmitter {
     chainTypeB: ChainType,
     version: number = 1,
   ) {
-    const signerA = await getSigner(chainIdA);
-    const signerB = await getSigner(chainIdB);
+    const prefixA = await getPrefix(chainTypeA, nodeA);
+    const prefixB = await getPrefix(chainTypeB, nodeB);
+    const signerA = await getSigner(chainIdA, {
+      prefix: prefixA,
+    });
+    const signerB = await getSigner(chainIdB, {
+      prefix: prefixB,
+    });
     const feesA = await getChainFees(chainIdA);
     const feesB = await getChainFees(chainIdB);
     const clientA = await TendermintIbcClient.connectWithSigner(nodeA, signerA, {
@@ -164,8 +177,14 @@ export class Relayer extends EventEmitter {
             this.logger.info(`No relayed heights found for path ${path.id}. Initializing to zero.`);
           }
           this.relayedHeights.set(path.id, relayedHeights);
-          const signerA = await getSigner(path.chainIdA);
-          const signerB = await getSigner(path.chainIdB);
+          const prefixA = await getPrefix(path.chainTypeA, path.nodeA);
+          const prefixB = await getPrefix(path.chainTypeB, path.nodeB);
+          const signerA = await getSigner(path.chainIdA, {
+            prefix: prefixA,
+          });
+          const signerB = await getSigner(path.chainIdB, {
+            prefix: prefixB,
+          });
           const feesA = await getChainFees(path.chainIdA);
           const feesB = await getChainFees(path.chainIdB);
           const clientA = await TendermintIbcClient.connectWithSigner(path.nodeA, signerA, {
