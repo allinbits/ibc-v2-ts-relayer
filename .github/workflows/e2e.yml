@@ -36,3 +36,12 @@ jobs:
       run: |            
             cd ${{ github.workspace }} && ./node_modules/.bin/wait-on  http://localhost:1317 && ./node_modules/.bin/wait-on  http://localhost:1318 && ./node_modules/.bin/wait-on  http://localhost:26657 && ./node_modules/.bin/wait-on  http://localhost:26658
             cd ${{ github.workspace }} && pnpm test:e2e
+    - name: Dockerize relayer and run commands
+      run: |
+        cd ${{ github.workspace }} && docker build -t ts-relayer .
+        docker run -d --name ts-relayer --cap-add IPC_LOCK ts-relayer
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-mnemonic -c mars "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-mnemonic -c venus "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c mars 0.025udenom
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c venus 0.025udenom
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-path -s mars -d venus --surl http://localhost:26657 --durl http://localhost:26658
