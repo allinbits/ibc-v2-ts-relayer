@@ -11,13 +11,13 @@ jobs:
     services:
       mars:
         image: clockworkgr/mars
-        options: --name mars --entrypoint `ignite chain serve -o ignite.log --skip-build --skip-proto`
+        options: --name mars --entrypoint 'ignite chain serve -o ignite.log --skip-build --skip-proto'
         ports:
           - 1317:1317
           - 26657:26657
       venus:
         image: clockworkgr/venus
-        options: --name venus --entrypoint `ignite chain serve -o ignite.log --skip-build --skip-proto`
+        options: --name venus --entrypoint 'ignite chain serve -o ignite.log --skip-build --skip-proto'
         ports:
           - 1318:1317
           - 26658:26657
