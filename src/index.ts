@@ -82,4 +82,10 @@ program.command("add-path")
       parseInt(options.ibcVersion, 10),
     );
   });
+program.command("dump-paths")
+  .description("Dump all relay paths")
+  .action(async () => {
+    const relayer = new Relayer(log);
+    console.log(await relayer.getRelayPaths());
+  });
 program.parseAsync();

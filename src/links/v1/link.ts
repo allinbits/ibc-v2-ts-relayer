@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import {
   Order, Packet, State,
 } from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
@@ -967,6 +968,7 @@ async function createClients(
     } = await nodeB.createTendermintClient(
       args.clientState, args.consensusState,
     );
+    nodeB.logger.info(`Created client for nodeB: ${clientId}`);
     clientIdB = clientId;
   }
 
@@ -978,6 +980,7 @@ async function createClients(
     } = await nodeA.createTendermintClient(
       args2.clientState, args2.consensusState,
     );
+    nodeA.logger.info(`Created client for nodeA: ${clientId}`);
     clientIdA = clientId;
   }
 
