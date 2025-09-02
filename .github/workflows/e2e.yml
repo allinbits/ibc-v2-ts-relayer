@@ -42,9 +42,9 @@ jobs:
     - name: Dockerize relayer and run commands
       run: |
         cd ${{ github.workspace }} && docker build -t ts-relayer .
-        docker run -d --name ts-relayer --cap-add IPC_LOCK ts-relayer
+        docker run -d --name ts-relayer --network container:mars --cap-add IPC_LOCK ts-relayer 
         docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-mnemonic -c mars "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
         docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-mnemonic -c venus "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
         docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c mars 0.025udenom
         docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-gas-price -c venus 0.025udenom
-        
+        docker exec ts-relayer /etc/with_keyring ibc-v2-ts-relayer add-path -s mars -d venus --surl http://mars:26657 --durl http://venus:26657 —-ibcv 2
