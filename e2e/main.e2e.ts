@@ -63,8 +63,10 @@ test("Start relayer and. run E2E tests", async () => {
   await addV1();
   const counterA_v1 = await queryA.ibc.channel.channel("transfer", "channel-0");
   expect(counterA_v1).toBeDefined();
-  expect(counterA_v1.channel?.counterparty).toBe("channel-0");
+  expect(counterA_v1.channel?.counterparty.channelId).toBe("channel-0");
+  expect(counterA_v1.channel?.counterparty.portId).toBe("transfer");
   const counterB_v1 = await queryB.ibc.channel.channel("transfer", "channel-0");
   expect(counterB_v1).toBeDefined();
-  expect(counterB_v1.channel?.counterparty).toBe("channel-0");
+  expect(counterB_v1.channel?.counterparty.channelId).toBe("channel-0");
+  expect(counterB_v1.channel?.counterparty.portId).toBe("transfer");
 }, 120000);
