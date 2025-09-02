@@ -86,6 +86,6 @@ program.command("dump-paths")
   .description("Dump all relay paths")
   .action(async () => {
     const relayer = new Relayer(log);
-    console.log(await relayer.getRelayPaths());
+    console.log(JSON.stringify(await relayer.getRelayPaths()));
   });
 program.parseAsync();
