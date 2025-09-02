@@ -146,12 +146,12 @@ const getRelayPath = async (chainIdA: string, chainIdB: string, clientIdA: strin
 const getRelayPaths = async () => {
   if (typeof window != "undefined") {
     const dexie = await import("./dexie");
-    return dexie.db.relayPaths.toArray();
+    return dexie.db.relayPaths.orderBy("id").toArray();
   }
   else {
     const sqlite = await import("./sqlite");
     const db = await sqlite.openDB(config.dbFile);
-    return db.all("SELECT * FROM relayPaths") as Promise<RelayPaths[]>;
+    return db.all("SELECT * FROM relayPaths ORDER BY id ASC") as Promise<RelayPaths[]>;
   }
 };
 export {
