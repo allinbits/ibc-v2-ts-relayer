@@ -57,7 +57,7 @@ const destinationTypeOption = new Option(
 destinationTypeOption.default(ChainType.Cosmos);
 
 const ibcVersionTypeOption = new Option(
-  "-v, --version <version>",
+  "--ibcv, --ibc-version <ibcVersion>",
   "IBC version of the relay path",
 ).choices(["1", "2"]).makeOptionMandatory().default("1", "Default IBC version is 1");
 
@@ -79,7 +79,7 @@ program.command("add-path")
       options.destinationUrl,
       options.sourceType as ChainType,
       options.destinationType as ChainType,
-      parseInt(options.version, 10),
+      parseInt(options.ibcVersion, 10),
     );
   });
 program.parseAsync();
