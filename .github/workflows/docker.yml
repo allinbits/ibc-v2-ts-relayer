@@ -31,17 +31,14 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          type=ref,event=branch
-          type=ref,event=pr
           type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
