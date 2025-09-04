@@ -33,7 +33,7 @@ services:
     restart: unless-stopped
     container_name: mars
     tty: true
-    entrypoint: ["/entrypoint.sh"]
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       # - "26656:26656"
       - "26657:26657"
@@ -58,7 +58,7 @@ services:
     restart: unless-stopped
     container_name: venus
     tty: true
-    entrypoint: ["/entrypoint.sh"]
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       # - "26656:26656"
       - "36657:26657"
