@@ -9,25 +9,19 @@ volumes:
     driver: local
 
 services:
-  mars:
-    image: clockworkgr/mars
-    ports:
-      - "1317:1317"
-      - "26657:26657" 
-  venus:
-    image: clockworkgr/venus
-    ports:
-      - "1318:1317"
-      - "26658:26657" 
   relayer:
     image: ghcr.io/allinbits/ibc-v2-ts-relayer:dev
     container_name: ts-relayer
+    entrypoint: ["/entrypoint.d/entrypoint.sh"]
+    command: ["ibc-v2-ts-relayer", "relay"]
     build:
       context: .
-    cap_add:
-        - IPC_LOCK
     environment:
       NODE_ENV: production
+    volumes:
+      - ./docker/relayer/entrypoint.d:/entrypoint.d
+      - ./docker/relayer/bin/with_keyring:/bin/with_keyring
+      - ./docker/relayer/bin/keyring_session:/bin/keyring_session
     cap_add:
       - IPC_LOCK
     depends_on:
@@ -56,10 +50,10 @@ services:
       DO_NOT_TRACK: "1"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
-      interval: 30s
+      interval: 5s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 300s
   
   venus:
     image: ignitehq/cli:latest
@@ -81,7 +75,7 @@ services:
       DO_NOT_TRACK: "1"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
-      interval: 30s
+      interval: 5s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 300s

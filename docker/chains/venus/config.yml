@@ -4,18 +4,18 @@ accounts:
     - name: alice
       mnemonic: other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy
       coins:
-        - 2000000000udenom
+        - 2000000000uvenus
     - name: bob
       coins:
-        - 1000000000udenom
+        - 1000000000uvenus
 faucet:
     name: bob
     coins:
-        - 100000udenom
-default_denom: udenom
+        - 100000uvenus
+default_denom: uvenus
 validators:
     - name: alice
-      bonded: 100000000udenom
+      bonded: 100000000uvenus
       app:
         api:
             enable: true

@@ -9,6 +9,15 @@ ENV PATH="$PNPM_HOME:$PATH"
 
 WORKDIR /usr/src/app
 
+RUN apk add --no-cache \
+    curl \
+    bash \
+    gnome-keyring \
+    dbus \
+    libcap \
+    sudo
+
+
 # Copy the rest of the source files into the image.
 COPY . .
 RUN rm -rf node_modules
@@ -22,16 +31,10 @@ RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm typescript && \
     pnpm install && \
     pnpm build
-RUN chmod +x ./scripts/ibc-v2-ts-relayer
-RUN apk add gnome-keyring
-RUN apk add dbus
-RUN apk add bash
-RUN apk add libcap
-RUN apk add --no-cache sudo
-RUN cp ./scripts/with_keyring /etc/with_keyring
-RUN cp ./scripts/keyring_session /etc/keyring_session
-RUN chmod +x /etc/with_keyring
-RUN chmod +x /etc/keyring_session
-ENV PATH="/usr/src/app/scripts:$PATH"
+
+COPY docker/relayer/bin /bin
+
+ENV PATH="/bin:/usr/src/app/scripts:$PATH"
+
 ENTRYPOINT ["/etc/with_keyring"]
 CMD        [ "ibc-v2-ts-relayer", "relay" ]

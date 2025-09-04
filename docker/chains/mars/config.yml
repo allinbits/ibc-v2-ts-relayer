@@ -3,20 +3,20 @@ version: 1
 accounts:
     - name: alice
       coins:
-        - 2000000000udenom
+        - 2000000000umars
       mnemonic: other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy
     - name: bob
       coins:
-        - 100000000udenom
+        - 100000000umars
 faucet:
     name: bob
     coins:
-        - 100000udenom
+        - 100000umars
     port: 4501
-default_denom: udenom
+default_denom: umars
 validators:
     - name: alice
-      bonded: 100000000udenom
+      bonded: 100000000umars
       app:
         api:
             enable: true
