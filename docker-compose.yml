@@ -20,8 +20,6 @@ services:
       NODE_ENV: production
     volumes:
       - ./docker/relayer/entrypoint.d:/entrypoint.d
-      - ./docker/relayer/bin/with_keyring:/bin/with_keyring
-      - ./docker/relayer/bin/keyring_session:/bin/keyring_session
     cap_add:
       - IPC_LOCK
     depends_on:
