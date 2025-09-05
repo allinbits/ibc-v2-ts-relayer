@@ -53,6 +53,10 @@ jobs:
 
   build-chains:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
     strategy:
       matrix:
         chain: [mars, venus]
