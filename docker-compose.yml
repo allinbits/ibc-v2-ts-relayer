@@ -29,7 +29,9 @@ services:
         condition: service_healthy
   
   mars:
-    image: ignitehq/cli:latest
+    image: ghcr.io/allinbits/ibc-v2-ts-relayer/mars
+    build:
+      context: ./docker/chains/mars
     restart: unless-stopped
     container_name: mars
     tty: true
@@ -54,7 +56,9 @@ services:
       start_period: 300s
   
   venus:
-    image: ignitehq/cli:latest
+    image: ghcr.io/allinbits/ibc-v2-ts-relayer/venus
+    build:
+      context: ./docker/chains/venus
     restart: unless-stopped
     container_name: venus
     tty: true

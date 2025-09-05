@@ -1,0 +1,25 @@
+FROM ignitehq/cli AS builder
+
+ENV DO_NOT_TRACK="1"
+
+RUN ignite scaffold chain \
+    --address-prefix=mars \
+    --default-denom=umars \
+    mars
+
+WORKDIR /apps/mars
+
+RUN ignite chain build
+
+FROM ignitehq/cli
+
+ENV DO_NOT_TRACK="1"
+
+COPY config.yml /config.yml
+
+COPY --from=builder /apps /apps
+COPY --from=builder /home/tendermint /home/tendermint
+
+COPY --from=builder /go/bin/marsd /go/bin/marsd
+
+ENTRYPOINT ["ignite", "chain", "serve", "--config", "/config.yaml", "--skip-build", "--skip-proto", "-r", "-o", "/dev/stdout"]
