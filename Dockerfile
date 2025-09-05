@@ -36,5 +36,5 @@ COPY docker/relayer/bin /bin
 
 ENV PATH="/bin:/usr/src/app/scripts:$PATH"
 
-ENTRYPOINT ["/etc/with_keyring"]
+ENTRYPOINT ["/bin/with_keyring"]
 CMD        [ "ibc-v2-ts-relayer", "relay" ]
