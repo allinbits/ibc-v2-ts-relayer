@@ -4,7 +4,7 @@ on:
     branches: [ main, master ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, master, "ci/docker" ]
+    branches: [ main, master, "ci/docker", "ops/dev-env" ]
 
 env:
   REGISTRY: ghcr.io
