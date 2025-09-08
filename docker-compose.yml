@@ -35,7 +35,6 @@ services:
     restart: unless-stopped
     container_name: mars
     tty: true
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       # - "26656:26656"
       - "26657:26657"
@@ -44,9 +43,7 @@ services:
       - mars-apps:/apps
       - mars-data:/home/tendermint
       - ./docker/chains/mars/config.yml:/config.yaml
-      - ./docker/chains/entrypoint.sh:/entrypoint.sh
     environment:
-      CHAIN_NAME: mars
       DO_NOT_TRACK: "1"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
@@ -62,7 +59,6 @@ services:
     restart: unless-stopped
     container_name: venus
     tty: true
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       # - "26656:26656"
       - "36657:26657"
@@ -71,9 +67,7 @@ services:
       - venus-apps:/apps
       - venus-data:/home/tendermint
       - ./docker/chains/venus/config.yml:/config.yaml
-      - ./docker/chains/entrypoint.sh:/entrypoint.sh
     environment:
-      CHAIN_NAME: venus
       DO_NOT_TRACK: "1"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]

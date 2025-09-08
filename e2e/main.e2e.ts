@@ -32,13 +32,13 @@ const init = async () => {
   await relayer.addMnemonic(
     "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy",
     "venus");
-  await relayer.addGasPrice("mars", "0.025", "udenom");
-  await relayer.addGasPrice("venus", "0.025", "udenom");
-  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 2);
+  await relayer.addGasPrice("mars", "0.025", "umars");
+  await relayer.addGasPrice("venus", "0.025", "uvenus");
+  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:36657", ChainType.Cosmos, ChainType.Cosmos, 2);
 };
 
 const addV1 = async () => {
-  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:26658", ChainType.Cosmos, ChainType.Cosmos, 1);
+  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:36657", ChainType.Cosmos, ChainType.Cosmos, 1);
 };
 
 test("Start relayer and. run E2E tests", async () => {
@@ -46,7 +46,7 @@ test("Start relayer and. run E2E tests", async () => {
   // Wait for the relayer to initialize and start
   console.log("Relayer initialized and started successfully.");
   const tmClientA = await connectComet("http://localhost:26657");
-  const tmClientB = await connectComet("http://localhost:26658");
+  const tmClientB = await connectComet("http://localhost:36657");
 
   const queryA = QueryClient.withExtensions(
     tmClientA, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
