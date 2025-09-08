@@ -11,11 +11,13 @@ jobs:
     services:
       mars:
         image: ghcr.io/allinbits/ibc-v2-ts-relayer/mars
+        options: --name mars
         ports:
           - 1317:1317
           - 26657:26657
       venus:
         image: ghcr.io/allinbits/ibc-v2-ts-relayer/venus
+        options: --name venus
         ports:
           - 2317:1317
           - 36657:26657
