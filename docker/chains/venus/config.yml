@@ -20,7 +20,7 @@ validators:
         api:
             enable: true
             swagger: true
-            address: tcp://0.0.0.0:1318
+            address: tcp://0.0.0.0:1317
             max-open-connections: "1000"
         grpc:
             address: 0.0.0.0:9091
