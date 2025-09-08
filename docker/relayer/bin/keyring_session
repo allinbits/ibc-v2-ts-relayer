@@ -13,7 +13,7 @@ else
   echo $DBUS_SESSION_BUS_ADDRESS > /etc/DBUS_SESSION_BUS_ADDRESS
 fi
 
-#killall -q -9 "$(whoami)" gnome-keyring-daemon || echo ''
+# killall -q -9 "$(whoami)" gnome-keyring-daemon || echo ''
 
 #based on https://unix.stackexchange.com/a/602935
 eval $(echo -n "$" \

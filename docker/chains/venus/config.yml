@@ -1,0 +1,32 @@
+validation: sovereign
+version: 1
+accounts:
+    - name: alice
+      mnemonic: other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy
+      coins:
+        - 2000000000uvenus
+    - name: bob
+      coins:
+        - 1000000000uvenus
+faucet:
+    name: bob
+    coins:
+        - 100000uvenus
+default_denom: uvenus
+validators:
+    - name: alice
+      bonded: 100000000uvenus
+      app:
+        api:
+            enable: true
+            swagger: true
+            address: tcp://0.0.0.0:1317
+            max-open-connections: "1000"
+        grpc:
+            address: 0.0.0.0:9091
+            enable: true
+      config:
+        p2p:
+            laddr: tcp://0.0.0.0:26656
+        rpc:
+            laddr: tcp://0.0.0.0:26657
