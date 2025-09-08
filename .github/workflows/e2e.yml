@@ -17,8 +17,8 @@ jobs:
       venus:
         image: ghcr.io/allinbits/ibc-v2-ts-relayer/venus
         ports:
-          - 1318:1317
-          - 26658:26657
+          - 2317:1317
+          - 36657:26657
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -28,12 +28,17 @@ jobs:
 
     - name: Install dependencies
       run: npm install -g pnpm && pnpm install
+
     - name: Build the project
       run: pnpm build
-    - name: Build chains and run tests
-      run: |            
-            cd ${{ github.workspace }} && ./node_modules/.bin/wait-on  http://localhost:1317 && ./node_modules/.bin/wait-on  http://localhost:1318 && ./node_modules/.bin/wait-on  http://localhost:26657 && ./node_modules/.bin/wait-on  http://localhost:26658
-            cd ${{ github.workspace }} && pnpm test:e2e
+
+    - name: Wait for services to be ready
+      run: |
+        ./node_modules/.bin/wait-on http://localhost:1317 http://localhost:2317 http://localhost:26657 http://localhost:36657 --timeout 60000
+
+    - name: Run E2E tests
+      run: pnpm test:e2e
+
     - name: Dockerize relayer and run commands
       run: |
         cd ${{ github.workspace }} && docker build -t ts-relayer .
