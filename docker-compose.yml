@@ -34,15 +34,16 @@ services:
       context: ./docker/chains/mars
     restart: unless-stopped
     container_name: mars
+    working_dir: /apps/mars
     tty: true
     ports:
       # - "26656:26656"
       - "26657:26657"
       - "1318:1318"
-    volumes:
-      - mars-apps:/apps
-      - mars-data:/home/tendermint
-      - ./docker/chains/mars/config.yml:/config.yaml
+    # volumes:
+      # - mars-apps:/apps
+      # - mars-data:/home/tendermint
+      # - ./docker/chains/mars/config.yml:/config.yaml
     environment:
       DO_NOT_TRACK: "1"
     healthcheck:
@@ -58,15 +59,16 @@ services:
       context: ./docker/chains/venus
     restart: unless-stopped
     container_name: venus
+    working_dir: /apps/venus
     tty: true
     ports:
       # - "26656:26656"
       - "36657:26657"
       - "2318:1318"
-    volumes:
-      - venus-apps:/apps
-      - venus-data:/home/tendermint
-      - ./docker/chains/venus/config.yml:/config.yaml
+    # volumes:
+      # - venus-apps:/apps
+      # - venus-data:/home/tendermint
+      # - ./docker/chains/venus/config.yml:/config.yaml
     environment:
       DO_NOT_TRACK: "1"
     healthcheck:

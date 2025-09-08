@@ -22,4 +22,6 @@ COPY --from=builder /home/tendermint /home/tendermint
 
 COPY --from=builder /go/bin/marsd /go/bin/marsd
 
-ENTRYPOINT ["ignite", "chain", "serve", "--config", "/config.yaml", "--skip-build", "--skip-proto", "-r", "-o", "/dev/stdout"]
+WORKDIR /apps/mars
+
+ENTRYPOINT ["ignite", "chain", "serve", "--config", "/config.yml", "--skip-build", "--skip-proto", "-r", "-o", "/dev/stdout"]
