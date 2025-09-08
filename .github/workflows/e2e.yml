@@ -10,14 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mars:
-        image: clockworkgr/mars
-        options: --name mars
+        image: ghcr.io/allinbits/ibc-v2-ts-relayer/mars
         ports:
           - 1317:1317
           - 26657:26657
       venus:
-        image: clockworkgr/venus
-        options: --name venus
+        image: ghcr.io/allinbits/ibc-v2-ts-relayer/venus
         ports:
           - 1318:1317
           - 26658:26657
