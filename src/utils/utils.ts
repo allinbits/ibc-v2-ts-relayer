@@ -1,49 +1,49 @@
 import {
   Bech32PrefixResponse,
-} from "@atomone/cosmos-ibc-types/build/cosmos/auth/v1beta1/query";
+} from "@atomone/cosmos-ibc-types/build/cosmos/auth/v1beta1/query.js";
 import {
   CommitmentProof, HashOp, LengthOp,
-} from "@atomone/cosmos-ibc-types/build/cosmos/ics23/v1/proofs";
+} from "@atomone/cosmos-ibc-types/build/cosmos/ics23/v1/proofs.js";
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
+} from "@atomone/cosmos-ibc-types/build/google/protobuf/any.js";
 import {
   Timestamp,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/timestamp";
+} from "@atomone/cosmos-ibc-types/build/google/protobuf/timestamp.js";
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
 import {
   MerkleProof,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/commitment/v1/commitment";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/commitment/v1/commitment.js";
 import {
   ClientState as SolomachineV2ClientState,
   ConsensusState as SolomachineV2ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v2/solomachine";
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v2/solomachine.js";
 import {
   ClientState as SolomachineV3ClientState,
   ConsensusState as SolomachineV3ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v3/solomachine";
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v3/solomachine.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ClientState as WasmClientState,
   ConsensusState as WasmConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/wasm/v1/wasm";
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/wasm/v1/wasm.js";
 import {
   PublicKey as ProtoPubKey,
-} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/keys";
+} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/keys.js";
 import {
   ProofOps,
-} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof";
+} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof.js";
 import {
   fromHex, fromUtf8, toBase64, toHex,
 } from "@cosmjs/encoding";
@@ -54,6 +54,7 @@ import {
   QueryClient,
 } from "@cosmjs/stargate";
 import {
+  comet38,
   connectComet,
   ReadonlyDateWithNanoseconds,
   tendermint34,
@@ -66,10 +67,10 @@ import {
 
 import {
   BaseIbcClient,
-} from "../clients/BaseIbcClient";
+} from "../clients/BaseIbcClient.js";
 import {
   Ack, AckV2, ChainType, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata,
-} from "../types";
+} from "../types/index.js";
 
 export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
   if (chainType === ChainType.Cosmos) {
@@ -255,12 +256,22 @@ export function buildTendermintClientState(
   });
 }
 
-export function parsePacketsFromBlockResult(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse): Packet[] {
-  return parsePacketsFromTendermintEvents([...result.beginBlockEvents, ...result.endBlockEvents]);
+export function parsePacketsFromBlockResult(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): Packet[] {
+  if ((result as comet38.BlockResultsResponse).finalizeBlockEvents) {
+    return parsePacketsFromTendermintEvents([...(result as comet38.BlockResultsResponse).finalizeBlockEvents]);
+  }
+  else {
+    return parsePacketsFromTendermintEvents([...(result as tendermint34.BlockResultsResponse).beginBlockEvents, ...(result as tendermint34.BlockResultsResponse).endBlockEvents]);
+  }
 }
 
-export function parsePacketsFromBlockResultV2(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse): PacketV2[] {
-  return parsePacketsFromTendermintEventsV2([...result.beginBlockEvents, ...result.endBlockEvents]);
+export function parsePacketsFromBlockResultV2(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): PacketV2[] {
+  if ((result as comet38.BlockResultsResponse).finalizeBlockEvents) {
+    return parsePacketsFromTendermintEventsV2([...(result as comet38.BlockResultsResponse).finalizeBlockEvents]);
+  }
+  else {
+    return parsePacketsFromTendermintEventsV2([...(result as tendermint34.BlockResultsResponse).beginBlockEvents, ...(result as tendermint34.BlockResultsResponse).endBlockEvents]);
+  }
 }
 
 /** Those events are normalized to strings already in CosmJS */
@@ -544,8 +555,8 @@ export function splitPendingPackets<T extends (PacketWithMetadata | PacketV2With
     }
     else {
       const validPacket
-          = heightGreater(packet.packet.timeoutHeight, currentHeight)
-            && timeGreater(packet.packet.timeoutTimestamp, currentTime);
+        = heightGreater(packet.packet.timeoutHeight, currentHeight)
+          && timeGreater(packet.packet.timeoutTimestamp, currentTime);
       return validPacket
         ? {
           ...acc,

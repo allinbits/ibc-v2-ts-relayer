@@ -1,5 +1,10 @@
-import EventEmitter from "node:events";
+import {
+  EventEmitter,
+} from "node:events";
 
+import {
+  GasPrice,
+} from "@cosmjs/stargate";
 import {
   Entry,
 } from "@napi-rs/keyring";
@@ -66,15 +71,15 @@ export class Relayer extends EventEmitter {
     });
     const feesA = await getChainFees(chainIdA);
     const feesB = await getChainFees(chainIdB);
-    const clientA = await TendermintIbcClient.connectWithSigner(nodeA, signerA, {
+    const clientA = await TendermintIbcClient.connectWithSigner("ws://" + nodeA, signerA, {
       senderAddress: (await signerA.getAccounts())[0].address,
       logger: this.logger,
-      gasPrice: feesA.gasPrice + feesA.gasDenom,
+      gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
     });
-    const clientB = await TendermintIbcClient.connectWithSigner(nodeB, signerB, {
+    const clientB = await TendermintIbcClient.connectWithSigner("ws://" + nodeB, signerB, {
       senderAddress: (await signerB.getAccounts())[0].address,
       logger: this.logger,
-      gasPrice: feesB.gasPrice + feesB.gasDenom,
+      gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
     });
     if (version === 1) {
       const link = await Link.createWithNewConnections(
@@ -187,15 +192,15 @@ export class Relayer extends EventEmitter {
           });
           const feesA = await getChainFees(path.chainIdA);
           const feesB = await getChainFees(path.chainIdB);
-          const clientA = await TendermintIbcClient.connectWithSigner(path.nodeA, signerA, {
+          const clientA = await TendermintIbcClient.connectWithSigner("ws://" + path.nodeA, signerA, {
             senderAddress: (await signerA.getAccounts())[0].address,
             logger: this.logger,
-            gasPrice: feesA.gasPrice + feesA.gasDenom,
+            gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
           });
-          const clientB = await TendermintIbcClient.connectWithSigner(path.nodeB, signerB, {
+          const clientB = await TendermintIbcClient.connectWithSigner("ws://" + path.nodeB, signerB, {
             senderAddress: (await signerB.getAccounts())[0].address,
             logger: this.logger,
-            gasPrice: feesB.gasPrice + feesB.gasDenom,
+            gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
           });
           if (path.version === 1) {
             this.links.set(path.id, await Link.createWithExistingConnections(clientA, clientB, path.clientA, path.clientB, this.logger));

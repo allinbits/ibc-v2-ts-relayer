@@ -8,7 +8,9 @@ import {
 
 test("SQLite database should have relayPaths and relayedHeights tables", async () => {
   const db = await openDB(":memory:");
-  const tables = await db.all("SELECT name FROM sqlite_master WHERE type='table'");
+  const tables = await db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+    name: string
+  }[];
   const tableNames = tables.map((table: {
     name: string
   }) => table.name);

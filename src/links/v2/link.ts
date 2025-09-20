@@ -1,9 +1,9 @@
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
 import {
   arrayContentEquals, isDefined,
 } from "@cosmjs/utils";
@@ -11,19 +11,19 @@ import * as winston from "winston";
 
 import {
   BaseIbcClient, isTendermint, isTendermintClientState, isTendermintConsensusState,
-} from "../../clients/BaseIbcClient";
+} from "../../clients/BaseIbcClient.js";
 import {
   TendermintIbcClient,
-} from "../../clients/tendermint/IbcClient";
+} from "../../clients/tendermint/IbcClient.js";
 import {
   BaseEndpoint,
-} from "../../endpoints/BaseEndpoint";
+} from "../../endpoints/BaseEndpoint.js";
 import {
   TendermintEndpoint,
-} from "../../endpoints/TendermintEndpoint";
+} from "../../endpoints/TendermintEndpoint.js";
 import {
   AckV2WithMetadata, ChannelInfo, ClientType, PacketV2WithMetadata, QueryOpts,
-} from "../../types";
+} from "../../types/index.js";
 import {
   decodeClientState,
   decodeConsensusState,
@@ -32,7 +32,7 @@ import {
   splitPendingPackets,
   timestampFromDateNanos,
   toIntHeight,
-} from "../../utils/utils";
+} from "../../utils/utils.js";
 
 /**
  * Many actions on link focus on a src and a dest. Rather than add two functions,

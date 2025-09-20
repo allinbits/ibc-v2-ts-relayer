@@ -1,15 +1,9 @@
-import {
-  open,
-} from "sqlite";
-import sqlite3 from "sqlite3";
+import Database from "better-sqlite3";
 
 // this is a top-level await
-export const openDB = async (dbFile: string) => {
+export const openDB = async (dbFile: string): Promise<Database.Database> => {
   // open the database
-  const db = await open({
-    filename: dbFile,
-    driver: sqlite3.Database,
-  });
+  const db = new Database(dbFile);
 
   const baseSchema = `
 CREATE TABLE IF NOT EXISTS relayPaths (

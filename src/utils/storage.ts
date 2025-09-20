@@ -1,6 +1,7 @@
 import config from "../config";
 import {
-  ChainType, RelayPaths,
+  ChainFees,
+  ChainType, RelayedHeights, RelayPaths,
 } from "../types";
 
 const addChainFees = async (chainId: string, gasPrice: number, gasDenom: string) => {
@@ -15,7 +16,7 @@ const addChainFees = async (chainId: string, gasPrice: number, gasDenom: string)
   else {
     const sqlite = await import("./sqlite");
     const db = await sqlite.openDB(config.dbFile);
-    await db.run("INSERT INTO chainFees (chainId, gasPrice, gasDenom) VALUES (?, ?, ?)", [chainId, gasPrice, gasDenom]);
+    await db.prepare("INSERT INTO chainFees (chainId, gasPrice, gasDenom) VALUES (?, ?, ?)").run([chainId, gasPrice, gasDenom]);
   }
   return await getChainFees(chainId);
 };
@@ -33,11 +34,11 @@ const getChainFees = async (chainId: string) => {
   else {
     const sqlite = await import("./sqlite");
     const db = await sqlite.openDB(config.dbFile);
-    const res = await db.get("SELECT * FROM chainFees WHERE chainId = ?", [chainId]);
+    const res = await db.prepare("SELECT * FROM chainFees WHERE chainId = ?").get([chainId]);
     if (!res) {
       throw new Error("Chain fees not found");
     }
-    return res;
+    return res as Promise<ChainFees>;
   }
 };
 
@@ -56,7 +57,7 @@ const updateRelayedHeights = async (pathId: number, relayHeightA: number, relayH
     else {
       const sqlite = await import("./sqlite");
       const db = await sqlite.openDB(config.dbFile);
-      await db.run("UPDATE relayedHeights SET packetHeightA = ?, packetHeightB = ?, ackHeightA = ?, ackHeightB = ? WHERE id = ?", [relayHeightA, relayHeightB, ackHeightA, ackHeightB, height.id]);
+      await db.prepare("UPDATE relayedHeights SET packetHeightA = ?, packetHeightB = ?, ackHeightA = ?, ackHeightB = ? WHERE id = ?").run([relayHeightA, relayHeightB, ackHeightA, ackHeightB, height.id]);
     }
   }
   else {
@@ -78,7 +79,7 @@ const getRelayedHeights = async (pathId: number) => {
     else {
       const sqlite = await import("./sqlite");
       const db = await sqlite.openDB(config.dbFile);
-      const res = await db.get("SELECT * FROM relayedHeights WHERE relayPathId = ?", [pathId]);
+      const res = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]) as unknown as Promise<RelayedHeights>;
       if (!res) {
         throw new Error("Heights not found");
       }
@@ -99,7 +100,7 @@ const getRelayedHeights = async (pathId: number) => {
     else {
       const sqlite = await import("./sqlite");
       const db = await sqlite.openDB(config.dbFile);
-      await db.run("INSERT INTO relayedHeights (packetHeightA, packetHeightB, ackHeightA, ackHeightB, relayPathId) VALUES (?, ?, ?, ?, ?)", [0, 0, 0, 0, pathId]);
+      await db.prepare("INSERT INTO relayedHeights (packetHeightA, packetHeightB, ackHeightA, ackHeightB, relayPathId) VALUES (?, ?, ?, ?, ?)").run([0, 0, 0, 0, pathId]);
     }
     return getRelayedHeights(pathId);
   }
@@ -122,7 +123,7 @@ const addRelayPath = async (chainIdA: string, nodeA: string, chainIdB: string, n
   else {
     const sqlite = await import("./sqlite");
     const db = await sqlite.openDB(config.dbFile);
-    await db.run("INSERT INTO relayPaths (chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientA, clientB, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version]);
+    await db.prepare("INSERT INTO relayPaths (chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientA, clientB, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run([chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version]);
   }
   return await getRelayPath(chainIdA, chainIdB, clientIdA, clientIdB, version);
 };
@@ -140,7 +141,7 @@ const getRelayPath = async (chainIdA: string, chainIdB: string, clientIdA: strin
   else {
     const sqlite = await import("./sqlite");
     const db = await sqlite.openDB(config.dbFile);
-    return db.get("SELECT * FROM relayPaths WHERE chainIdA = ? AND chainIdB = ? AND clientA = ? AND clientB = ? AND version = ?", [chainIdA, chainIdB, clientIdA, clientIdB, version]) as Promise<RelayPaths>;
+    return db.prepare("SELECT * FROM relayPaths WHERE chainIdA = ? AND chainIdB = ? AND clientA = ? AND clientB = ? AND version = ?").get([chainIdA, chainIdB, clientIdA, clientIdB, version]) as Promise<RelayPaths>;
   }
 };
 const getRelayPaths = async () => {
@@ -151,7 +152,7 @@ const getRelayPaths = async () => {
   else {
     const sqlite = await import("./sqlite");
     const db = await sqlite.openDB(config.dbFile);
-    return db.all("SELECT * FROM relayPaths ORDER BY id ASC") as Promise<RelayPaths[]>;
+    return db.prepare("SELECT * FROM relayPaths ORDER BY id ASC").all() as unknown as Promise<RelayPaths[]>;
   }
 };
 export {

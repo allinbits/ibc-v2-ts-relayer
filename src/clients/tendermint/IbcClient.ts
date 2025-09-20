@@ -1,13 +1,13 @@
 /* eslint-disable max-lines */
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
+} from "@atomone/cosmos-ibc-types/build/google/protobuf/any.js";
 import {
   MsgTransfer,
-} from "@atomone/cosmos-ibc-types/build/ibc/applications/transfer/v1/tx";
+} from "@atomone/cosmos-ibc-types/build/ibc/applications/transfer/v1/tx.js";
 import {
   Order, Packet, State,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel.js";
 import {
   MsgAcknowledgement,
   MsgChannelOpenAck,
@@ -16,49 +16,49 @@ import {
   MsgChannelOpenTry,
   MsgRecvPacket,
   MsgTimeout,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/tx";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/tx.js";
 import {
   Acknowledgement, Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet.js";
 import {
   MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/tx";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/tx.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
 import {
   MsgCreateClient,
   MsgUpdateClient,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/tx";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/tx.js";
 import {
   MsgRegisterCounterparty,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/tx";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/tx.js";
 import {
   Version,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/connection";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/connection.js";
 import {
   QueryConnectionResponse,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query.js";
 import {
   MsgConnectionOpenAck,
   MsgConnectionOpenConfirm,
   MsgConnectionOpenInit,
   MsgConnectionOpenTry,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/tx";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/tx.js";
 import {
   ClientState, ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
   Header as TendermintHeader,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   Commit, Header, SignedHeader,
-} from "@atomone/cosmos-ibc-types/build/tendermint/types/types";
+} from "@atomone/cosmos-ibc-types/build/tendermint/types/types.js";
 import {
   blockIDFlagFromJSON, ValidatorSet,
-} from "@atomone/cosmos-ibc-types/build/tendermint/types/validator";
+} from "@atomone/cosmos-ibc-types/build/tendermint/types/validator.js";
 import {
   fromHex, toAscii, toHex,
 } from "@cosmjs/encoding";
@@ -91,16 +91,16 @@ import {
 
 import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientArgs, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
-} from "../../types";
+} from "../../types/index.js";
 import {
   buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight,
-} from "../../utils/utils";
+} from "../../utils/utils.js";
 import {
   IbcV2Extension, setupIbcV2Extension,
-} from "../../v2queries/ibc";
+} from "../../v2queries/ibc.js";
 import {
   BaseIbcClient, BaseIbcClientOptions, isTendermint,
-} from "../BaseIbcClient";
+} from "../BaseIbcClient.js";
 
 function ibcRegistry(): Registry {
   return new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer]]);

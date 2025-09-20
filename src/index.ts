@@ -6,7 +6,7 @@ import {
   Option,
 } from "commander";
 
-import pkgJson from "../package.json";
+import * as pkgJson from "../package.json";
 import {
   Relayer,
 } from "./relayer";

@@ -1,12 +1,12 @@
 import {
   QueryNextSequenceSendResponse, QueryPacketCommitmentResponse, QueryUnreceivedAcksResponse, QueryUnreceivedPacketsResponse,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/query";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/query.js";
 import {
   QueryClientImpl as ChannelV2Query,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/query";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/query.js";
 import {
   QueryClientImpl as ClientV2Query, QueryCounterpartyInfoResponse,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/query";
+} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/query.js";
 import {
   createProtobufRpcClient, QueryClient,
 } from "@cosmjs/stargate";
