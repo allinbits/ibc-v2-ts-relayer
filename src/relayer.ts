@@ -71,12 +71,12 @@ export class Relayer extends EventEmitter {
     });
     const feesA = await getChainFees(chainIdA);
     const feesB = await getChainFees(chainIdB);
-    const clientA = await TendermintIbcClient.connectWithSigner("ws://" + nodeA, signerA, {
+    const clientA = await TendermintIbcClient.connectWithSigner(nodeA, signerA, {
       senderAddress: (await signerA.getAccounts())[0].address,
       logger: this.logger,
       gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
     });
-    const clientB = await TendermintIbcClient.connectWithSigner("ws://" + nodeB, signerB, {
+    const clientB = await TendermintIbcClient.connectWithSigner(nodeB, signerB, {
       senderAddress: (await signerB.getAccounts())[0].address,
       logger: this.logger,
       gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
@@ -192,12 +192,12 @@ export class Relayer extends EventEmitter {
           });
           const feesA = await getChainFees(path.chainIdA);
           const feesB = await getChainFees(path.chainIdB);
-          const clientA = await TendermintIbcClient.connectWithSigner("ws://" + path.nodeA, signerA, {
+          const clientA = await TendermintIbcClient.connectWithSigner(path.nodeA, signerA, {
             senderAddress: (await signerA.getAccounts())[0].address,
             logger: this.logger,
             gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
           });
-          const clientB = await TendermintIbcClient.connectWithSigner("ws://" + path.nodeB, signerB, {
+          const clientB = await TendermintIbcClient.connectWithSigner(path.nodeB, signerB, {
             senderAddress: (await signerB.getAccounts())[0].address,
             logger: this.logger,
             gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
