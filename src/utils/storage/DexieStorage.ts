@@ -10,6 +10,11 @@ import {
 import {
   IStorage,
 } from "./IStorage";
+import {
+  validateChainFees,
+  validateRelayedHeights,
+  validateRelayPaths,
+} from "./schemas";
 
 /**
  * Dexie/IndexedDB-based storage implementation for browser environments.
@@ -32,7 +37,8 @@ export class DexieStorage implements IStorage {
     if (!res) {
       throw new Error(`Chain fees not found for chain ID: ${chainId}`);
     }
-    return res;
+    // Validate runtime data from database
+    return validateChainFees(res);
   }
 
   async updateRelayedHeights(
@@ -63,7 +69,8 @@ export class DexieStorage implements IStorage {
       if (!res) {
         throw new Error("Heights not found");
       }
-      return res;
+      // Validate runtime data from database
+      return validateRelayedHeights(res);
     }
     catch (_error) {
       // Initialize if not found
@@ -110,16 +117,23 @@ export class DexieStorage implements IStorage {
     clientIdB: string,
     version: number,
   ): Promise<RelayPaths | undefined> {
-    return db.relayPaths.where({
+    const res = await db.relayPaths.where({
       chainIdA,
       chainIdB,
       clientA: clientIdA,
       clientB: clientIdB,
       version,
     }).first();
+    if (!res) {
+      return undefined;
+    }
+    // Validate runtime data from database
+    return validateRelayPaths(res);
   }
 
   async getRelayPaths(): Promise<RelayPaths[]> {
-    return db.relayPaths.orderBy("id").toArray();
+    const results = await db.relayPaths.orderBy("id").toArray();
+    // Validate each record
+    return results.map(result => validateRelayPaths(result));
   }
 }

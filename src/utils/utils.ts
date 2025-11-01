@@ -338,13 +338,13 @@ export function parsePacket({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = attributes.reduce((acc, {
+  // Optimized: O(n) instead of O(n²) with spread in reduce
+  const attributesObj: Record<string, string> = {};
+  for (const {
     key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  } of attributes) {
+    attributesObj[key] = value;
+  }
 
   return Packet.fromPartial({
     sequence: may(BigInt, attributesObj.packet_sequence),
@@ -380,13 +380,13 @@ export function parsePacketV2({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = attributes.reduce((acc, {
+  // Optimized: O(n) instead of O(n²) with spread in reduce
+  const attributesObj: Record<string, string> = {};
+  for (const {
     key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  } of attributes) {
+    attributesObj[key] = value;
+  }
   const data = fromHex(attributesObj.encoded_packet_hex);
   return PacketV2.decode(data);
 }
@@ -411,13 +411,13 @@ export function parseAck({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = attributes.reduce((acc, {
+  // Optimized: O(n) instead of O(n²) with spread in reduce
+  const attributesObj: Record<string, string | undefined> = {};
+  for (const {
     key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  } of attributes) {
+    attributesObj[key] = value;
+  }
   const originalPacket = Packet.fromPartial({
     sequence: may(BigInt, attributesObj.packet_sequence),
 
@@ -457,13 +457,13 @@ export function parseAckV2({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = attributes.reduce((acc, {
+  // Optimized: O(n) instead of O(n²) with spread in reduce
+  const attributesObj: Record<string, string | undefined> = {};
+  for (const {
     key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  } of attributes) {
+    attributesObj[key] = value;
+  }
   if (!attributesObj.encoded_packet_hex) {
     throw new Error("Missing encoded_packet_hex in write_acknowledgement event");
   }

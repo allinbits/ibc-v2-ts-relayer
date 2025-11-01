@@ -34,6 +34,24 @@ import {
   getPrefix,
 } from "./utils/utils";
 
+/**
+ * Main relayer class for managing IBC packet relay between multiple chain pairs.
+ * Supports both IBC v1 (connection-based) and v2 (client-based) protocols.
+ *
+ * @extends EventEmitter
+ * @fires Relayer#error - Emitted when an error occurs in the relay loop
+ * @fires Relayer#messageRelayed - Emitted when a message is relayed
+ *
+ * @example
+ * ```typescript
+ * import { Relayer } from "./relayer";
+ * import { log } from "./utils/logging";
+ *
+ * const relayer = new Relayer(log);
+ * await relayer.init();
+ * await relayer.start();
+ * ```
+ */
 export class Relayer extends EventEmitter {
   private logger: winston.Logger;
   private relayedHeights: Map<number, RelayedHeights> = new Map();
@@ -41,6 +59,11 @@ export class Relayer extends EventEmitter {
   private links = new Map<number, Link | LinkV2>();
   private running: boolean = false;
 
+  /**
+   * Creates a new Relayer instance.
+   *
+   * @param logger - Winston logger instance for logging relay operations
+   */
   constructor(logger: winston.Logger) {
     super();
     this.logger = logger;
@@ -49,10 +72,38 @@ export class Relayer extends EventEmitter {
     });
   }
 
+  /**
+   * Retrieves all configured relay paths from storage.
+   *
+   * @returns Array of all relay path configurations
+   */
   async getRelayPaths() {
     return getRelayPaths();
   }
 
+  /**
+   * Adds a new relay path by creating clients and establishing connections/counterparty registrations.
+   * For v1, creates a full connection handshake and transfer channel.
+   * For v2, creates clients and registers counterparties.
+   *
+   * @param chainIdA - Chain ID for chain A
+   * @param nodeA - RPC endpoint for chain A
+   * @param chainIdB - Chain ID for chain B
+   * @param nodeB - RPC endpoint for chain B
+   * @param chainTypeA - Type of chain A (Cosmos, Ethereum, etc.)
+   * @param chainTypeB - Type of chain B (Cosmos, Ethereum, etc.)
+   * @param version - IBC protocol version (1 or 2, default: 1)
+   *
+   * @example
+   * ```typescript
+   * await relayer.addNewRelayPath(
+   *   "cosmoshub-4", "https://rpc.cosmos.network",
+   *   "osmosis-1", "https://rpc.osmosis.zone",
+   *   ChainType.Cosmos, ChainType.Cosmos,
+   *   1  // IBC v1
+   * );
+   * ```
+   */
   async addNewRelayPath(
     chainIdA: string,
     nodeA: string,
@@ -106,10 +157,10 @@ export class Relayer extends EventEmitter {
       const path = await addRelayPath(
         chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
       );
-      // this.relayPaths = await getRelayPaths();
+      this.relayPaths = await getRelayPaths();
 
       if (path) {
-        // this.links.set(path.id, link);
+        this.links.set(path.id, link);
         this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
       }
     }
@@ -153,6 +204,19 @@ export class Relayer extends EventEmitter {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Initializes the relayer by loading all configured relay paths from storage
+   * and establishing connections to all chains.
+   *
+   * @throws Error if relay path loading or connection establishment fails
+   *
+   * @example
+   * ```typescript
+   * const relayer = new Relayer(log);
+   * await relayer.init();  // Load all paths and connect
+   * await relayer.start(); // Begin relaying
+   * ```
+   */
   async init() {
     try {
       this.relayPaths = await getRelayPaths();
@@ -217,6 +281,19 @@ export class Relayer extends EventEmitter {
     }
   }
 
+  /**
+   * Starts the relayer loop.
+   * Initializes connections and begins continuously checking for and relaying packets.
+   *
+   * @example
+   * ```typescript
+   * const relayer = new Relayer(log);
+   * await relayer.start();  // Starts continuous relaying
+   *
+   * // Later...
+   * await relayer.stop();   // Gracefully stops
+   * ```
+   */
   async start() {
     this.running = true;
     this.logger.info("Starting relayer...");
@@ -224,6 +301,17 @@ export class Relayer extends EventEmitter {
     this.relayerLoop();
   }
 
+  /**
+   * Stops the relayer loop and cleans up all resources.
+   * Disconnects all client connections and clears internal state.
+   *
+   * @example
+   * ```typescript
+   * // Graceful shutdown
+   * await relayer.stop();
+   * console.log("Relayer stopped, all resources cleaned up");
+   * ```
+   */
   async stop() {
     this.running = false;
     this.logger.info("Stopping relayer...");
@@ -308,8 +396,25 @@ export class Relayer extends EventEmitter {
     }
   }
 
+  /**
+   * Example method demonstrating event emission.
+   * This is a placeholder for custom message relay functionality.
+   * Extend this class and override this method for custom behavior.
+   *
+   * @param message - Optional message to relay
+   * @fires Relayer#messageRelayed
+   *
+   * @example
+   * ```typescript
+   * class CustomRelayer extends Relayer {
+   *   relayMessage(message?: string) {
+   *     // Custom logic here
+   *     super.relayMessage(message);
+   *   }
+   * }
+   * ```
+   */
   relayMessage(message?: string) {
-    // Placeholder for relaying a message
     this.emit("messageRelayed", message);
   }
 }

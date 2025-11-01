@@ -11,6 +11,11 @@ import {
 import {
   IStorage,
 } from "./IStorage";
+import {
+  validateChainFees,
+  validateRelayedHeights,
+  validateRelayPaths,
+} from "./schemas";
 
 /**
  * SQLite-based storage implementation for Node.js environments.
@@ -35,7 +40,8 @@ export class SQLiteStorage implements IStorage {
     if (!res) {
       throw new Error(`Chain fees not found for chain ID: ${chainId}`);
     }
-    return res as ChainFees;
+    // Validate runtime data from database
+    return validateChainFees(res);
   }
 
   async updateRelayedHeights(
@@ -59,11 +65,12 @@ export class SQLiteStorage implements IStorage {
   async getRelayedHeights(pathId: number): Promise<RelayedHeights> {
     try {
       const db = await openDB(this.dbPath);
-      const res = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]) as unknown as RelayedHeights;
+      const res = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]);
       if (!res) {
         throw new Error("Heights not found");
       }
-      return res;
+      // Validate runtime data from database
+      return validateRelayedHeights(res);
     }
     catch (_error) {
       // Initialize if not found
@@ -104,11 +111,17 @@ export class SQLiteStorage implements IStorage {
     const res = await db.prepare(
       "SELECT * FROM relayPaths WHERE chainIdA = ? AND chainIdB = ? AND clientA = ? AND clientB = ? AND version = ?",
     ).get([chainIdA, chainIdB, clientIdA, clientIdB, version]);
-    return res as RelayPaths | undefined;
+    if (!res) {
+      return undefined;
+    }
+    // Validate runtime data from database
+    return validateRelayPaths(res);
   }
 
   async getRelayPaths(): Promise<RelayPaths[]> {
     const db = await openDB(this.dbPath);
-    return db.prepare("SELECT * FROM relayPaths ORDER BY id ASC").all() as unknown as RelayPaths[];
+    const results = await db.prepare("SELECT * FROM relayPaths ORDER BY id ASC").all();
+    // Validate each record
+    return (results as unknown[]).map(result => validateRelayPaths(result));
   }
 }
