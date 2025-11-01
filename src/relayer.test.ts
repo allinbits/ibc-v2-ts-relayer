@@ -24,6 +24,48 @@ vi.mock("winston", () => ({
   createLogger: vi.fn(() => ({
     info: vi.fn(),
     error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    verbose: vi.fn(),
+  })),
+}));
+
+// Mock @cosmjs/tendermint-rpc to avoid WebSocket connections
+vi.mock("@cosmjs/tendermint-rpc", () => ({
+  connectComet: vi.fn().mockResolvedValue({
+    disconnect: vi.fn(),
+    abciInfo: vi.fn(),
+    abciQuery: vi.fn().mockResolvedValue({
+      value: new Uint8Array(),
+    }),
+    block: vi.fn(),
+    blockchain: vi.fn(),
+    commit: vi.fn(),
+    validators: vi.fn(),
+    status: vi.fn(),
+  }),
+}));
+
+// Mock @cosmjs/stargate QueryClient
+vi.mock("@cosmjs/stargate", async () => {
+  const actual = await vi.importActual<typeof import("@cosmjs/stargate")>("@cosmjs/stargate");
+  return {
+    ...actual,
+    QueryClient: {
+      withExtensions: vi.fn(() => ({
+        queryAbci: vi.fn().mockResolvedValue({
+          value: new Uint8Array([10, 6, 99, 111, 115, 109, 111, 115]), // "cosmos" prefix encoded
+        }),
+      })),
+    },
+  };
+});
+
+// Mock @napi-rs/keyring
+vi.mock("@napi-rs/keyring", () => ({
+  Entry: vi.fn().mockImplementation(() => ({
+    setPassword: vi.fn(),
+    getPassword: vi.fn().mockReturnValue("test mnemonic"),
   })),
 }));
 
@@ -41,16 +83,40 @@ vi.mock("./links/v1/link", () => ({
       endA: {
         connectionID: "connA",
         clientID: "clientA",
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
       },
       endB: {
         connectionID: "connB",
         clientID: "clientB",
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
       },
       createChannel: vi.fn(),
       checkAndRelayPacketsAndAcks: vi.fn(async heights => heights),
       updateClientIfStale: vi.fn(),
     })),
     createWithExistingConnections: vi.fn(async () => ({
+      endA: {
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
+      },
+      endB: {
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
+      },
       checkAndRelayPacketsAndAcks: vi.fn(async heights => heights),
       updateClientIfStale: vi.fn(),
     })),
@@ -63,15 +129,39 @@ vi.mock("./links/v2/link", () => ({
       endA: {
         connectionID: "connA",
         clientID: "clientA",
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
       },
       endB: {
         connectionID: "connB",
         clientID: "clientB",
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
       },
       checkAndRelayPacketsAndAcks: vi.fn(async heights => heights),
       updateClientIfStale: vi.fn(),
     })),
     createWithExistingClients: vi.fn(async () => ({
+      endA: {
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
+      },
+      endB: {
+        client: {
+          tm: {
+            disconnect: vi.fn(),
+          },
+        },
+      },
       checkAndRelayPacketsAndAcks: vi.fn(async heights => heights),
       updateClientIfStale: vi.fn(),
     })),
@@ -117,7 +207,21 @@ vi.mock("./utils/storage", () => ({
   getRelayPaths: vi.fn(async () => relayPathsMock),
   getRelayedHeights: vi.fn(async () => relayedHeightsMock),
   updateRelayedHeights: vi.fn(async () => undefined),
+  getChainFees: vi.fn(async () => ({
+    gasPrice: "0.025",
+    gasDenom: "uatom",
+  })),
+  addChainFees: vi.fn(async () => undefined),
 }));
+
+// Mock utils functions
+vi.mock("./utils/utils", async () => {
+  const actual = await vi.importActual<typeof import("./utils/utils")>("./utils/utils");
+  return {
+    ...actual,
+    getPrefix: vi.fn(async () => "cosmos"),
+  };
+});
 
 describe("Relayer", () => {
   let logger: winston.Logger;

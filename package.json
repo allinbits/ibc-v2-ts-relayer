@@ -45,7 +45,7 @@
     "@stylistic/eslint-plugin": "^5.3.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.5.2",
-    "@vitest/coverage-istanbul": "^3.2.4",
+    "@vitest/coverage-istanbul": "^4.0.5",
     "eslint": "^9.35.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "happy-dom": "^18.0.1",
@@ -53,7 +53,7 @@
     "tsdown": "^0.15.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.44.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.5"
   },
   "main": "dist/index.cjs",
   "module": "dist/index.js",

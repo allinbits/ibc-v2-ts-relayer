@@ -373,8 +373,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     // "assert that trustedVals is NextValidators of last trusted header"
     // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
     const validatorHeight = lastHeight + 1;
-    /* eslint @typescript-eslint/no-non-null-assertion: "off" */
-    const curHeight = Number(signedHeader.header!.height);
+    if (!signedHeader.header) {
+      throw new Error("Signed header missing header field");
+    }
+    const curHeight = Number(signedHeader.header.height);
     return TendermintHeader.fromPartial({
       signedHeader,
       validatorSet: await this.getValidatorSet(curHeight),
@@ -1384,6 +1386,25 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.verbose(`Timeout ${packets.length} packets...`);
     const senderAddress = this.senderAddress;
 
+    // Gather unique channels and fetch their types in parallel
+    const uniqueChannelKeys = new Map<string, Order>();
+    for (const packet of packets) {
+      const key = `${packet.destinationPort}/${packet.destinationChannel}`;
+      if (!uniqueChannelKeys.has(key)) {
+        uniqueChannelKeys.set(key, Order.ORDER_NONE_UNSPECIFIED);
+      }
+    }
+
+    // Fetch all channel types in parallel
+    await Promise.all(
+      Array.from(uniqueChannelKeys.keys()).map(async (key) => {
+        const [port, channel] = key.split("/");
+        const ordering = await this.getChannelV1Type(port, channel);
+        uniqueChannelKeys.set(key, ordering);
+      }),
+    );
+
+    // Build messages using cached channel types
     const msgs = [];
     for (const i in packets) {
       const packet = packets[i];
@@ -1391,7 +1412,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`, presentPacketData(packet.data),
       );
 
-      const channel = await this.getChannelV1Type(packet.destinationPort, packet.destinationChannel);
+      const key = `${packet.destinationPort}/${packet.destinationChannel}`;
+      const channel = uniqueChannelKeys.get(key)!;
 
       const msg = {
         typeUrl: "/ibc.core.channel.v1.MsgTimeout",

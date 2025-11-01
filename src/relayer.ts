@@ -10,6 +10,7 @@ import {
 } from "@napi-rs/keyring";
 import * as winston from "winston";
 
+import config from "./config/index";
 import {
   TendermintIbcClient,
 } from "./clients/tendermint/IbcClient";
@@ -219,22 +220,48 @@ export class Relayer extends EventEmitter {
   async start() {
     this.running = true;
     this.logger.info("Starting relayer...");
+    await this.init();
     this.relayerLoop();
   }
 
   async stop() {
     this.running = false;
     this.logger.info("Stopping relayer...");
+
+    // Clean up resources
+    for (const [id, link] of this.links.entries()) {
+      try {
+        // Disconnect Tendermint clients if they have tm property
+        const clientA = link.endA.client as any;
+        const clientB = link.endB.client as any;
+
+        if (clientA.tm && typeof clientA.tm.disconnect === "function") {
+          clientA.tm.disconnect();
+        }
+        if (clientB.tm && typeof clientB.tm.disconnect === "function") {
+          clientB.tm.disconnect();
+        }
+        this.logger.debug(`Cleaned up resources for relay path ${id}`);
+      }
+      catch (error) {
+        this.logger.warn(`Error cleaning up relay path ${id}:`, error);
+      }
+    }
+
+    // Clear the links map
+    this.links.clear();
+    this.relayedHeights.clear();
+
+    this.logger.info("Relayer stopped and resources cleaned up");
   }
 
   async relayerLoop(options = {
-    poll: 5000,
-    maxAgeDest: 86400,
-    maxAgeSrc: 86400,
+    poll: config.relay.pollInterval,
+    maxAgeDest: config.relay.maxAgeDest,
+    maxAgeSrc: config.relay.maxAgeSrc,
   }) {
     while (this.running) {
       try {
-        this.init();
         for (const [id, link] of this.links.entries()) {
           this.logger.info(`Checking relay path ${id}...`);
           if (!this.relayedHeights) {
@@ -260,7 +287,10 @@ export class Relayer extends EventEmitter {
             relayHeights = {
               ...relayHeights,
               ...await link.checkAndRelayPacketsAndAcks(
-                relayHeights, 2, 6),
+                relayHeights,
+                config.relay.timeoutBlocks,
+                config.relay.timeoutSeconds,
+              ),
             };
             this.relayedHeights.set(id, relayHeights);
             updateRelayedHeights(id, relayHeights.packetHeightA, relayHeights.packetHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
@@ -270,8 +300,9 @@ export class Relayer extends EventEmitter {
           await link.updateClientIfStale("B", options.maxAgeSrc);
         }
       }
-      catch (e) {
-        console.error("Caught error: ", e);
+      catch (error) {
+        this.logger.error("Relayer loop error:", error);
+        this.emit("error", error);
       }
       await this.sleep(options.poll);
     }

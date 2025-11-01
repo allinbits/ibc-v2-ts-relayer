@@ -55,20 +55,10 @@ export function isTendermint(client: BaseIbcClient): client is TendermintIbcClie
   return client.clientType === ClientType.Tendermint;
 }
 export function isTendermintClientState(clientState: ReturnType<typeof decodeClientState>): clientState is TendermintClientState {
-  if ((clientState as TendermintClientState).chainId) {
-    return true;
-  }
-  else {
-    return false;
-  }
+  return clientState != null && (clientState as TendermintClientState).chainId !== undefined;
 }
 export function isTendermintConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is TendermintConsensusState {
-  if ((consensusState as TendermintConsensusState).nextValidatorsHash) {
-    return true;
-  }
-  else {
-    return false;
-  }
+  return consensusState != null && (consensusState as TendermintConsensusState).nextValidatorsHash !== undefined;
 }
 
 /*
@@ -115,7 +105,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
      *
      * It provides the basic functionality that all IBC clients should implement.
      * It is not meant to be used directly, but rather extended by other classes.
-     * Implementations of those classes should provide a type to provide as the gerneric type parameter T
+     * Implementations of those classes should provide a type to provide as the generic type parameter T
      * to identify the specific types for the client, consensus state, header and client args.
      * It provides methods to create and manage IBC clients, connections, channels, and packets.
      * It also provides methods to query the state of the IBC clients, connections, channels, and packets.
@@ -133,7 +123,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
      *
      */
 
-  /* Basic helper methods for the connected chain (self-explantory) */
+  /* Basic helper methods for the connected chain (self-explanatory) */
 
   abstract getChainId(): Promise<string>;
   abstract currentTime(): Promise<ReadonlyDateWithNanoseconds>;

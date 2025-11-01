@@ -13,16 +13,10 @@ import {
   BaseIbcClient, isTendermint, isTendermintClientState, isTendermintConsensusState,
 } from "../../clients/BaseIbcClient.js";
 import {
-  TendermintIbcClient,
-} from "../../clients/tendermint/IbcClient.js";
-import {
   BaseEndpoint,
 } from "../../endpoints/BaseEndpoint.js";
 import {
-  TendermintEndpoint,
-} from "../../endpoints/TendermintEndpoint.js";
-import {
-  AckV2WithMetadata, ChannelInfo, ClientType, PacketV2WithMetadata, QueryOpts,
+  AckV2WithMetadata, ChannelInfo, PacketV2WithMetadata, QueryOpts,
 } from "../../types/index.js";
 import {
   decodeClientState,
@@ -33,21 +27,18 @@ import {
   timestampFromDateNanos,
   toIntHeight,
 } from "../../utils/utils.js";
+import {
+  createClients,
+  getEndpoint,
+  otherSide,
+  Side,
+} from "../shared.js";
 
-/**
- * Many actions on link focus on a src and a dest. Rather than add two functions,
- * we have `Side` to select if we initialize from A or B.
- */
-export type Side = "A" | "B";
-
-export function otherSide(side: Side): Side {
-  if (side === "A") {
-    return "B";
-  }
-  else {
-    return "A";
-  }
-}
+// Re-export shared types and functions for backward compatibility
+export {
+  otherSide,
+  Side,
+} from "../shared.js";
 
 /**
  * PacketFilter is the type for a function that accepts a Packet and returns a boolean defining whether to relay the packet or not
@@ -134,7 +125,7 @@ export class Link {
     if (isTendermintClientState(clientState) && isTendermint(dest.client)) {
       const height = clientState.latestHeight;
       // Check headers match consensus state (at least validators)
-      const [rawConsensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, height), dest.client.header(toIntHeight(height)), 3]);
+      const [rawConsensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, height), dest.client.header(toIntHeight(height))]);
       const consensusState = decodeConsensusState(rawConsensusState);
       if (isTendermintConsensusState(consensusState)) {
         // ensure consensus and headers match for next validator hashes
@@ -206,12 +197,12 @@ export class Link {
 
     if (clientIdA !== connectionB) {
       throw new Error(
-        `Client ID on [${chainA}] : ${clientIdA}  dos not match counterparty client ID on [${chainB}] : ${connectionB}`,
+        `Client ID on [${chainA}] : ${clientIdA} does not match counterparty client ID on [${chainB}] : ${connectionB}`,
       );
     }
     if (clientIdB !== connectionA) {
       throw new Error(
-        `Client ID on [${chainB}] : ${clientIdB}  dos not match counterparty client ID on [${chainA}] : ${connectionA}`,
+        `Client ID on [${chainB}] : ${clientIdB} does not match counterparty client ID on [${chainA}] : ${connectionA}`,
       );
     }
     // An additional check for clients where client state contains a chain ID e.g. Tendermint
@@ -302,7 +293,7 @@ export class Link {
     const {
       src, dest,
     } = this.getEnds(sender);
-    // The following checks are for Termendmint clients.
+    // The following checks are for Tendermint clients.
     // TODO: Add support for other client types
 
     if (!isTendermint(src.client)) {
@@ -355,7 +346,7 @@ export class Link {
     const {
       src, dest,
     } = this.getEnds(source);
-    // The following checks are for Termendmint clients.
+    // The following checks are for Tendermint clients.
     // TODO: Add support for other client types
     if (!isTendermint(src.client)) {
       throw new Error(
@@ -791,50 +782,4 @@ export interface ChannelPair {
   readonly src: ChannelInfo
   readonly dest: ChannelInfo
 }
-function getEndpoint(
-  client: BaseIbcClient,
-  clientId: string,
-  connectionId?: string,
-): BaseEndpoint {
-  switch (client.clientType) {
-    case ClientType.Tendermint:
-      return new TendermintEndpoint(client as TendermintIbcClient, clientId, connectionId);
-    default:
-      throw new Error(`Unsupported client type: ${client.clientType}`);
-  }
-}
-async function createClients(
-  nodeA: BaseIbcClient,
-  nodeB: BaseIbcClient,
-  // number of seconds the client (on B pointing to A) is valid without update
-  trustPeriodA?: number | null,
-  // number of seconds the client (on A pointing to B) is valid without update
-  trustPeriodB?: number | null,
-): Promise<string[]> {
-  // client on B pointing to A
-  let clientIdA = "", clientIdB = "";
-  if (isTendermint(nodeA)) {
-    const args = await nodeA.buildCreateClientArgs(trustPeriodA);
-    const {
-      clientId,
-    } = await nodeB.createTendermintClient(
-      args.clientState, args.consensusState,
-    );
-    nodeB.logger.info(`Created client for nodeB: ${clientId}`);
-    clientIdB = clientId;
-  }
-
-  // client on A pointing to B
-  if (isTendermint(nodeB)) {
-    const args2 = await nodeB.buildCreateClientArgs(trustPeriodB);
-    const {
-      clientId,
-    } = await nodeA.createTendermintClient(
-      args2.clientState, args2.consensusState,
-    );
-    nodeA.logger.info(`Created client for nodeA: ${clientId}`);
-    clientIdA = clientId;
-  }
-
-  return [clientIdA, clientIdB];
-}
+// getEndpoint and createClients have been moved to ../shared.ts

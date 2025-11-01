@@ -1,6 +1,10 @@
-const logLevel = process.env.LOG_LEVEL || "debug";
+/**
+ * @deprecated Import from "./config/index" instead.
+ * This file is kept for backward compatibility.
+ */
+import config from "./config/index";
 
 export default {
-  logLevel: logLevel,
-  dbFile: process.env.DB_FILE || "relayer.db",
+  logLevel: config.logging.level,
+  dbFile: config.database.file,
 };
