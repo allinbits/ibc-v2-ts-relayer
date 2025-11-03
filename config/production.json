@@ -1,0 +1,24 @@
+{
+  "$schema": "./schema.json",
+  "description": "Production environment configuration - optimized for reliability and performance",
+  "logging": {
+    "level": "warn"
+  },
+  "database": {
+    "file": "/var/lib/relayer/relayer.db"
+  },
+  "relay": {
+    "pollInterval": 5000,
+    "maxAgeDest": 300000,
+    "maxAgeSrc": 300000,
+    "timeoutBlocks": 100,
+    "timeoutSeconds": 600
+  },
+  "network": {
+    "maxRetries": 3,
+    "retryBackoff": 2000,
+    "requestTimeout": 30000
+  },
+  "estimatedBlockTime": 7000,
+  "estimatedIndexerTime": 3000
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "./schema.json",
+  "description": "Test environment configuration - fast polling and minimal delays for testing",
+  "logging": {
+    "level": "verbose"
+  },
+  "database": {
+    "file": ":memory:"
+  },
+  "relay": {
+    "pollInterval": 1000,
+    "maxAgeDest": 10000,
+    "maxAgeSrc": 10000,
+    "timeoutBlocks": 10,
+    "timeoutSeconds": 60
+  },
+  "network": {
+    "maxRetries": 1,
+    "retryBackoff": 100,
+    "requestTimeout": 5000
+  },
+  "estimatedBlockTime": 1000,
+  "estimatedIndexerTime": 500
+}

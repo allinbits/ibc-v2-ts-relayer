@@ -1,0 +1,24 @@
+{
+  "$schema": "./schema.json",
+  "description": "Development environment configuration - verbose logging and frequent polling for debugging",
+  "logging": {
+    "level": "debug"
+  },
+  "database": {
+    "file": "./relayer-dev.db"
+  },
+  "relay": {
+    "pollInterval": 10000,
+    "maxAgeDest": 600000,
+    "maxAgeSrc": 600000,
+    "timeoutBlocks": 100,
+    "timeoutSeconds": 600
+  },
+  "network": {
+    "maxRetries": 5,
+    "retryBackoff": 1000,
+    "requestTimeout": 60000
+  },
+  "estimatedBlockTime": 7000,
+  "estimatedIndexerTime": 3000
+}
