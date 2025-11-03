@@ -320,8 +320,9 @@ export class Relayer extends EventEmitter {
     for (const [id, link] of this.links.entries()) {
       try {
         // Disconnect Tendermint clients if they have tm property
-        const clientA = link.endA.client as any;
-        const clientB = link.endB.client as any;
+        // Type assertion is safe here as we're checking for property existence
+        const clientA = link.endA.client as unknown as { tm?: { disconnect?: () => void } };
+        const clientB = link.endB.client as unknown as { tm?: { disconnect?: () => void } };
 
         if (clientA.tm && typeof clientA.tm.disconnect === "function") {
           clientA.tm.disconnect();
@@ -356,21 +357,29 @@ export class Relayer extends EventEmitter {
             this.relayedHeights = new Map<number, RelayedHeights>();
           }
 
-          let relayedHeights = await getRelayedHeights(id);
-          if (!relayedHeights) {
-            await updateRelayedHeights(id, 0, 0, 0, 0);
-            relayedHeights = {
-              id: 0,
-              relayPathId: id,
-              packetHeightA: 0,
-              packetHeightB: 0,
-              ackHeightA: 0,
-              ackHeightB: 0,
-            };
-            this.logger.info(`No relayed heights found for path ${id}. Initializing to zero.`);
-          }
-          this.relayedHeights.set(id, relayedHeights);
+          // Optimization: Use cached heights from memory, only query DB if not cached
+          // This reduces redundant DB queries in the relay loop
           let relayHeights = this.relayedHeights.get(id);
+          if (!relayHeights) {
+            // Not in cache, query from database
+            const relayedHeights = await getRelayedHeights(id);
+            if (!relayedHeights) {
+              // Not in DB either, initialize
+              await updateRelayedHeights(id, 0, 0, 0, 0);
+              relayHeights = {
+                id: 0,
+                relayPathId: id,
+                packetHeightA: 0,
+                packetHeightB: 0,
+                ackHeightA: 0,
+                ackHeightB: 0,
+              };
+              this.logger.info(`No relayed heights found for path ${id}. Initializing to zero.`);
+            } else {
+              relayHeights = relayedHeights;
+            }
+            this.relayedHeights.set(id, relayHeights);
+          }
           if (relayHeights) {
             relayHeights = {
               ...relayHeights,

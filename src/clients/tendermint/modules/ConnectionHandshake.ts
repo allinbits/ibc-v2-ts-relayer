@@ -108,7 +108,11 @@ export class ConnectionHandshake {
       .find(x => x.type == "connection_open_init")
       ?.attributes.find(x => x.key == "connection_id")?.value;
     if (!connectionId) {
-      throw new Error("Could not read TX events.");
+      throw new Error(
+        `Failed to extract connection ID from ConnOpenInit transaction. ` +
+        `Transaction hash: ${result.transactionHash}, Chain: ${this.client.chainId}. ` +
+        `This may indicate an incompatible IBC module version.`
+      );
     }
 
     this.client.logger.debug(`Connection open init successful: ${connectionId}`);
@@ -192,7 +196,11 @@ export class ConnectionHandshake {
       .find(x => x.type == "connection_open_try")
       ?.attributes.find(x => x.key == "connection_id")?.value;
     if (!myConnectionId) {
-      throw new Error("Could not read TX events.");
+      throw new Error(
+        `Failed to extract connection ID from ConnOpenTry transaction. ` +
+        `Transaction hash: ${result.transactionHash}, Counterparty connection: ${connectionId}. ` +
+        `Verify the proof is valid and the counterparty connection exists.`
+      );
     }
 
     this.client.logger.debug(

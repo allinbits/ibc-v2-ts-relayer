@@ -112,7 +112,11 @@ export class ChannelHandshake {
       .find(x => x.type == "channel_open_init")
       ?.attributes.find(x => x.key == "channel_id")?.value;
     if (!channelId) {
-      throw new Error("Could not read TX events.");
+      throw new Error(
+        `Failed to extract channel ID from ChannelOpenInit transaction. ` +
+        `Transaction hash: ${result.transactionHash}, Port: ${portId}, Connection: ${connectionId}. ` +
+        `Verify the connection exists and is in OPEN state.`
+      );
     }
 
     this.client.logger.debug(`Channel open init successful: ${channelId}`);
@@ -190,7 +194,11 @@ export class ChannelHandshake {
       .find(x => x.type == "channel_open_try")
       ?.attributes.find(x => x.key == "channel_id")?.value;
     if (!channelId) {
-      throw new Error("Could not read TX events.");
+      throw new Error(
+        `Failed to extract channel ID from ChannelOpenTry transaction. ` +
+        `Transaction hash: ${result.transactionHash}, Port: ${portId}, Counterparty: ${remote.portId}/${remote.channelId}. ` +
+        `Verify the connection is open and the proof is valid.`
+      );
     }
 
     this.client.logger.debug(

@@ -258,7 +258,11 @@ export class ClientManagement {
     const revisionHeight = consensusHeight ? Number(consensusHeight.revisionHeight) : undefined;
     const consensusState = await this.client.query.ibc.client.consensusState(clientId, revisionHeight);
     if (!consensusState.consensusState) {
-      throw new Error(`Consensus state not found for client ID ${clientId} at height ${consensusHeight}`);
+      const heightStr = consensusHeight ? `${consensusHeight.revisionNumber}-${consensusHeight.revisionHeight}` : "latest";
+      throw new Error(
+        `Consensus state not found for client ${clientId} at height ${heightStr}. ` +
+        `Client may not exist or height may be pruned. Chain: ${this.client.chainId}`
+      );
     }
     return consensusState.consensusState;
   }
@@ -273,7 +277,10 @@ export class ClientManagement {
   public async getLatestClientState(clientId: string): Promise<Any> {
     const clientState = await this.client.query.ibc.client.state(clientId);
     if (!clientState || !clientState.clientState) {
-      throw new Error(`Client state not found for client ID ${clientId}`);
+      throw new Error(
+        `Client state not found for client ${clientId} on chain ${this.client.chainId}. ` +
+        `Ensure the client exists and has been created successfully.`
+      );
     }
     return clientState.clientState;
   }
@@ -344,7 +351,10 @@ export class ClientManagement {
       .find(x => x.type == "create_client")
       ?.attributes.find(x => x.key == "client_id")?.value;
     if (!clientId) {
-      throw new Error("Could not read TX events.");
+      throw new Error(
+        `Failed to extract client ID from transaction events. Transaction hash: ${result.transactionHash}. ` +
+        `This may indicate a chain configuration issue or incompatible IBC version.`
+      );
     }
 
     return {
