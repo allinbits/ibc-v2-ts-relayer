@@ -1,10 +1,10 @@
 /* istanbul ignore file -- @preserve */
 import {
   BaseIbcClient,
-} from "../clients/BaseIbcClient";
+} from "../clients/BaseIbcClient.js";
 import {
   AckV2WithMetadata, AckWithMetadata, PacketV2WithMetadata, PacketWithMetadata,
-} from "../types";
+} from "../types/index.js";
 
 export abstract class BaseEndpoint {
   public readonly client: BaseIbcClient;

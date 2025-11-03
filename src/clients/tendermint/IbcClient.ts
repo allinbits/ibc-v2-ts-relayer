@@ -1,13 +1,13 @@
 /* eslint-disable max-lines */
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/any.js";
+} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
 import {
   MsgTransfer,
-} from "@atomone/cosmos-ibc-types/build/ibc/applications/transfer/v1/tx.js";
+} from "@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/tx.js";
 import {
   Order, Packet, State,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
 import {
   MsgAcknowledgement,
   MsgChannelOpenAck,
@@ -16,53 +16,51 @@ import {
   MsgChannelOpenTry,
   MsgRecvPacket,
   MsgTimeout,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/tx.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/tx.js";
 import {
   Acknowledgement, Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
 import {
   MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/tx.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/tx.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   MsgCreateClient,
   MsgUpdateClient,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/tx.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/tx.js";
 import {
   MsgRegisterCounterparty,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v2/tx.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v2/tx.js";
 import {
   Version,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/connection.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/connection.js";
 import {
   QueryConnectionResponse,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
 import {
   MsgConnectionOpenAck,
   MsgConnectionOpenConfirm,
   MsgConnectionOpenInit,
   MsgConnectionOpenTry,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/tx.js";
-import {
-  ClientState, ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/tx.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
   Header as TendermintHeader,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   Commit, Header, SignedHeader,
-} from "@atomone/cosmos-ibc-types/build/tendermint/types/types.js";
+} from "@atomone/cosmos-ibc-types/tendermint/types/types.js";
 import {
   blockIDFlagFromJSON, ValidatorSet,
-} from "@atomone/cosmos-ibc-types/build/tendermint/types/validator.js";
+} from "@atomone/cosmos-ibc-types/tendermint/types/validator.js";
 import {
   fromHex, toAscii, toHex,
 } from "@cosmjs/encoding";
 import {
+  GeneratedType,
   OfflineSigner, Registry,
 } from "@cosmjs/proto-signing";
 import {
@@ -71,12 +69,10 @@ import {
   defaultRegistryTypes,
   fromTendermintEvent,
   GasPrice,
-  IbcExtension,
   isDeliverTxFailure,
   QueryClient,
   setupAuthExtension,
   setupBankExtension,
-  setupIbcExtension,
   setupStakingExtension,
   SigningStargateClient,
   SigningStargateClientOptions,
@@ -88,22 +84,28 @@ import {
 import {
   arrayContentEquals, assert, sleep,
 } from "@cosmjs/utils";
+import {
+  ibc,
+} from "@gnolang/gno-types";
 
 import {
-  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientArgs, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
+  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
 import {
   buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight,
 } from "../../utils/utils.js";
 import {
+  IbcExtension, setupIbcExtension,
+} from "../../v1queries/ibc.js";
+import {
   IbcV2Extension, setupIbcV2Extension,
 } from "../../v2queries/ibc.js";
 import {
-  BaseIbcClient, BaseIbcClientOptions, isTendermint,
+  BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
 } from "../BaseIbcClient.js";
 
 function ibcRegistry(): Registry {
-  return new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer]]);
+  return new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as GeneratedType]]);
 }
 export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
@@ -123,7 +125,6 @@ export interface TendermintIbcClientTypes {
   header: CometHeader
   consensusState: TendermintConsensusState
   clientState: TendermintClientState
-  clientArgs: CreateClientArgs
   lightClientHeader: TendermintHeader
 }
 export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes> {
@@ -320,12 +321,6 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     };
   }
 
-  public async lastKnownHeight(clientId: string): Promise<number> {
-    const rawClientState = await this.getLatestClientState(clientId);
-    const clientState = ClientState.decode(rawClientState.value);
-    return Number(clientState.latestHeight?.revisionHeight ?? 0);
-  }
-
   public async getValidatorSet(height: number): Promise<ValidatorSet> {
     this.logger.verbose(`Get validator set for height ${height}`);
     // we need to query the header to find out who the proposer was, and pull them out
@@ -383,21 +378,58 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
   }
 
-  public async getConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<Any> {
-    const revisionHeight = consensusHeight ? Number(consensusHeight.revisionHeight) : undefined;
-    const consensusState = await this.query.ibc.client.consensusState(clientId, revisionHeight);
-    if (!consensusState.consensusState) {
+  public async getTendermintConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<TendermintConsensusState> {
+    const consensusState = await this.query.ibc.client.consensusStateTm(clientId, consensusHeight);
+    if (!consensusState) {
       throw new Error(`Consensus state not found for client ID ${clientId} at height ${consensusHeight}`);
     }
-    return consensusState.consensusState;
+    return consensusState;
   }
 
-  public async getLatestClientState(clientId: string): Promise<Any> {
+  public async getGnoConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<ibc.lightclients.gno.v1.gno.ConsensusState> {
+    const consensusState = await this.query.ibc.client.consensusState(clientId, consensusHeight);
+    if (!consensusState || !consensusState.consensusState) {
+      throw new Error(`Consensus state not found for client ID ${clientId} at height ${consensusHeight}`);
+    }
+    const gnoConsensusState = ibc.lightclients.gno.v1.gno.ConsensusState.decode(consensusState.consensusState.value);
+    return gnoConsensusState;
+  }
+
+  public async getLatestTendermintClientState(clientId: string): Promise<TendermintClientState> {
+    const clientState = await this.query.ibc.client.stateTm(clientId);
+    if (!clientState) {
+      throw new Error(`Client state not found for client ID ${clientId}`);
+    }
+    return clientState;
+  }
+
+  public async getLatestGnoClientState(clientId: string): Promise<ibc.lightclients.gno.v1.gno.ClientState> {
     const clientState = await this.query.ibc.client.state(clientId);
     if (!clientState || !clientState.clientState) {
       throw new Error(`Client state not found for client ID ${clientId}`);
     }
-    return clientState.clientState;
+    const gnoClientState = ibc.lightclients.gno.v1.gno.ClientState.decode(clientState.clientState.value);
+    return gnoClientState;
+  }
+
+  public async getConsensusStateAtHeight(clientId: string, type: ClientType, consensusHeight?: Height): Promise<AnyConsensusState> {
+    if (type === ClientType.Tendermint) {
+      return this.getTendermintConsensusStateAtHeight(clientId, consensusHeight);
+    }
+    if (type === ClientType.Gno) {
+      return this.getGnoConsensusStateAtHeight(clientId, consensusHeight);
+    }
+    throw new Error(`Unsupported chain type ${type} for getting consensus state.`);
+  }
+
+  public async getLatestClientState(clientId: string, type: ClientType): Promise<AnyClientState> {
+    if (type === ClientType.Tendermint) {
+      return this.getLatestTendermintClientState(clientId);
+    }
+    if (type === ClientType.Gno) {
+      return this.getLatestGnoClientState(clientId);
+    }
+    throw new Error(`Unsupported chain type ${type} for getting latest client state.`);
   }
 
   // trustedHeight must be proven by the client on the destination chain
@@ -579,6 +611,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       await this.updateTendermintClient(clientId, header);
       height = Number(header.signedHeader?.header?.height ?? 0);
     }
+    if (isGno(src)) {
+      const header = await src.buildHeader(toIntHeight(latestHeight));
+      await this.updateGnoClient(clientId, header);
+      height = Number(header.signedHeader?.header?.height ?? 0);
+    }
     return src.revisionHeight(height);
   }
 
@@ -626,6 +663,50 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     };
   }
 
+  public async createGnoClient(
+    clientState: ibc.lightclients.gno.v1.gno.ClientState,
+    consensusState: ibc.lightclients.gno.v1.gno.ConsensusState,
+  ): Promise<CreateClientResult> {
+    this.logger.verbose("Create Gno client");
+    const senderAddress = this.senderAddress;
+    const createMsg = {
+      typeUrl: "/ibc.core.client.v1.MsgCreateClient",
+      value: MsgCreateClient.fromPartial({
+        signer: senderAddress,
+        clientState: {
+          typeUrl: "/ibc.lightclients.gno.v1.ClientState",
+          value: ibc.lightclients.gno.v1.gno.ClientState.encode(clientState).finish(),
+        },
+        consensusState: {
+          typeUrl: "/ibc.lightclients.gno.v1.ConsensusState",
+          value: ibc.lightclients.gno.v1.gno.ConsensusState.encode(consensusState).finish(),
+        },
+      }),
+    };
+    this.logger.debug("MsgCreateClient", createMsg);
+
+    const result = await this.sign.signAndBroadcast(
+      senderAddress, [createMsg], "auto",
+    );
+    if (isDeliverTxFailure(result)) {
+      throw new Error(createDeliverTxFailureMessage(result));
+    }
+
+    const clientId = result.events
+      .find(x => x.type == "create_client")
+      ?.attributes.find(x => x.key == "client_id")?.value;
+    if (!clientId) {
+      throw new Error("Could not read TX events.");
+    }
+
+    return {
+      events: result.events,
+      transactionHash: result.transactionHash,
+      height: result.height,
+      clientId,
+    };
+  }
+
   public async updateTendermintClient(
     clientId: string,
     header: TendermintHeader,
@@ -640,6 +721,47 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         clientMessage: {
           typeUrl: "/ibc.lightclients.tendermint.v1.Header",
           value: TendermintHeader.encode(header).finish(),
+        },
+      }),
+    };
+
+    this.logger.debug(
+      "MsgUpdateClient", deepCloneAndMutate(updateMsg, (mutableMsg) => {
+        if (mutableMsg.value.clientMessage?.value) {
+          mutableMsg.value.clientMessage.value = toBase64AsAny(
+            mutableMsg.value.clientMessage.value,
+          );
+        }
+      }),
+    );
+
+    const result = await this.sign.signAndBroadcast(
+      senderAddress, [updateMsg], "auto",
+    );
+    if (isDeliverTxFailure(result)) {
+      throw new Error(createDeliverTxFailureMessage(result));
+    }
+    return {
+      events: result.events,
+      transactionHash: result.transactionHash,
+      height: result.height,
+    };
+  }
+
+  public async updateGnoClient(
+    clientId: string,
+    header: ibc.lightclients.gno.v1.gno.Header,
+  ): Promise<MsgResult> {
+    this.logger.verbose(`Update Tendermint client ${clientId}`);
+    const senderAddress = this.senderAddress;
+    const updateMsg = {
+      typeUrl: "/ibc.core.client.v1.MsgUpdateClient",
+      value: MsgUpdateClient.fromPartial({
+        signer: senderAddress,
+        clientId,
+        clientMessage: {
+          typeUrl: "/ibc.lightclients.tendermint.v1.Header",
+          value: ibc.lightclients.gno.v1.gno.Header.encode(header).finish(),
         },
       }),
     };
@@ -1564,6 +1686,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     return result;
   }
 
+  /*
   public async getTendermintConsensusState(clientId: string, consensusHeight: Height, proofHeight: Height): Promise<{
     consensusState: ConsensusState
     proof: Uint8Array
@@ -1591,7 +1714,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       proof: state.proof,
     };
   }
-
+*/
   public async getRawChannelProof(portId: string, channelId: string, proofHeight: Height): Promise<DataProof> {
     /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = toAscii(
@@ -1928,7 +2051,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     return res.sequences.map(seq => Number(seq));
   }
 
-  public async buildCreateClientArgs(trustPeriodSec?: number | null): Promise<CreateClientArgs> {
+  public async buildCreateClientArgs(trustPeriodSec?: number | null): Promise<{
+    consensusState: TendermintConsensusState
+    clientState: TendermintClientState
+  }> {
     const header = await this.latestHeader();
     const consensusState = buildTendermintConsensusState(header);
     const unbondingPeriodSec = await this.getUnbondingPeriod();

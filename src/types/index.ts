@@ -1,33 +1,38 @@
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
+} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   ClientState as TendermintClientState, ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ProofOps,
-} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof";
+} from "@atomone/cosmos-ibc-types/tendermint/crypto/proof.js";
 import {
   Event,
 } from "@cosmjs/stargate";
 import {
   comet38, tendermint34, tendermint37,
 } from "@cosmjs/tendermint-rpc";
+import {
+  ibc,
+} from "@gnolang/gno-types";
 
 export enum ChainType {
   Cosmos = "cosmos",
   Ethereum = "ethereum",
   Gno = "gno",
 }
+export type AnyClientState = TendermintClientState | ibc.lightclients.gno.v1.gno.ClientState;
+export type AnyConsensusState = TendermintConsensusState | ibc.lightclients.gno.v1.gno.ConsensusState;
 export interface RelayPaths {
   id: number
   chainIdA: string
@@ -128,9 +133,10 @@ export type BlockResultsResponse
     | tendermint37.BlockResultsResponse
     | comet38.BlockResultsResponse;
 export interface CreateClientArgs {
-  clientState: TendermintClientState
-  consensusState: TendermintConsensusState
+  clientState: TendermintClientState | ibc.lightclients.gno.v1.gno.ClientState
+  consensusState: TendermintConsensusState | ibc.lightclients.gno.v1.gno.ConsensusState
 }
+
 export enum ClientType {
   Tendermint = "tendermint",
   Gno = "gno",

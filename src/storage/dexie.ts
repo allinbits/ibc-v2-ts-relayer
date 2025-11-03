@@ -5,7 +5,7 @@ import Dexie, {
 import {
   ChainFees,
   RelayedHeights, RelayPaths,
-} from "../types";
+} from "../types/index.js";
 
 const db = new Dexie("Relayer") as Dexie & {
   relayPaths: EntityTable<RelayPaths, "id">

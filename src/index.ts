@@ -9,13 +9,13 @@ import {
 import * as pkgJson from "../package.json";
 import {
   Relayer,
-} from "./relayer";
+} from "./relayer.js";
 import {
   ChainType,
-} from "./types";
+} from "./types/index.js";
 import {
   log,
-} from "./utils/logging";
+} from "./utils/logging.js";
 
 const program = new Command();
 

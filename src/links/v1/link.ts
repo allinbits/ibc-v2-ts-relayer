@@ -1,10 +1,9 @@
-/* eslint-disable max-lines */
 import {
   Order, Packet, State,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   arrayContentEquals, isDefined,
 } from "@cosmjs/utils";
@@ -23,11 +22,9 @@ import {
   TendermintEndpoint,
 } from "../../endpoints/TendermintEndpoint.js";
 import {
-  AckWithMetadata, ChannelInfo, ClientType, PacketWithMetadata, QueryOpts,
+  AckWithMetadata, AnyClientState, ChannelInfo, ClientType, PacketWithMetadata, QueryOpts,
 } from "../../types/index.js";
 import {
-  decodeClientState,
-  decodeConsensusState,
   parseAcksFromTxEvents,
   prepareChannelHandshake,
   prepareConnectionHandshake,
@@ -183,9 +180,7 @@ export class Link {
       );
     }
     // An additional check for clients where client state contains a chain ID e.g. Tendermint
-    const [rawClientStateA, rawClientStateB] = await Promise.all([nodeA.getLatestClientState(clientIdA), nodeB.getLatestClientState(clientIdB)]);
-    const clientStateA = decodeClientState(rawClientStateA);
-    const clientStateB = decodeClientState(rawClientStateB);
+    const [clientStateA, clientStateB] = await Promise.all([nodeA.getLatestClientState(clientIdA, nodeB.clientType), nodeB.getLatestClientState(clientIdB, nodeA.clientType)]);
     if (isTendermintClientState(clientStateB)) {
       if (nodeA.chainId !== clientStateB.chainId) {
         throw new Error(
@@ -232,7 +227,7 @@ export class Link {
   public async assertHeadersMatchConsensusState(
     proofSide: Side,
     clientId: string,
-    clientState: ReturnType<typeof decodeClientState>,
+    clientState: AnyClientState,
   ): Promise<void> {
     const {
       src, dest,
@@ -243,8 +238,8 @@ export class Link {
     if (isTendermintClientState(clientState) && isTendermint(dest.client)) {
       const height = clientState.latestHeight;
       // Check headers match consensus state (at least validators)
-      const [rawConsensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, height), dest.client.header(toIntHeight(height)), 3]);
-      const consensusState = decodeConsensusState(rawConsensusState);
+      const [consensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, dest.client.clientType, height), dest.client.header(toIntHeight(height)), 3]);
+
       if (isTendermintConsensusState(consensusState)) {
         // ensure consensus and headers match for next validator hashes
         if (
@@ -377,13 +372,13 @@ export class Link {
         `updateClientIfStale only supported for Tendermint clients, got ${dest.client.clientType}`,
       );
     }
-    const rawKnownHeader = await dest.client.getConsensusStateAtHeight(
+    const knownHeader = await dest.client.getConsensusStateAtHeight(
       dest.clientID,
+      src.client.clientType,
     );
-    const knownHeader = decodeConsensusState(rawKnownHeader);
-    if (!isTendermintConsensusState(knownHeader)) {
+    if (!isTendermint(dest.client)) {
       throw new Error(
-        `Expected TendermintConsensusState, got ${rawKnownHeader.typeUrl}`,
+        `Expected TendermintConsensusState, got ${knownHeader}`,
       );
     }
     const currentHeader = await src.client.latestHeader();
@@ -429,11 +424,11 @@ export class Link {
         `updateClientToHeight only supported for Tendermint clients, got ${src.client.clientType}`,
       );
     }
-    const rawClientState = await dest.client.getLatestClientState(dest.clientID);
-    const clientState = decodeClientState(rawClientState);
+    const clientState = await dest.client.getLatestClientState(dest.clientID, src.client.clientType);
+
     if (!isTendermintClientState(clientState)) {
       throw new Error(
-        `Expected TendermintClientState, got ${rawClientState.typeUrl}`,
+        `Expected TendermintClientState, got ${clientState}`,
       );
     }
     // TODO: revisit where revision number comes from - this must be the number from the source chain

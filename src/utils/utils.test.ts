@@ -1,605 +1,1057 @@
-/* eslint-disable max-lines-per-function */
 import {
-  fromBase64, fromHex,
+  Any,
+} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+import {
+  Packet,
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
+import {
+  Packet as PacketV2,
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+import {
+  Height,
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+import {
+  ClientState as TendermintClientState,
+  ConsensusState as TendermintConsensusState,
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+import {
+  fromHex,
+  toUtf8,
 } from "@cosmjs/encoding";
+import type {
+  DeliverTxResponse,
+} from "@cosmjs/stargate";
 import {
-  fromRfc3339WithNanoseconds,
+  Event,
+} from "@cosmjs/stargate";
+import {
   ReadonlyDateWithNanoseconds,
   tendermint34,
+  tendermint37,
 } from "@cosmjs/tendermint-rpc";
 import {
-  expect, test,
+  ibc,
+} from "@gnolang/gno-types";
+import {
+  describe,
+  expect,
+  it,
 } from "vitest";
 
 import {
+  buildGnoClientState,
+  buildGnoConsensusState,
+  buildTendermintClientState,
+  buildTendermintConsensusState,
+  createDeliverTxFailureMessage,
+  decodeClientState,
+  decodeConsensusState,
+  deepCloneAndMutate,
   ensureIntHeight,
   heightGreater,
+  heightQueryString,
+  isV2Packet,
+  may,
+  mergeUint8Arrays,
+  parseAck,
   parseHeightAttribute,
+  parsePacket,
   parsePacketsFromEvents,
-  parsePacketsFromTendermintEvents,
   parseRevisionNumber,
+  presentPacketData,
+  presentPacketDataV2,
   secondsFromDateNanos,
+  splitPendingPackets,
+  subtractBlock,
   timeGreater,
+  timeGreaterV2,
   timestampFromDateNanos,
   toIntHeight,
 } from "./utils";
 
-test(
-  "Utils: toIntHeight converts Height to number", () => {
-    const height = {
-      revisionNumber: 1n,
-      revisionHeight: 123n,
-    };
-    const result = toIntHeight(height);
-    expect(result).toBe(123);
-  },
-);
-
-test(
-  "Utils: ensureIntHeight converts Height or bigint to number", () => {
-    const height = {
-      revisionNumber: 1n,
-      revisionHeight: 123n,
-    };
-    const result = ensureIntHeight(height);
-    const result2 = ensureIntHeight(123n);
-    expect(result).toBe(123);
-    expect(result2).toBe(123);
-  },
-);
-
-test(
-  "parsePacketsFromEvents", () => {
-    // From https://gist.github.com/webmaster128/14d273b3b462c1c653f51e3e1edb8cd5
-    const events: tendermint34.Event[] = [
-      {
-        type: "coin_spent",
-        attributes: [
-          {
-            key: fromBase64("c3BlbmRlcg=="),
-            value: fromBase64("anVubzEwMHM0NXM0aDk0cWRrY2FmbW1ycWZsdGxyZ3lxd3luNmUwNWp4Mg=="),
-          },
-          {
-            key: fromBase64("YW1vdW50"),
-            value: fromBase64("MzY5NDV1anVub3g="),
-          },
-        ],
-      },
-      {
-        type: "coin_received",
-        attributes: [
-          {
-            key: fromBase64("cmVjZWl2ZXI="),
-            value: fromBase64("anVubzE3eHBmdmFrbTJhbWc5NjJ5bHM2Zjg0ejNrZWxsOGM1bHh0cW12cA=="),
-          },
-          {
-            key: fromBase64("YW1vdW50"),
-            value: fromBase64("MzY5NDV1anVub3g="),
-          },
-        ],
-      },
-      {
-        type: "transfer",
-        attributes: [
-          {
-            key: fromBase64("cmVjaXBpZW50"),
-            value: fromBase64("anVubzE3eHBmdmFrbTJhbWc5NjJ5bHM2Zjg0ejNrZWxsOGM1bHh0cW12cA=="),
-          },
-          {
-            key: fromBase64("c2VuZGVy"),
-            value: fromBase64("anVubzEwMHM0NXM0aDk0cWRrY2FmbW1ycWZsdGxyZ3lxd3luNmUwNWp4Mg=="),
-          },
-          {
-            key: fromBase64("YW1vdW50"),
-            value: fromBase64("MzY5NDV1anVub3g="),
-          },
-        ],
-      },
-      {
-        type: "message",
-        attributes: [
-          {
-            key: fromBase64("c2VuZGVy"),
-            value: fromBase64("anVubzEwMHM0NXM0aDk0cWRrY2FmbW1ycWZsdGxyZ3lxd3luNmUwNWp4Mg=="),
-          },
-        ],
-      },
-      {
-        type: "tx",
-        attributes: [
-          {
-            key: fromBase64("ZmVl"),
-            value: fromBase64("MzY5NDV1anVub3g="),
-          },
-        ],
-      },
-      {
-        type: "tx",
-        attributes: [
-          {
-            key: fromBase64("YWNjX3NlcQ=="),
-            value: fromBase64("anVubzEwMHM0NXM0aDk0cWRrY2FmbW1ycWZsdGxyZ3lxd3luNmUwNWp4Mi8xMjQ5Mg=="),
-          },
-        ],
-      },
-      {
-        type: "tx",
-        attributes: [
-          {
-            key: fromBase64("c2lnbmF0dXJl"),
-            value: fromBase64("Sm42eW9WYlFPdFIxWlNHRW1lQmQ4c2VaOTl5RHlqdlJ2eU8rR1hGL1FGaDh3bzR2Tm5EckFFUzNxNmk0Sy9XTnhhdkNFRDAxVXNSK0hJYVB2djdRNkE9PQ=="),
-          },
-        ],
-      },
-      {
-        type: "message",
-        attributes: [
-          {
-            key: fromBase64("YWN0aW9u"),
-            value: fromBase64("L2Nvc213YXNtLndhc20udjEuTXNnRXhlY3V0ZUNvbnRyYWN0"),
-          },
-        ],
-      },
-      {
-        type: "message",
-        attributes: [
-          {
-            key: fromBase64("bW9kdWxl"),
-            value: fromBase64("d2FzbQ=="),
-          },
-          {
-            key: fromBase64("c2VuZGVy"),
-            value: fromBase64("anVubzEwMHM0NXM0aDk0cWRrY2FmbW1ycWZsdGxyZ3lxd3luNmUwNWp4Mg=="),
-          },
-        ],
-      },
-      {
-        type: "execute",
-        attributes: [
-          {
-            key: fromBase64("X2NvbnRyYWN0X2FkZHJlc3M="),
-            value: fromBase64("anVubzE0eWYyNHBmY3pjc2xjaGRyMDR1NXAyeXc5enhmNmN2czN2aGU5cjlzcmY1cGc2eTJwN25xZHFuN2tu"),
-          },
-        ],
-      },
-      {
-        type: "execute",
-        attributes: [
-          {
-            key: fromBase64("X2NvbnRyYWN0X2FkZHJlc3M="),
-            value: fromBase64("anVubzFlN3ZzNzZtYXJrc2h1czM5ZXlmZWZoMnkzdDlndWdlNHQwa3ZxeWEzcTZ2YW1nc2VqaDRxOGx4dHE5"),
-          },
-        ],
-      },
-      {
-        type: "wasm",
-        attributes: [
-          {
-            key: fromBase64("X2NvbnRyYWN0X2FkZHJlc3M="),
-            value: fromBase64("anVubzFlN3ZzNzZtYXJrc2h1czM5ZXlmZWZoMnkzdDlndWdlNHQwa3ZxeWEzcTZ2YW1nc2VqaDRxOGx4dHE5"),
-          },
-          {
-            key: fromBase64("YWN0aW9u"),
-            value: fromBase64("ZXhlY3V0ZV9nZXRfbmV4dF9yYW5kb21uZXNz"),
-          },
-        ],
-      },
-      {
-        type: "send_packet",
-        attributes: [
-          {
-            key: fromBase64("cGFja2V0X2NoYW5uZWxfb3JkZXJpbmc="),
-            value: fromBase64("T1JERVJfVU5PUkRFUkVE"),
-          },
-          {
-            key: fromBase64("cGFja2V0X2Nvbm5lY3Rpb24="),
-            value: fromBase64("Y29ubmVjdGlvbi0zMQ=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RhdGE="),
-            value: fromBase64("eyJhZnRlciI6IjE2NjYxNjkwMDM0MTM1NzgyNjkiLCJzZW5kZXIiOiJqdW5vMTR5ZjI0cGZjemNzbGNoZHIwNHU1cDJ5dzl6eGY2Y3ZzM3ZoZTlyOXNyZjVwZzZ5MnA3bnFkcW43a24iLCJqb2JfaWQiOiJzaW1vbi1yb2xsLTEifQ=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RhdGFfaGV4"),
-            value: fromBase64("N2IyMjYxNjY3NDY1NzIyMjNhMjIzMTM2MzYzNjMxMzYzOTMwMzAzMzM0MzEzMzM1MzczODMyMzYzOTIyMmMyMjczNjU2ZTY0NjU3MjIyM2EyMjZhNzU2ZTZmMzEzNDc5NjYzMjM0NzA2NjYzN2E2MzczNmM2MzY4NjQ3MjMwMzQ3NTM1NzAzMjc5NzczOTdhNzg2NjM2NjM3NjczMzM3NjY4NjUzOTcyMzk3MzcyNjYzNTcwNjczNjc5MzI3MDM3NmU3MTY0NzE2ZTM3NmI2ZTIyMmMyMjZhNmY2MjVmNjk2NDIyM2EyMjczNjk2ZDZmNmUyZDcyNmY2YzZjMmQzMTIyN2Q="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RzdF9jaGFubmVs"),
-            value: fromBase64("Y2hhbm5lbC0xMA=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RzdF9wb3J0"),
-            value: fromBase64("d2FzbS5ub2lzMWo3bTRmNjhscnVjZWc1eHEzZ2ZrZmRnZGd6MDJ2aHZscTJwNjd2Zjl2M2h3ZHlkYWF0M3NhanpjeTU="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NlcXVlbmNl"),
-            value: fromBase64("NzUyNA=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NyY19jaGFubmVs"),
-            value: fromBase64("Y2hhbm5lbC00Mg=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NyY19wb3J0"),
-            value: fromBase64("d2FzbS5qdW5vMWU3dnM3Nm1hcmtzaHVzMzlleWZlZmgyeTN0OWd1Z2U0dDBrdnF5YTNxNnZhbWdzZWpoNHE4bHh0cTk="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3RpbWVvdXRfaGVpZ2h0"),
-            value: fromBase64("MC0w"),
-          },
-          {
-            key: fromBase64("cGFja2V0X3RpbWVvdXRfdGltZXN0YW1w"),
-            value: fromBase64("MTY2NjE3MjYwMDQxMzU3ODI2OQ=="),
-          },
-        ],
-      },
-      {
-        type: "execute",
-        attributes: [
-          {
-            key: fromBase64("X2NvbnRyYWN0X2FkZHJlc3M="),
-            value: fromBase64("anVubzFlN3ZzNzZtYXJrc2h1czM5ZXlmZWZoMnkzdDlndWdlNHQwa3ZxeWEzcTZ2YW1nc2VqaDRxOGx4dHE5"),
-          },
-        ],
-      },
-      {
-        type: "wasm",
-        attributes: [
-          {
-            key: fromBase64("X2NvbnRyYWN0X2FkZHJlc3M="),
-            value: fromBase64("anVubzFlN3ZzNzZtYXJrc2h1czM5ZXlmZWZoMnkzdDlndWdlNHQwa3ZxeWEzcTZ2YW1nc2VqaDRxOGx4dHE5"),
-          },
-          {
-            key: fromBase64("YWN0aW9u"),
-            value: fromBase64("ZXhlY3V0ZV9nZXRfbmV4dF9yYW5kb21uZXNz"),
-          },
-        ],
-      },
-      {
-        type: "send_packet",
-        attributes: [
-          {
-            key: fromBase64("cGFja2V0X2NoYW5uZWxfb3JkZXJpbmc="),
-            value: fromBase64("T1JERVJfVU5PUkRFUkVE"),
-          },
-          {
-            key: fromBase64("cGFja2V0X2Nvbm5lY3Rpb24="),
-            value: fromBase64("Y29ubmVjdGlvbi0zMQ=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RhdGE="),
-            value: fromBase64("eyJhZnRlciI6IjE2NjYxNjkwMDM0MTM1NzgyNjkiLCJzZW5kZXIiOiJqdW5vMTR5ZjI0cGZjemNzbGNoZHIwNHU1cDJ5dzl6eGY2Y3ZzM3ZoZTlyOXNyZjVwZzZ5MnA3bnFkcW43a24iLCJqb2JfaWQiOiJzaW1vbi1yb2xsLTIifQ=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RhdGFfaGV4"),
-            value: fromBase64("N2IyMjYxNjY3NDY1NzIyMjNhMjIzMTM2MzYzNjMxMzYzOTMwMzAzMzM0MzEzMzM1MzczODMyMzYzOTIyMmMyMjczNjU2ZTY0NjU3MjIyM2EyMjZhNzU2ZTZmMzEzNDc5NjYzMjM0NzA2NjYzN2E2MzczNmM2MzY4NjQ3MjMwMzQ3NTM1NzAzMjc5NzczOTdhNzg2NjM2NjM3NjczMzM3NjY4NjUzOTcyMzk3MzcyNjYzNTcwNjczNjc5MzI3MDM3NmU3MTY0NzE2ZTM3NmI2ZTIyMmMyMjZhNmY2MjVmNjk2NDIyM2EyMjczNjk2ZDZmNmUyZDcyNmY2YzZjMmQzMjIyN2Q="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RzdF9jaGFubmVs"),
-            value: fromBase64("Y2hhbm5lbC0xMA=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RzdF9wb3J0"),
-            value: fromBase64("d2FzbS5ub2lzMWo3bTRmNjhscnVjZWc1eHEzZ2ZrZmRnZGd6MDJ2aHZscTJwNjd2Zjl2M2h3ZHlkYWF0M3NhanpjeTU="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NlcXVlbmNl"),
-            value: fromBase64("NzUyNQ=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NyY19jaGFubmVs"),
-            value: fromBase64("Y2hhbm5lbC00Mg=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NyY19wb3J0"),
-            value: fromBase64("d2FzbS5qdW5vMWU3dnM3Nm1hcmtzaHVzMzlleWZlZmgyeTN0OWd1Z2U0dDBrdnF5YTNxNnZhbWdzZWpoNHE4bHh0cTk="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3RpbWVvdXRfaGVpZ2h0"),
-            value: fromBase64("MC0w"),
-          },
-          {
-            key: fromBase64("cGFja2V0X3RpbWVvdXRfdGltZXN0YW1w"),
-            value: fromBase64("MTY2NjE3MjYwMDQxMzU3ODI2OQ=="),
-          },
-        ],
-      },
-      {
-        type: "execute",
-        attributes: [
-          {
-            key: fromBase64("X2NvbnRyYWN0X2FkZHJlc3M="),
-            value: fromBase64("anVubzFlN3ZzNzZtYXJrc2h1czM5ZXlmZWZoMnkzdDlndWdlNHQwa3ZxeWEzcTZ2YW1nc2VqaDRxOGx4dHE5"),
-          },
-        ],
-      },
-      {
-        type: "wasm",
-        attributes: [
-          {
-            key: fromBase64("X2NvbnRyYWN0X2FkZHJlc3M="),
-            value: fromBase64("anVubzFlN3ZzNzZtYXJrc2h1czM5ZXlmZWZoMnkzdDlndWdlNHQwa3ZxeWEzcTZ2YW1nc2VqaDRxOGx4dHE5"),
-          },
-          {
-            key: fromBase64("YWN0aW9u"),
-            value: fromBase64("ZXhlY3V0ZV9nZXRfbmV4dF9yYW5kb21uZXNz"),
-          },
-        ],
-      },
-      {
-        type: "send_packet",
-        attributes: [
-          {
-            key: fromBase64("cGFja2V0X2NoYW5uZWxfb3JkZXJpbmc="),
-            value: fromBase64("T1JERVJfVU5PUkRFUkVE"),
-          },
-          {
-            key: fromBase64("cGFja2V0X2Nvbm5lY3Rpb24="),
-            value: fromBase64("Y29ubmVjdGlvbi0zMQ=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RhdGE="),
-            value: fromBase64("eyJhZnRlciI6IjE2NjYxNjkwMDM0MTM1NzgyNjkiLCJzZW5kZXIiOiJqdW5vMTR5ZjI0cGZjemNzbGNoZHIwNHU1cDJ5dzl6eGY2Y3ZzM3ZoZTlyOXNyZjVwZzZ5MnA3bnFkcW43a24iLCJqb2JfaWQiOiJzaW1vbi1yb2xsLTMifQ=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RhdGFfaGV4"),
-            value: fromBase64("N2IyMjYxNjY3NDY1NzIyMjNhMjIzMTM2MzYzNjMxMzYzOTMwMzAzMzM0MzEzMzM1MzczODMyMzYzOTIyMmMyMjczNjU2ZTY0NjU3MjIyM2EyMjZhNzU2ZTZmMzEzNDc5NjYzMjM0NzA2NjYzN2E2MzczNmM2MzY4NjQ3MjMwMzQ3NTM1NzAzMjc5NzczOTdhNzg2NjM2NjM3NjczMzM3NjY4NjUzOTcyMzk3MzcyNjYzNTcwNjczNjc5MzI3MDM3NmU3MTY0NzE2ZTM3NmI2ZTIyMmMyMjZhNmY2MjVmNjk2NDIyM2EyMjczNjk2ZDZmNmUyZDcyNmY2YzZjMmQzMzIyN2Q="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RzdF9jaGFubmVs"),
-            value: fromBase64("Y2hhbm5lbC0xMA=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X2RzdF9wb3J0"),
-            value: fromBase64("d2FzbS5ub2lzMWo3bTRmNjhscnVjZWc1eHEzZ2ZrZmRnZGd6MDJ2aHZscTJwNjd2Zjl2M2h3ZHlkYWF0M3NhanpjeTU="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NlcXVlbmNl"),
-            value: fromBase64("NzUyNg=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NyY19jaGFubmVs"),
-            value: fromBase64("Y2hhbm5lbC00Mg=="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3NyY19wb3J0"),
-            value: fromBase64("d2FzbS5qdW5vMWU3dnM3Nm1hcmtzaHVzMzlleWZlZmgyeTN0OWd1Z2U0dDBrdnF5YTNxNnZhbWdzZWpoNHE4bHh0cTk="),
-          },
-          {
-            key: fromBase64("cGFja2V0X3RpbWVvdXRfaGVpZ2h0"),
-            value: fromBase64("MC0w"),
-          },
-          {
-            key: fromBase64("cGFja2V0X3RpbWVvdXRfdGltZXN0YW1w"),
-            value: fromBase64("MTY2NjE3MjYwMDQxMzU3ODI2OQ=="),
-          },
-        ],
-      },
-    ];
-
-    /*
-         * See https://testnet.mintscan.io/juno-testnet/txs/F64B8C6A320A9C25FD1EA60B00194817B069C9CBEF19B736117D9339F33F2E51
-         * for packet logs
-         */
-    const packets = parsePacketsFromTendermintEvents(events);
-    expect(packets.length).toBe(3);
-    const [packet0, packet1, packet2] = packets;
-    expect(packet0).toEqual(
-      {
-        sequence: BigInt(7524),
-        sourcePort:
-      "wasm.juno1e7vs76markshus39eyfefh2y3t9guge4t0kvqya3q6vamgsejh4q8lxtq9",
-        sourceChannel: "channel-42",
-        destinationPort:
-      "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
-        destinationChannel: "channel-10",
-        data: fromHex("7b226166746572223a2231363636313639303033343133353738323639222c2273656e646572223a226a756e6f3134796632347066637a63736c636864723034753570327977397a7866366376733376686539723973726635706736793270376e7164716e376b6e222c226a6f625f6964223a2273696d6f6e2d726f6c6c2d31227d"),
-        timeoutHeight: undefined,
-        timeoutTimestamp: BigInt("1666172600413578269"),
-      },
-    );
-    expect(packet1).toEqual({
-      sequence: BigInt(7525),
-      sourcePort:
-      "wasm.juno1e7vs76markshus39eyfefh2y3t9guge4t0kvqya3q6vamgsejh4q8lxtq9",
-      sourceChannel: "channel-42",
-      destinationPort:
-      "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
-      destinationChannel: "channel-10",
-      data: fromHex("7b226166746572223a2231363636313639303033343133353738323639222c2273656e646572223a226a756e6f3134796632347066637a63736c636864723034753570327977397a7866366376733376686539723973726635706736793270376e7164716e376b6e222c226a6f625f6964223a2273696d6f6e2d726f6c6c2d32227d"),
-      timeoutHeight: undefined,
-      timeoutTimestamp: BigInt("1666172600413578269"),
-    },
-    );
-    expect(packet2).toEqual({
-      sequence: BigInt(7526),
-      sourcePort:
-      "wasm.juno1e7vs76markshus39eyfefh2y3t9guge4t0kvqya3q6vamgsejh4q8lxtq9",
-      sourceChannel: "channel-42",
-      destinationPort:
-      "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
-      destinationChannel: "channel-10",
-      data: fromHex("7b226166746572223a2231363636313639303033343133353738323639222c2273656e646572223a226a756e6f3134796632347066637a63736c636864723034753570327977397a7866366376733376686539723973726635706736793270376e7164716e376b6e222c226a6f625f6964223a2273696d6f6e2d726f6c6c2d33227d"),
-      timeoutHeight: undefined,
-      timeoutTimestamp: BigInt("1666172600413578269"),
-    },
-    );
-  },
-);
-
-test(
-  "parsePacketsFromTxEvents works for one packet", () => {
-    /*
-         * curl -sS "https://juno-testnet-rpc.polkachu.com/tx?hash=0x502E6F4AEA3FB185DD894D0DC14E013C45E6F52AC00A0B5224F6876A1CA107DB" | jq .result.tx_result.log -r
-         * and then replace \" with \\" to get the correct JavaScript escaping
-         */
-    const events = JSON.parse("[{\"type\":\"execute\",\"attributes\":[{\"key\":\"_contract_address\",\"value\":\"juno19pam0vncl2s3etn4e7rqxvpq2gkyu9wg2czfvsph6dgvp00fsrxqzjt5sr\"},{\"key\":\"_contract_address\",\"value\":\"juno1e7vs76markshus39eyfefh2y3t9guge4t0kvqya3q6vamgsejh4q8lxtq9\"}]},{\"type\":\"message\",\"attributes\":[{\"key\":\"action\",\"value\":\"/cosmwasm.wasm.v1.MsgExecuteContract\"},{\"key\":\"module\",\"value\":\"wasm\"},{\"key\":\"sender\",\"value\":\"juno100s45s4h94qdkcafmmrqfltlrgyqwyn6e05jx2\"}]},{\"type\":\"send_packet\",\"attributes\":[{\"key\":\"packet_channel_ordering\",\"value\":\"ORDER_UNORDERED\"},{\"key\":\"packet_connection\",\"value\":\"connection-31\"},{\"key\":\"packet_data\",\"value\":\"{\\\"after\\\":\\\"1666164035856871113\\\",\\\"sender\\\":\\\"juno19pam0vncl2s3etn4e7rqxvpq2gkyu9wg2czfvsph6dgvp00fsrxqzjt5sr\\\",\\\"job_id\\\":\\\"dapp-1-1666164017\\\"}\"},{\"key\":\"packet_data_hex\",\"value\":\"7b226166746572223a2231363636313634303335383536383731313133222c2273656e646572223a226a756e6f313970616d30766e636c32733365746e34653772717876707132676b797539776732637a66767370683664677670303066737278717a6a74357372222c226a6f625f6964223a22646170702d312d31363636313634303137227d\"},{\"key\":\"packet_dst_channel\",\"value\":\"channel-10\"},{\"key\":\"packet_dst_port\",\"value\":\"wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5\"},{\"key\":\"packet_sequence\",\"value\":\"7489\"},{\"key\":\"packet_src_channel\",\"value\":\"channel-42\"},{\"key\":\"packet_src_port\",\"value\":\"wasm.juno1e7vs76markshus39eyfefh2y3t9guge4t0kvqya3q6vamgsejh4q8lxtq9\"},{\"key\":\"packet_timeout_height\",\"value\":\"0-0\"},{\"key\":\"packet_timeout_timestamp\",\"value\":\"1666167632856871113\"}]},{\"type\":\"wasm\",\"attributes\":[{\"key\":\"_contract_address\",\"value\":\"juno1e7vs76markshus39eyfefh2y3t9guge4t0kvqya3q6vamgsejh4q8lxtq9\"},{\"key\":\"action\",\"value\":\"execute_get_next_randomness\"}]}]");
-    const packets = parsePacketsFromEvents(events);
-    expect(packets.length).toBe(1);
-    expect(packets[0]).toEqual({
-      sequence: BigInt(7489),
-      sourcePort:
-      "wasm.juno1e7vs76markshus39eyfefh2y3t9guge4t0kvqya3q6vamgsejh4q8lxtq9",
-      sourceChannel: "channel-42",
-      destinationPort:
-      "wasm.nois1j7m4f68lruceg5xq3gfkfdgdgz02vhvlq2p67vf9v3hwdydaat3sajzcy5",
-      destinationChannel: "channel-10",
-      data: fromHex("7b226166746572223a2231363636313634303335383536383731313133222c2273656e646572223a226a756e6f313970616d30766e636c32733365746e34653772717876707132676b797539776732637a66767370683664677670303066737278717a6a74357372222c226a6f625f6964223a22646170702d312d31363636313634303137227d"),
-      timeoutHeight: undefined,
-      timeoutTimestamp: BigInt("1666167632856871113"),
-    },
-    );
-  },
-);
-
-test(
-  "can parse revision numbers", () => {
-    const musselnet = parseRevisionNumber("musselnet-4");
-    expect(musselnet).toBe(4n);
-
-    const numerific = parseRevisionNumber("numers-123-456");
-    expect(numerific).toBe(456n);
-
-    const nonums = parseRevisionNumber("hello");
-    expect(nonums).toBe(0n);
-
-    const nonums2 = parseRevisionNumber("hello-world");
-    expect(nonums2).toBe(0n);
-  },
-);
-
-test(
-  "can parse strange revision numbers", () => {
-    // all of these should give 0
-    const strangers = ["", "-", "hello-", "hello-123-", "hello-0123", "hello-00123", "hello-1.23"];
-    for (const strange of strangers) {
-      const rev = parseRevisionNumber(strange);
-      expect(rev).toBe(0n);
-    }
-  },
-);
-
-function nanosFromDateTime(time: ReadonlyDateWithNanoseconds): bigint {
-  const stamp = timestampFromDateNanos(time);
-  return stamp.seconds * 1_000_000_000n + BigInt(stamp.nanos);
-}
-
-test(
-  "time-based timeouts properly", () => {
-    const time1 = fromRfc3339WithNanoseconds("2021-03-12T12:34:56.123456789Z");
-    const time2 = fromRfc3339WithNanoseconds("2021-03-12T12:36:56.543543543Z");
-    const time3 = fromRfc3339WithNanoseconds("2021-03-12T12:36:13Z");
-
-    const sec1 = secondsFromDateNanos(time1);
-    const nanos1 = nanosFromDateTime(time1);
-    const sec2 = secondsFromDateNanos(time2);
-    const nanos2 = nanosFromDateTime(time2);
-
-    const greaterThanNull = timeGreater(
-      undefined, secondsFromDateNanos(time1),
-    );
-    expect(greaterThanNull).toBe(true);
-
-    const greaterThanPast = timeGreater(
-      nanos2, sec1,
-    );
-    expect(greaterThanPast).toBe(true);
-
-    const greaterThanFuture = timeGreater(
-      nanos1, sec2,
-    );
-    expect(
-      greaterThanFuture).toBe(false,
-    );
-
-    // nanos seconds beat seconds if present
-    const greaterThanSelfWithNanos = timeGreater(
-      nanos1, sec1,
-    );
-    expect(
-      greaterThanSelfWithNanos).toBe(true,
-    );
-    const greaterThanSelf = timeGreater(
-      nanosFromDateTime(time3), secondsFromDateNanos(time3),
-    );
-    expect(
-      greaterThanSelf).toBe(false,
-    );
-  },
-);
-
-test(
-  "height based timeouts properly", () => {
-    const height1a = {
-      revisionHeight: BigInt(12345),
-      revisionNumber: BigInt(1),
-    };
-    const height1b = {
-      revisionHeight: BigInt(14000),
-      revisionNumber: BigInt(1),
-    };
-    const height2a = {
-      revisionHeight: BigInt(600),
-      revisionNumber: BigInt(2),
-    };
-
-    expect(heightGreater(
-      height1b, height1a,
-    )).toBeTruthy();
-    expect(heightGreater(
-      height2a, height1b,
-    )).toBeTruthy();
-    expect(heightGreater(
-      undefined, height2a,
-    )).toBeTruthy();
-
-    expect(heightGreater(
-      height1b, height1b,
-    )).toBeFalsy();
-    expect(heightGreater(
-      height1a, height1b,
-    )).toBeFalsy();
-  },
-);
-
-test(
-  "Properly determines height-based timeouts", () => {
-    // proper heights
-    expect(
-      parseHeightAttribute("1-34")).toEqual({
-      revisionNumber: BigInt(1),
-      revisionHeight: BigInt(34),
-    });
-    expect(
-      parseHeightAttribute("17-3456")).toEqual({
-      revisionNumber: BigInt(17),
-      revisionHeight: BigInt(3456),
+// eslint-disable-next-line max-lines-per-function
+describe("utils", () => {
+  describe("toIntHeight", () => {
+    it("should convert Height to number", () => {
+      const height: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 123n,
+      };
+      expect(toIntHeight(height)).toBe(123);
     });
 
-    // handles revision number 0 properly (this is allowed)
-    expect(
-      parseHeightAttribute("0-1724")).toEqual(
-      {
-        revisionNumber: BigInt(0),
-        revisionHeight: BigInt(1724),
-      },
-    );
+    it("should return NaN for undefined height", () => {
+      expect(toIntHeight(undefined)).toBeNaN();
+    });
 
-    // missing heights
-    expect(
-      parseHeightAttribute("")).toBeUndefined();
-    expect(
+    it("should handle large revision heights", () => {
+      const height: Height = {
+        revisionNumber: 5n,
+        revisionHeight: 999999n,
+      };
+      expect(toIntHeight(height)).toBe(999999);
+    });
+  });
 
-      parseHeightAttribute()).toBeUndefined();
+  describe("ensureIntHeight", () => {
+    it("should convert Height to number", () => {
+      const height: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 456n,
+      };
+      expect(ensureIntHeight(height)).toBe(456);
+    });
 
-    // bad format
-    expect(
+    it("should convert bigint to number", () => {
+      expect(ensureIntHeight(789n)).toBe(789);
+    });
 
-      parseHeightAttribute("some-random-string")).toBeUndefined();
+    it("should handle zero", () => {
+      expect(ensureIntHeight(0n)).toBe(0);
+    });
+  });
 
-    // zero value is defined as missing
-    expect(
-      parseHeightAttribute("0-0")).toBeUndefined(
-    );
-  },
-);
+  describe("subtractBlock", () => {
+    it("should subtract one block by default", () => {
+      const height: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      const result = subtractBlock(height);
+      expect(result.revisionNumber).toBe(1n);
+      expect(result.revisionHeight).toBe(99n);
+    });
+
+    it("should subtract custom number of blocks", () => {
+      const height: Height = {
+        revisionNumber: 2n,
+        revisionHeight: 500n,
+      };
+      const result = subtractBlock(height, 10n);
+      expect(result.revisionNumber).toBe(2n);
+      expect(result.revisionHeight).toBe(490n);
+    });
+
+    it("should maintain revision number", () => {
+      const height: Height = {
+        revisionNumber: 5n,
+        revisionHeight: 10n,
+      };
+      const result = subtractBlock(height, 5n);
+      expect(result.revisionNumber).toBe(5n);
+      expect(result.revisionHeight).toBe(5n);
+    });
+  });
+
+  describe("heightQueryString", () => {
+    it("should format height as query string", () => {
+      const height: Height = {
+        revisionNumber: 3n,
+        revisionHeight: 456n,
+      };
+      expect(heightQueryString(height)).toBe("3-456");
+    });
+
+    it("should handle zero values", () => {
+      const height: Height = {
+        revisionNumber: 0n,
+        revisionHeight: 0n,
+      };
+      expect(heightQueryString(height)).toBe("0-0");
+    });
+  });
+
+  describe("parseRevisionNumber", () => {
+    it("should parse revision number from chain id", () => {
+      expect(parseRevisionNumber("cosmoshub-4")).toBe(4n);
+      expect(parseRevisionNumber("testnet-1")).toBe(1n);
+      expect(parseRevisionNumber("my-chain-999")).toBe(999n);
+    });
+
+    it("should return 0 for chain id without revision", () => {
+      expect(parseRevisionNumber("cosmoshub")).toBe(0n);
+      expect(parseRevisionNumber("test")).toBe(0n);
+    });
+
+    it("should not match revision at start of chain id", () => {
+      expect(parseRevisionNumber("4-cosmoshub")).toBe(0n);
+    });
+  });
+
+  describe("may", () => {
+    it("should apply transform when value is defined", () => {
+      const result = may(x => x * 2, 5);
+      expect(result).toBe(10);
+    });
+
+    it("should return undefined when value is undefined", () => {
+      const result = may(x => x * 2, undefined);
+      expect(result).toBeUndefined();
+    });
+
+    it("should return undefined when value is null", () => {
+      const result = may(x => x * 2, null);
+      expect(result).toBeUndefined();
+    });
+
+    it("should work with complex transforms", () => {
+      const result = may(x => BigInt(x), "123");
+      expect(result).toBe(123n);
+    });
+  });
+
+  describe("timestampFromDateNanos", () => {
+    it("should convert date with nanoseconds to timestamp", () => {
+      const date = {
+        getTime: () => 1000000,
+        nanoseconds: 500,
+      } as ReadonlyDateWithNanoseconds;
+
+      const result = timestampFromDateNanos(date);
+      expect(result.seconds).toBe(1000n);
+      expect(result.nanos).toBe(500);
+    });
+
+    it("should handle date without nanoseconds", () => {
+      const date = {
+        getTime: () => 2000000,
+      } as ReadonlyDateWithNanoseconds;
+
+      const result = timestampFromDateNanos(date);
+      expect(result.seconds).toBe(2000n);
+    });
+
+    it("should correctly compute nanoseconds", () => {
+      const date = {
+        getTime: () => 1234567,
+        nanoseconds: 123,
+      } as ReadonlyDateWithNanoseconds;
+
+      const result = timestampFromDateNanos(date);
+      expect(result.seconds).toBe(1234n);
+      expect(result.nanos).toBe(567000000 + 123);
+    });
+  });
+
+  describe("secondsFromDateNanos", () => {
+    it("should extract seconds from date", () => {
+      const date = {
+        getTime: () => 5000000,
+      } as ReadonlyDateWithNanoseconds;
+
+      expect(secondsFromDateNanos(date)).toBe(5000);
+    });
+
+    it("should floor fractional seconds", () => {
+      const date = {
+        getTime: () => 1234567,
+      } as ReadonlyDateWithNanoseconds;
+
+      expect(secondsFromDateNanos(date)).toBe(1234);
+    });
+  });
+
+  describe("buildTendermintConsensusState", () => {
+    it("should build consensus state from tendermint header", () => {
+      const header = {
+        time: {
+          getTime: () => 1000000,
+          nanoseconds: 0,
+        } as ReadonlyDateWithNanoseconds,
+        appHash: new Uint8Array([1, 2, 3]),
+        nextValidatorsHash: new Uint8Array([4, 5, 6]),
+      } as tendermint34.Header;
+
+      const result = buildTendermintConsensusState(header);
+
+      expect(result.root?.hash).toEqual(new Uint8Array([1, 2, 3]));
+      expect(result.nextValidatorsHash).toEqual(new Uint8Array([4, 5, 6]));
+      expect(result.timestamp?.seconds).toBe(1000n);
+    });
+
+    it("should work with tendermint37 header", () => {
+      const header = {
+        time: {
+          getTime: () => 2000000,
+          nanoseconds: 500,
+        } as ReadonlyDateWithNanoseconds,
+        appHash: new Uint8Array([7, 8, 9]),
+        nextValidatorsHash: new Uint8Array([10, 11, 12]),
+      } as tendermint37.Header;
+
+      const result = buildTendermintConsensusState(header);
+
+      expect(result.root?.hash).toEqual(new Uint8Array([7, 8, 9]));
+      expect(result.nextValidatorsHash).toEqual(new Uint8Array([10, 11, 12]));
+    });
+  });
+
+  describe("buildGnoConsensusState", () => {
+    it("should build Gno consensus state from header", () => {
+      const header = ibc.lightclients.gno.v1.gno.GnoHeader.fromPartial({
+        time: {
+          seconds: 1000n,
+          nanos: 0,
+        },
+        appHash: new Uint8Array([1, 2, 3]),
+        nextValidatorsHash: new Uint8Array([4, 5, 6]),
+      });
+
+      const result = buildGnoConsensusState(header);
+
+      expect(result.root?.hash).toEqual(new Uint8Array([1, 2, 3]));
+      expect(result.nextValidatorsHash).toEqual(new Uint8Array([4, 5, 6]));
+      expect(result.lcType).toBe("10-gno");
+    });
+  });
+
+  describe("buildTendermintClientState", () => {
+    it("should build Tendermint client state with correct parameters", () => {
+      const height: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+
+      const result = buildTendermintClientState(
+        "test-chain",
+        1814400, // 21 days
+        1209600, // 14 days
+        height,
+      );
+
+      expect(result.chainId).toBe("test-chain");
+      expect(result.trustLevel?.numerator).toBe(1n);
+      expect(result.trustLevel?.denominator).toBe(3n);
+      expect(result.unbondingPeriod?.seconds).toBe(1814400n);
+      expect(result.trustingPeriod?.seconds).toBe(1209600n);
+      expect(result.maxClockDrift?.seconds).toBe(20n);
+      expect(result.latestHeight).toEqual(height);
+      expect(result.allowUpdateAfterExpiry).toBe(false);
+      expect(result.allowUpdateAfterMisbehaviour).toBe(false);
+    });
+
+    it("should include proof specs", () => {
+      const height: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+
+      const result = buildTendermintClientState("test", 1000, 500, height);
+
+      expect(result.proofSpecs).toHaveLength(2);
+    });
+
+    it("should include upgrade path", () => {
+      const height: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+
+      const result = buildTendermintClientState("test", 1000, 500, height);
+
+      expect(result.upgradePath).toEqual(["upgrade", "upgradedIBCState"]);
+    });
+  });
+
+  describe("buildGnoClientState", () => {
+    it("should build Gno client state with correct parameters", () => {
+      const height: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+
+      const result = buildGnoClientState(
+        "gno-chain",
+        1814400,
+        1209600,
+        height,
+      );
+
+      expect(result.chainId).toBe("gno-chain");
+      expect(result.trustLevel?.numerator).toBe(1n);
+      expect(result.trustLevel?.denominator).toBe(3n);
+      expect(result.unbondingPeriod?.seconds).toBe(1814400n);
+      expect(result.trustingPeriod?.seconds).toBe(1209600n);
+      expect(result.latestHeight).toEqual(height);
+    });
+  });
+
+  describe("parseHeightAttribute", () => {
+    it("should parse valid height string", () => {
+      const result = parseHeightAttribute("1-100");
+      expect(result).toEqual({
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      });
+    });
+
+    it("should handle zero revision number", () => {
+      const result = parseHeightAttribute("0-50");
+      expect(result).toEqual({
+        revisionNumber: 0n,
+        revisionHeight: 50n,
+      });
+    });
+
+    it("should return undefined for invalid format", () => {
+      expect(parseHeightAttribute("invalid")).toBeUndefined();
+      expect(parseHeightAttribute("100")).toBeUndefined();
+    });
+
+    it("should return undefined for zero height", () => {
+      expect(parseHeightAttribute("0-0")).toBeUndefined();
+      expect(parseHeightAttribute("1-0")).toBeUndefined();
+    });
+
+    it("should return undefined for undefined input", () => {
+      expect(parseHeightAttribute(undefined)).toBeUndefined();
+    });
+
+    it("should handle large numbers", () => {
+      const result = parseHeightAttribute("999-123456789");
+      expect(result).toEqual({
+        revisionNumber: 999n,
+        revisionHeight: 123456789n,
+      });
+    });
+  });
+
+  describe("parsePacket", () => {
+    it("should parse send_packet event", () => {
+      const event: Event = {
+        type: "send_packet",
+        attributes: [
+          {
+            key: "packet_sequence",
+            value: "1",
+          },
+          {
+            key: "packet_src_port",
+            value: "transfer",
+          },
+          {
+            key: "packet_src_channel",
+            value: "channel-0",
+          },
+          {
+            key: "packet_dst_port",
+            value: "transfer",
+          },
+          {
+            key: "packet_dst_channel",
+            value: "channel-1",
+          },
+          {
+            key: "packet_data_hex",
+            value: "68656c6c6f",
+          },
+          {
+            key: "packet_timeout_height",
+            value: "1-1000",
+          },
+          {
+            key: "packet_timeout_timestamp",
+            value: "1234567890000000000",
+          },
+        ],
+      };
+
+      const result = parsePacket(event);
+
+      expect(result.sequence).toBe(1n);
+      expect(result.sourcePort).toBe("transfer");
+      expect(result.sourceChannel).toBe("channel-0");
+      expect(result.destinationPort).toBe("transfer");
+      expect(result.destinationChannel).toBe("channel-1");
+      expect(result.data).toEqual(fromHex("68656c6c6f"));
+      expect(result.timeoutHeight).toEqual({
+        revisionNumber: 1n,
+        revisionHeight: 1000n,
+      });
+      expect(result.timeoutTimestamp).toBe(1234567890000000000n);
+    });
+
+    it("should throw error for wrong event type", () => {
+      const event: Event = {
+        type: "wrong_event",
+        attributes: [],
+      };
+
+      expect(() => parsePacket(event)).toThrow("Cannot parse event of type wrong_event");
+    });
+  });
+
+  describe("parsePacketsFromEvents", () => {
+    it("should filter and parse send_packet events", () => {
+      const events: Event[] = [
+        {
+          type: "message",
+          attributes: [
+            {
+              key: "action",
+              value: "send",
+            },
+          ],
+        },
+        {
+          type: "send_packet",
+          attributes: [
+            {
+              key: "packet_sequence",
+              value: "1",
+            },
+            {
+              key: "packet_src_port",
+              value: "transfer",
+            },
+            {
+              key: "packet_src_channel",
+              value: "channel-0",
+            },
+            {
+              key: "packet_dst_port",
+              value: "transfer",
+            },
+            {
+              key: "packet_dst_channel",
+              value: "channel-1",
+            },
+            {
+              key: "packet_timeout_height",
+              value: "1-100",
+            },
+            {
+              key: "packet_timeout_timestamp",
+              value: "0",
+            },
+          ],
+        },
+        {
+          type: "send_packet",
+          attributes: [
+            {
+              key: "packet_sequence",
+              value: "2",
+            },
+            {
+              key: "packet_src_port",
+              value: "transfer",
+            },
+            {
+              key: "packet_src_channel",
+              value: "channel-0",
+            },
+            {
+              key: "packet_dst_port",
+              value: "transfer",
+            },
+            {
+              key: "packet_dst_channel",
+              value: "channel-1",
+            },
+            {
+              key: "packet_timeout_height",
+              value: "1-200",
+            },
+            {
+              key: "packet_timeout_timestamp",
+              value: "0",
+            },
+          ],
+        },
+      ];
+
+      const result = parsePacketsFromEvents(events);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].sequence).toBe(1n);
+      expect(result[1].sequence).toBe(2n);
+    });
+
+    it("should return empty array when no send_packet events", () => {
+      const events: Event[] = [
+        {
+          type: "message",
+          attributes: [],
+        },
+      ];
+
+      const result = parsePacketsFromEvents(events);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("parseAck", () => {
+    it("should parse write_acknowledgement event", () => {
+      const event: Event = {
+        type: "write_acknowledgement",
+        attributes: [
+          {
+            key: "packet_sequence",
+            value: "1",
+          },
+          {
+            key: "packet_src_port",
+            value: "transfer",
+          },
+          {
+            key: "packet_src_channel",
+            value: "channel-0",
+          },
+          {
+            key: "packet_dst_port",
+            value: "transfer",
+          },
+          {
+            key: "packet_dst_channel",
+            value: "channel-1",
+          },
+          {
+            key: "packet_data_hex",
+            value: "68656c6c6f",
+          },
+          {
+            key: "packet_timeout_height",
+            value: "1-1000",
+          },
+          {
+            key: "packet_timeout_timestamp",
+            value: "0",
+          },
+          {
+            key: "packet_ack_hex",
+            value: "01",
+          },
+        ],
+      };
+
+      const result = parseAck(event);
+
+      expect(result.acknowledgement).toEqual(fromHex("01"));
+      expect(result.originalPacket.sequence).toBe(1n);
+      expect(result.originalPacket.sourcePort).toBe("transfer");
+    });
+
+    it("should throw error for wrong event type", () => {
+      const event: Event = {
+        type: "send_packet",
+        attributes: [],
+      };
+
+      expect(() => parseAck(event)).toThrow("Cannot parse event of type send_packet");
+    });
+  });
+
+  describe("heightGreater", () => {
+    it("should return true when a is undefined", () => {
+      const b: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      expect(heightGreater(undefined, b)).toBe(true);
+    });
+
+    it("should return true when a is zero height", () => {
+      const a: Height = {
+        revisionNumber: 0n,
+        revisionHeight: 0n,
+      };
+      const b: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      expect(heightGreater(a, b)).toBe(true);
+    });
+
+    it("should return true when revision number is greater", () => {
+      const a: Height = {
+        revisionNumber: 2n,
+        revisionHeight: 50n,
+      };
+      const b: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      expect(heightGreater(a, b)).toBe(true);
+    });
+
+    it("should return true when revision numbers equal and height is greater", () => {
+      const a: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 200n,
+      };
+      const b: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      expect(heightGreater(a, b)).toBe(true);
+    });
+
+    it("should return false when b is greater", () => {
+      const a: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 50n,
+      };
+      const b: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      expect(heightGreater(a, b)).toBe(false);
+    });
+
+    it("should return false when heights are equal", () => {
+      const a: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      const b: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      expect(heightGreater(a, b)).toBe(false);
+    });
+  });
+
+  describe("timeGreater", () => {
+    it("should return true when a is undefined", () => {
+      expect(timeGreater(undefined, 1000)).toBe(true);
+    });
+
+    it("should return true when a is zero", () => {
+      expect(timeGreater(0n, 1000)).toBe(true);
+    });
+
+    it("should return true when a is greater (nanoseconds vs seconds)", () => {
+      expect(timeGreater(2000000000000n, 1000)).toBe(true);
+    });
+
+    it("should return false when b is greater", () => {
+      expect(timeGreater(500000000000n, 1000)).toBe(false);
+    });
+
+    it("should handle edge cases", () => {
+      expect(timeGreater(1000000000000n, 1000)).toBe(false);
+      expect(timeGreater(1000000000001n, 1000)).toBe(true);
+    });
+  });
+
+  describe("timeGreaterV2", () => {
+    it("should return true when a is undefined", () => {
+      expect(timeGreaterV2(undefined, 1000)).toBe(true);
+    });
+
+    it("should return true when a is zero", () => {
+      expect(timeGreaterV2(0n, 1000)).toBe(true);
+    });
+
+    it("should return true when a is greater (both in seconds)", () => {
+      expect(timeGreaterV2(2000n, 1000)).toBe(true);
+    });
+
+    it("should return false when b is greater", () => {
+      expect(timeGreaterV2(500n, 1000)).toBe(false);
+    });
+
+    it("should handle equal values", () => {
+      expect(timeGreaterV2(1000n, 1000)).toBe(false);
+      expect(timeGreaterV2(1001n, 1000)).toBe(true);
+    });
+  });
+
+  describe("mergeUint8Arrays", () => {
+    it("should merge multiple arrays", () => {
+      const arr1 = new Uint8Array([1, 2]);
+      const arr2 = new Uint8Array([3, 4]);
+      const arr3 = new Uint8Array([5, 6]);
+
+      const result = mergeUint8Arrays(arr1, arr2, arr3);
+
+      expect(result).toEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
+    });
+
+    it("should handle empty arrays", () => {
+      const arr1 = new Uint8Array([1, 2]);
+      const arr2 = new Uint8Array([]);
+      const arr3 = new Uint8Array([3]);
+
+      const result = mergeUint8Arrays(arr1, arr2, arr3);
+
+      expect(result).toEqual(new Uint8Array([1, 2, 3]));
+    });
+
+    it("should handle single array", () => {
+      const arr = new Uint8Array([1, 2, 3]);
+      const result = mergeUint8Arrays(arr);
+
+      expect(result).toEqual(new Uint8Array([1, 2, 3]));
+    });
+
+    it("should handle no arrays", () => {
+      const result = mergeUint8Arrays();
+      expect(result).toEqual(new Uint8Array([]));
+    });
+  });
+
+  describe("splitPendingPackets", () => {
+    it("should split packets into valid and timed out (v1)", () => {
+      const currentHeight: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      const currentTime = 1000;
+
+      const packets = [
+        {
+          packet: Packet.fromPartial({
+            sequence: 1n,
+            timeoutHeight: {
+              revisionNumber: 1n,
+              revisionHeight: 200n,
+            },
+            timeoutTimestamp: 2000000000000n,
+          }),
+          height: 100,
+        },
+        {
+          packet: Packet.fromPartial({
+            sequence: 2n,
+            timeoutHeight: {
+              revisionNumber: 1n,
+              revisionHeight: 50n,
+            },
+            timeoutTimestamp: 2000000000000n,
+          }),
+          height: 100,
+        },
+        {
+          packet: Packet.fromPartial({
+            sequence: 3n,
+            timeoutHeight: {
+              revisionNumber: 1n,
+              revisionHeight: 200n,
+            },
+            timeoutTimestamp: 500000000000n,
+          }),
+          height: 100,
+        },
+      ];
+
+      const result = splitPendingPackets(currentHeight, currentTime, packets);
+
+      expect(result.toSubmit).toHaveLength(1);
+      expect(result.toSubmit[0].packet.sequence).toBe(1n);
+      expect(result.toTimeout).toHaveLength(2);
+    });
+
+    it("should handle all valid packets", () => {
+      const currentHeight: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      const currentTime = 1000;
+
+      const packets = [
+        {
+          packet: Packet.fromPartial({
+            sequence: 1n,
+            timeoutHeight: {
+              revisionNumber: 1n,
+              revisionHeight: 200n,
+            },
+            timeoutTimestamp: 2000000000000n,
+          }),
+          height: 100,
+        },
+      ];
+
+      const result = splitPendingPackets(currentHeight, currentTime, packets);
+
+      expect(result.toSubmit).toHaveLength(1);
+      expect(result.toTimeout).toHaveLength(0);
+    });
+
+    it("should handle all timed out packets", () => {
+      const currentHeight: Height = {
+        revisionNumber: 1n,
+        revisionHeight: 100n,
+      };
+      const currentTime = 1000;
+
+      const packets = [
+        {
+          packet: Packet.fromPartial({
+            sequence: 1n,
+            timeoutHeight: {
+              revisionNumber: 1n,
+              revisionHeight: 50n,
+            },
+            timeoutTimestamp: 500000000000n,
+          }),
+          height: 100,
+        },
+      ];
+
+      const result = splitPendingPackets(currentHeight, currentTime, packets);
+
+      expect(result.toSubmit).toHaveLength(0);
+      expect(result.toTimeout).toHaveLength(1);
+    });
+  });
+
+  describe("presentPacketData", () => {
+    it("should parse JSON data", () => {
+      const data = toUtf8(JSON.stringify({
+        amount: "1000",
+        denom: "uatom",
+      }));
+
+      const result = presentPacketData(data);
+
+      expect(result.amount).toBe("1000");
+      expect(result.denom).toBe("uatom");
+    });
+
+    it("should return hex for non-JSON data", () => {
+      const data = new Uint8Array([1, 2, 3, 4]);
+
+      const result = presentPacketData(data);
+
+      expect(result).toHaveProperty("hex");
+      expect(typeof result.hex).toBe("string");
+    });
+  });
+
+  describe("presentPacketDataV2", () => {
+    it("should parse JSON data", () => {
+      const data = toUtf8(JSON.stringify({
+        test: "value",
+      }));
+
+      const result = presentPacketDataV2(data);
+
+      expect(result.test).toBe("value");
+    });
+
+    it("should return hex for non-JSON data", () => {
+      const data = new Uint8Array([5, 6, 7, 8]);
+
+      const result = presentPacketDataV2(data);
+
+      expect(result).toHaveProperty("hex");
+    });
+  });
+
+  describe("isV2Packet", () => {
+    it("should return true for v2 packet", () => {
+      const packet = PacketV2.fromPartial({
+        sourceClient: "07-tendermint-0",
+        destinationClient: "07-tendermint-1",
+        sequence: 1n,
+      });
+
+      expect(isV2Packet(packet)).toBe(true);
+    });
+
+    it("should return false for v1 packet", () => {
+      const packet = Packet.fromPartial({
+        sourcePort: "transfer",
+        sourceChannel: "channel-0",
+        sequence: 1n,
+      });
+
+      expect(isV2Packet(packet)).toBe(false);
+    });
+  });
+
+  describe("createDeliverTxFailureMessage", () => {
+    it("should format error message", () => {
+      const result = {
+        transactionHash: "ABC123",
+        height: 100,
+        code: 5,
+        rawLog: "insufficient funds",
+      } as DeliverTxResponse;
+
+      const message = createDeliverTxFailureMessage(result);
+
+      expect(message).toContain("ABC123");
+      expect(message).toContain("100");
+      expect(message).toContain("5");
+      expect(message).toContain("insufficient funds");
+    });
+  });
+
+  describe("deepCloneAndMutate", () => {
+    it("should deep clone and mutate object", () => {
+      const original = {
+        a: 1,
+        b: {
+          c: 2,
+        },
+      };
+
+      const result = deepCloneAndMutate(original, (obj) => {
+        obj.a = 999;
+      });
+
+      expect(result.a).toBe(999);
+      expect(original.a).toBe(1); // original unchanged
+    });
+  });
+
+  describe("decodeClientState", () => {
+    it("should decode Tendermint client state", () => {
+      const clientStateBytes = TendermintClientState.encode(
+        TendermintClientState.fromPartial({
+          chainId: "test-chain",
+        }),
+      ).finish();
+
+      const any = Any.fromPartial({
+        typeUrl: "/ibc.lightclients.tendermint.v1.ClientState",
+        value: clientStateBytes,
+      });
+
+      const result = decodeClientState(any);
+      expect((result as TendermintClientState).chainId).toBe("test-chain");
+    });
+
+    it("should throw error for unknown client state type", () => {
+      const any = Any.fromPartial({
+        typeUrl: "/unknown.ClientState",
+        value: new Uint8Array(),
+      });
+
+      expect(() => decodeClientState(any)).toThrow();
+    });
+  });
+
+  describe("decodeConsensusState", () => {
+    it("should decode Tendermint consensus state", () => {
+      const consensusStateBytes = TendermintConsensusState.encode(
+        TendermintConsensusState.fromPartial({
+          nextValidatorsHash: new Uint8Array([1, 2, 3]),
+        }),
+      ).finish();
+
+      const any = Any.fromPartial({
+        typeUrl: "/ibc.lightclients.tendermint.v1.ConsensusState",
+        value: consensusStateBytes,
+      });
+
+      const result = decodeConsensusState(any);
+      expect((result as TendermintConsensusState).nextValidatorsHash).toEqual(
+        new Uint8Array([1, 2, 3]),
+      );
+    });
+
+    it("should throw error for unknown consensus state type", () => {
+      const any = Any.fromPartial({
+        typeUrl: "/unknown.ConsensusState",
+        value: new Uint8Array(),
+      });
+
+      expect(() => decodeConsensusState(any)).toThrow();
+    });
+  });
+});

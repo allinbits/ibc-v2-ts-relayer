@@ -1,9 +1,9 @@
 import {
   BaseIbcClient,
-} from "../clients/BaseIbcClient";
+} from "../clients/BaseIbcClient.js";
 import {
   BaseEndpoint,
-} from "./BaseEndpoint";
+} from "./BaseEndpoint.js";
 
 export class TendermintEndpoint extends BaseEndpoint {
   public constructor(

@@ -3,35 +3,44 @@ import {
 } from "node:events";
 
 import {
+  OfflineSigner,
+} from "@cosmjs/proto-signing";
+import {
   GasPrice,
 } from "@cosmjs/stargate";
+import {
+  GnoWallet,
+} from "@gnolang/gno-js-client";
 import {
   Entry,
 } from "@napi-rs/keyring";
 import * as winston from "winston";
 
 import {
+  GnoIbcClient,
+} from "./clients/gno/IbcClient.js";
+import {
   TendermintIbcClient,
-} from "./clients/tendermint/IbcClient";
+} from "./clients/tendermint/IbcClient.js";
+import config from "./config/index.js";
 import {
   Link,
-} from "./links/v1/link";
+} from "./links/v1/link.js";
 import {
   Link as LinkV2,
-} from "./links/v2/link";
+} from "./links/v2/link.js";
 import {
   ChainType, RelayedHeights, RelayPaths,
-} from "./types";
+} from "./types/index.js";
 import {
   getSigner,
-} from "./utils/signers";
+} from "./utils/signers.js";
 import {
-  addChainFees,
-  addRelayPath, getChainFees, getRelayedHeights, getRelayPaths, updateRelayedHeights,
-} from "./utils/storage";
+  storage,
+} from "./utils/storage.js";
 import {
   getPrefix,
-} from "./utils/utils";
+} from "./utils/utils.js";
 
 export class Relayer extends EventEmitter {
   private logger: winston.Logger;
@@ -49,7 +58,7 @@ export class Relayer extends EventEmitter {
   }
 
   async getRelayPaths() {
-    return getRelayPaths();
+    return storage.getRelayPaths();
   }
 
   async addNewRelayPath(
@@ -63,32 +72,51 @@ export class Relayer extends EventEmitter {
   ) {
     const prefixA = await getPrefix(chainTypeA, nodeA);
     const prefixB = await getPrefix(chainTypeB, nodeB);
-    const signerA = await getSigner(chainIdA, {
+    const signerA = await getSigner(chainIdA, chainTypeA, {
       prefix: prefixA,
     });
-    const signerB = await getSigner(chainIdB, {
+    const signerB = await getSigner(chainIdB, chainTypeB, {
       prefix: prefixB,
     });
-    const feesA = await getChainFees(chainIdA);
-    const feesB = await getChainFees(chainIdB);
-    const clientA = await TendermintIbcClient.connectWithSigner(nodeA, signerA, {
-      senderAddress: (await signerA.getAccounts())[0].address,
-      logger: this.logger,
-      gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-    });
-    const clientB = await TendermintIbcClient.connectWithSigner(nodeB, signerB, {
-      senderAddress: (await signerB.getAccounts())[0].address,
-      logger: this.logger,
-      gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-    });
+    const feesA = await storage.getChainFees(chainIdA);
+    const feesB = await storage.getChainFees(chainIdB);
+
+    const clientA = chainTypeA == ChainType.Cosmos
+      ? await TendermintIbcClient.connectWithSigner(nodeA, signerA as OfflineSigner, {
+        senderAddress: (await (signerA as OfflineSigner).getAccounts())[0].address,
+        logger: this.logger,
+        gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+        estimatedBlockTime: 6000,
+      })
+      : await GnoIbcClient.connectWithSigner(nodeA, signerA as GnoWallet, {
+        senderAddress: (await (signerA as GnoWallet).getAddress()),
+        logger: this.logger,
+        gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+        addressPrefix: prefixA,
+        estimatedBlockTime: 6000,
+      });
+    const clientB = chainTypeB == ChainType.Cosmos
+      ? await TendermintIbcClient.connectWithSigner(nodeB, signerB as OfflineSigner, {
+        senderAddress: (await (signerB as OfflineSigner).getAccounts())[0].address,
+        logger: this.logger,
+        gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+        estimatedBlockTime: 6000,
+      })
+      : await GnoIbcClient.connectWithSigner(nodeB, signerB as GnoWallet, {
+        senderAddress: (await (signerB as GnoWallet).getAddress()),
+        logger: this.logger,
+        gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+        addressPrefix: prefixB,
+        estimatedBlockTime: 6000,
+      });
     if (version === 1) {
       const link = await Link.createWithNewConnections(
         clientA, clientB, this.logger);
 
-      const path = await addRelayPath(
+      const path = await storage.addRelayPath(
         chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
       );
-      this.relayPaths = await getRelayPaths();
+      this.relayPaths = await storage.getRelayPaths();
 
       if (path) {
         this.links.set(path.id, link);
@@ -102,10 +130,10 @@ export class Relayer extends EventEmitter {
       const link = await LinkV2.createWithNewClientsV2(
         clientA, clientB, this.logger);
 
-      const path = await addRelayPath(
+      const path = await storage.addRelayPath(
         chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
       );
-      // this.relayPaths = await getRelayPaths();
+      // this.relayPaths = await storage.getRelayPaths();
 
       if (path) {
         // this.links.set(path.id, link);
@@ -128,7 +156,7 @@ export class Relayer extends EventEmitter {
     gasPrice: string,
     gasDenom: string,
   ) {
-    await addChainFees(chainId, parseFloat(gasPrice), gasDenom);
+    await storage.addChainFees(chainId, parseFloat(gasPrice), gasDenom);
     this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}`);
   }
 
@@ -143,7 +171,7 @@ export class Relayer extends EventEmitter {
     clientIdB: string,
     version: number = 1,
   ) {
-    await addRelayPath(
+    await storage.addRelayPath(
       chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version,
     );
   }
@@ -154,7 +182,7 @@ export class Relayer extends EventEmitter {
 
   async init() {
     try {
-      this.relayPaths = await getRelayPaths();
+      this.relayPaths = await storage.getRelayPaths();
       if (this.relayPaths.length === 0) {
         this.logger.info("No relay paths found. Please add a relay path to start relaying messages.");
         return;
@@ -168,9 +196,9 @@ export class Relayer extends EventEmitter {
           const path = this.relayPaths[i];
           this.logger.info(`Relay Path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
           this.relayedHeights = new Map<number, RelayedHeights>();
-          let relayedHeights = await getRelayedHeights(path.id);
+          let relayedHeights = await storage.getRelayedHeights(path.id);
           if (!relayedHeights) {
-            await updateRelayedHeights(path.id, 0, 0, 0, 0);
+            await storage.updateRelayedHeights(path.id, 0, 0, 0, 0);
             relayedHeights = {
               id: 0,
               relayPathId: path.id,
@@ -184,24 +212,37 @@ export class Relayer extends EventEmitter {
           this.relayedHeights.set(path.id, relayedHeights);
           const prefixA = await getPrefix(path.chainTypeA, path.nodeA);
           const prefixB = await getPrefix(path.chainTypeB, path.nodeB);
-          const signerA = await getSigner(path.chainIdA, {
+          const signerA = await getSigner(path.chainIdA, path.chainTypeA, {
             prefix: prefixA,
           });
-          const signerB = await getSigner(path.chainIdB, {
+          const signerB = await getSigner(path.chainIdB, path.chainTypeB, {
             prefix: prefixB,
           });
-          const feesA = await getChainFees(path.chainIdA);
-          const feesB = await getChainFees(path.chainIdB);
-          const clientA = await TendermintIbcClient.connectWithSigner(path.nodeA, signerA, {
-            senderAddress: (await signerA.getAccounts())[0].address,
-            logger: this.logger,
-            gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-          });
-          const clientB = await TendermintIbcClient.connectWithSigner(path.nodeB, signerB, {
-            senderAddress: (await signerB.getAccounts())[0].address,
-            logger: this.logger,
-            gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-          });
+          const feesA = await storage.getChainFees(path.chainIdA);
+          const feesB = await storage.getChainFees(path.chainIdB);
+
+          const clientA = path.chainTypeA == ChainType.Cosmos
+            ? await TendermintIbcClient.connectWithSigner(path.nodeA, signerA as OfflineSigner, {
+              senderAddress: (await (signerA as OfflineSigner).getAccounts())[0].address,
+              logger: this.logger,
+              gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+            })
+            : await GnoIbcClient.connectWithSigner(path.nodeA, signerA as GnoWallet, {
+              senderAddress: (await (signerA as GnoWallet).getAddress()),
+              logger: this.logger,
+              gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+            });
+          const clientB = path.chainTypeB == ChainType.Cosmos
+            ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
+              senderAddress: (await (signerB as OfflineSigner).getAccounts())[0].address,
+              logger: this.logger,
+              gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+            })
+            : await GnoIbcClient.connectWithSigner(path.nodeB, signerB as GnoWallet, {
+              senderAddress: (await (signerB as GnoWallet).getAddress()),
+              logger: this.logger,
+              gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+            });
           if (path.version === 1) {
             this.links.set(path.id, await Link.createWithExistingConnections(clientA, clientB, path.clientA, path.clientB, this.logger));
           }
@@ -228,9 +269,9 @@ export class Relayer extends EventEmitter {
   }
 
   async relayerLoop(options = {
-    poll: 5000,
-    maxAgeDest: 86400,
-    maxAgeSrc: 86400,
+    poll: config.relay.pollInterval,
+    maxAgeDest: config.relay.maxAgeDest,
+    maxAgeSrc: config.relay.maxAgeSrc,
   }) {
     while (this.running) {
       try {
@@ -241,9 +282,9 @@ export class Relayer extends EventEmitter {
             this.relayedHeights = new Map<number, RelayedHeights>();
           }
 
-          let relayedHeights = await getRelayedHeights(id);
+          let relayedHeights = await storage.getRelayedHeights(id);
           if (!relayedHeights) {
-            await updateRelayedHeights(id, 0, 0, 0, 0);
+            await storage.updateRelayedHeights(id, 0, 0, 0, 0);
             relayedHeights = {
               id: 0,
               relayPathId: id,
@@ -260,10 +301,10 @@ export class Relayer extends EventEmitter {
             relayHeights = {
               ...relayHeights,
               ...await link.checkAndRelayPacketsAndAcks(
-                relayHeights, 2, 6),
+                relayHeights, config.relay.timeoutBlocks, config.relay.timeoutSeconds),
             };
             this.relayedHeights.set(id, relayHeights);
-            updateRelayedHeights(id, relayHeights.packetHeightA, relayHeights.packetHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
+            storage.updateRelayedHeights(id, relayHeights.packetHeightA, relayHeights.packetHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
             this.logger.info(`Updated relay heights for path ${id}:`, relayHeights);
           }
           await link.updateClientIfStale("A", options.maxAgeDest);

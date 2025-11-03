@@ -1,49 +1,45 @@
 import {
   Bech32PrefixResponse,
-} from "@atomone/cosmos-ibc-types/build/cosmos/auth/v1beta1/query.js";
+} from "@atomone/cosmos-ibc-types/cosmos/auth/v1beta1/query.js";
 import {
   CommitmentProof, HashOp, LengthOp,
-} from "@atomone/cosmos-ibc-types/build/cosmos/ics23/v1/proofs.js";
+} from "@atomone/cosmos-ibc-types/cosmos/ics23/v1/proofs.js";
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/any.js";
+} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
 import {
   Timestamp,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/timestamp.js";
+} from "@atomone/cosmos-ibc-types/google/protobuf/timestamp.js";
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   MerkleProof,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/commitment/v1/commitment.js";
-import {
-  ClientState as SolomachineV2ClientState,
-  ConsensusState as SolomachineV2ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v2/solomachine.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/commitment/v1/commitment.js";
 import {
   ClientState as SolomachineV3ClientState,
   ConsensusState as SolomachineV3ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v3/solomachine.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/solomachine/v3/solomachine.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ClientState as WasmClientState,
   ConsensusState as WasmConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/wasm/v1/wasm.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/wasm/v1/wasm.js";
 import {
   PublicKey as ProtoPubKey,
-} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/keys.js";
+} from "@atomone/cosmos-ibc-types/tendermint/crypto/keys.js";
 import {
   ProofOps,
-} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof.js";
+} from "@atomone/cosmos-ibc-types/tendermint/crypto/proof.js";
 import {
   fromHex, fromUtf8, toBase64, toHex,
 } from "@cosmjs/encoding";
@@ -64,6 +60,9 @@ import {
 import {
   arrayContentEquals,
 } from "@cosmjs/utils";
+import {
+  ibc,
+} from "@gnolang/gno-types";
 
 import {
   BaseIbcClient,
@@ -80,7 +79,7 @@ export async function getPrefix(chainType: ChainType, node: string): Promise<str
     return Bech32PrefixResponse.decode(res.value).bech32Prefix;
   }
   else {
-    return "";
+    return "g";
   }
 }
 
@@ -189,6 +188,16 @@ export function buildTendermintConsensusState(header: tendermint34.Header | tend
   });
 }
 
+export function buildGnoConsensusState(header: ibc.lightclients.gno.v1.gno.GnoHeader): ibc.lightclients.gno.v1.gno.ConsensusState {
+  return ibc.lightclients.gno.v1.gno.ConsensusState.fromPartial({
+    timestamp: header.time,
+    root: {
+      hash: header.appHash,
+    },
+    lcType: "10-gno",
+    nextValidatorsHash: header.nextValidatorsHash,
+  });
+}
 // Note: we hardcode a number of assumptions, like trust level, clock drift, and assume revisionNumber is 1
 export function buildTendermintClientState(
   chainId: string,
@@ -256,6 +265,72 @@ export function buildTendermintClientState(
   });
 }
 
+// Note: we hardcode a number of assumptions, like trust level, clock drift, and assume revisionNumber is 1
+export function buildGnoClientState(
+  chainId: string,
+  unbondingPeriodSec: number,
+  trustPeriodSec: number,
+  height: Height,
+): ibc.lightclients.gno.v1.gno.ClientState {
+  /*
+     * Copied here until https://github.com/confio/ics23/issues/36 is resolved
+     * https://github.com/confio/ics23/blob/master/js/src/proofs.ts#L11-L26
+     */
+  const iavlSpec = {
+    leafSpec: {
+      prefix: Uint8Array.from([0]),
+      hash: HashOp.SHA256,
+      prehashValue: HashOp.SHA256,
+      prehashKey: HashOp.NO_HASH,
+      length: LengthOp.VAR_PROTO,
+    },
+    innerSpec: {
+      childOrder: [0, 1],
+      minPrefixLength: 4,
+      maxPrefixLength: 12,
+      childSize: 33,
+      hash: HashOp.SHA256,
+    },
+  };
+  const tendermintSpec = {
+    leafSpec: {
+      prefix: Uint8Array.from([0]),
+      hash: HashOp.SHA256,
+      prehashValue: HashOp.SHA256,
+      prehashKey: HashOp.NO_HASH,
+      length: LengthOp.VAR_PROTO,
+    },
+    innerSpec: {
+      childOrder: [0, 1],
+      minPrefixLength: 1,
+      maxPrefixLength: 1,
+      childSize: 32,
+      hash: HashOp.SHA256,
+    },
+  };
+
+  return ibc.lightclients.gno.v1.gno.ClientState.fromPartial({
+    chainId,
+    trustLevel: {
+      numerator: 1n,
+      denominator: 3n,
+    },
+    unbondingPeriod: {
+      seconds: BigInt(unbondingPeriodSec),
+    },
+    trustingPeriod: {
+      seconds: BigInt(trustPeriodSec),
+    },
+    maxClockDrift: {
+      seconds: 20n,
+    },
+    latestHeight: height,
+    proofSpecs: [iavlSpec, tendermintSpec],
+    upgradePath: ["upgrade", "upgradedIBCState"],
+    allowUpdateAfterExpiry: false,
+    allowUpdateAfterMisbehaviour: false,
+  });
+}
 export function parsePacketsFromBlockResult(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): Packet[] {
   if ((result as comet38.BlockResultsResponse).finalizeBlockEvents) {
     return parsePacketsFromTendermintEvents([...(result as comet38.BlockResultsResponse).finalizeBlockEvents]);
@@ -648,12 +723,12 @@ export function decodeClientState(clientState: Any) {
   switch (clientState?.typeUrl) {
     case "/ibc.lightclients.tendermint.v1.ClientState":
       return TendermintClientState.decode(clientState.value);
-    case "/ibc.lightclients.solomachine.v2.ClientState":
-      return SolomachineV2ClientState.decode(clientState.value);
     case "/ibc.lightclients.solomachine.v3.ClientState":
       return SolomachineV3ClientState.decode(clientState.value);
     case "/ibc.lightclients.wasm.v1.ClientState":
       return WasmClientState.decode(clientState.value);
+    case "/ibc.lightclients.gno.v1.ClientState":
+      return ibc.lightclients.gno.v1.gno.ClientState.decode(clientState.value);
     default:
       throw new Error(`Unexpected client state type: ${clientState?.typeUrl}`);
   }
@@ -663,12 +738,12 @@ export function decodeConsensusState(consensusState: Any | undefined) {
   switch (consensusState?.typeUrl) {
     case "/ibc.lightclients.tendermint.v1.ConsensusState":
       return TendermintConsensusState.decode(consensusState.value);
-    case "/ibc.lightclients.solomachine.v2.ConsensusState":
-      return SolomachineV2ConsensusState.decode(consensusState.value);
     case "/ibc.lightclients.solomachine.v3.ConsensusState":
       return SolomachineV3ConsensusState.decode(consensusState.value);
     case "/ibc.lightclients.wasm.v1.ConsensusState":
       return WasmConsensusState.decode(consensusState.value);
+    case "/ibc.lightclients.gno.v1.ConsensusState":
+      return ibc.lightclients.gno.v1.gno.ConsensusState.decode(consensusState.value);
     default:
       throw new Error(`Unexpected consensus state type: ${consensusState?.typeUrl}`);
   }

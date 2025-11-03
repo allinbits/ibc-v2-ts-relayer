@@ -1,33 +1,36 @@
 /* istanbul ignore file -- @preserve */
 import {
-  Any,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/any";
-import {
   Order, Packet,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   QueryConnectionResponse,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/connection/v1/query";
+} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
 import {
   ClientState as TendermintClientState, ConsensusState as TendermintConsensusState, Header as TendermintHeader,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ReadonlyDateWithNanoseconds,
 } from "@cosmjs/tendermint-rpc";
+import {
+  ibc,
+} from "@gnolang/gno-types";
 import * as winston from "winston";
 
 import {
-  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata,
+  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types";
 import {
   decodeClientState, decodeConsensusState,
 } from "../utils/utils";
+import {
+  GnoIbcClient,
+} from "./gno/IbcClient.js";
 import {
   TendermintIbcClient,
 } from "./tendermint/IbcClient";
@@ -47,12 +50,14 @@ export interface IbcClientTypes {
   header: unknown
   clientState: unknown
   consensusState: unknown
-  clientArgs: unknown
   lightClientHeader: unknown
 }
 
 export function isTendermint(client: BaseIbcClient): client is TendermintIbcClient {
   return client.clientType === ClientType.Tendermint;
+}
+export function isGno(client: BaseIbcClient): client is GnoIbcClient {
+  return client.clientType === ClientType.Gno;
 }
 export function isTendermintClientState(clientState: ReturnType<typeof decodeClientState>): clientState is TendermintClientState {
   if ((clientState as TendermintClientState).chainId) {
@@ -64,6 +69,23 @@ export function isTendermintClientState(clientState: ReturnType<typeof decodeCli
 }
 export function isTendermintConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is TendermintConsensusState {
   if ((consensusState as TendermintConsensusState).nextValidatorsHash) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+export function isGnoClientState(clientState: ReturnType<typeof decodeClientState>): clientState is ibc.lightclients.gno.v1.gno.ClientState {
+  if ((clientState as ibc.lightclients.gno.v1.gno.ClientState).lcType == "10-gno") {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+export function isGnoConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is ibc.lightclients.gno.v1.gno.ConsensusState {
+  if ((consensusState as ibc.lightclients.gno.v1.gno.ConsensusState).lcType == "10-gno") {
     return true;
   }
   else {
@@ -152,6 +174,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
 
   /* Client creation and updating Txs */
   abstract createTendermintClient(clientState: TendermintClientState, consensusState: TendermintConsensusState): Promise<CreateClientResult>;
+  abstract createGnoClient(clientState: ibc.lightclients.gno.v1.gno.ClientState, consensusState: ibc.lightclients.gno.v1.gno.ConsensusState): Promise<CreateClientResult>;
   abstract updateClient(clientId: string, src: BaseIbcClient): Promise<Height>;
 
   /*
@@ -159,6 +182,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
      * It should identify the src client type and call the appropriate method to update the client from the ones below:
      */
   abstract updateTendermintClient(clientId: string, header: TendermintHeader): Promise<MsgResult>;
+  abstract updateGnoClient(clientId: string, header: ibc.lightclients.gno.v1.gno.Header): Promise<MsgResult>;
 
   /* Registering counterparty client for IBC v2 handshaking  Tx */
   abstract registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<MsgResult>;
@@ -210,7 +234,10 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
      * Concrete return types to be provided by the specific client implementations
      */
   abstract buildHeader(lastHeight: number): Promise<T["lightClientHeader"]>;
-  abstract buildCreateClientArgs(trustPeriodSec?: number | null,): Promise<T["clientArgs"]>;
+  abstract buildCreateClientArgs(trustPeriodSec?: number | null,): Promise<{
+    clientState: T["clientState"]
+    consensusState: T["consensusState"]
+  }>;
 
   /*
      * Packet handling methods. Rceived/ack/timeout packets are handled by the relayer and sent to the chain.
@@ -243,7 +270,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   abstract getConnection(connectionId: string): Promise<Partial<QueryConnectionResponse>>;
   abstract getCounterparty(clientId: string): Promise<string>;
   abstract getChannelV1Type(portId: string, channelId: string): Promise<Order>;
-  abstract getLatestClientState(clientId: string): Promise<Any>;
-  abstract getConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<Any>;
+  abstract getLatestClientState(clientId: string, type: ClientType): Promise<AnyClientState>;
+  abstract getConsensusStateAtHeight(clientId: string, type: ClientType, consensusHeight?: Height): Promise<AnyConsensusState>;
   abstract getNextSequenceRecv(portId: string, channelId: string): Promise<bigint>;
 }
