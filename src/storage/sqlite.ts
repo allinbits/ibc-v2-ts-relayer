@@ -10,13 +10,15 @@ CREATE TABLE IF NOT EXISTS relayPaths (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chainIdA TEXT NOT NULL,
     nodeA TEXT NOT NULL,
+    queryNodeA TEXT,
     chainIdB TEXT NOT NULL,
     nodeB TEXT NOT NULL,
+    queryNodeB TEXT,
     chainTypeA TEXT NOT NULL,
     chainTypeB TEXT NOT NULL,
     clientA TEXT NOT NULL,
     clientB TEXT NOT NULL,
-    version INTEHER NOT NULL DEFAULT 1
+    version INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS relayedHeights (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

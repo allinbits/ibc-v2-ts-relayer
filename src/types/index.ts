@@ -37,8 +37,10 @@ export interface RelayPaths {
   id: number
   chainIdA: string
   nodeA: string
+  queryNodeA?: string
   chainIdB: string
   nodeB: string
+  queryNodeB?: string
   chainTypeA: ChainType
   chainTypeB: ChainType
   clientA: string

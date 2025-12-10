@@ -64,8 +64,10 @@ export class Relayer extends EventEmitter {
   async addNewRelayPath(
     chainIdA: string,
     nodeA: string,
+    queryNodeA: string | undefined,
     chainIdB: string,
     nodeB: string,
+    queryNodeB: string | undefined,
     chainTypeA: ChainType,
     chainTypeB: ChainType,
     version: number = 1,
@@ -88,7 +90,7 @@ export class Relayer extends EventEmitter {
         gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
         estimatedBlockTime: 6000,
       })
-      : await GnoIbcClient.connectWithSigner(nodeA, signerA as GnoWallet, {
+      : await GnoIbcClient.connectWithSigner(nodeA, queryNodeA, signerA as GnoWallet, {
         senderAddress: (await (signerA as GnoWallet).getAddress()),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
@@ -102,7 +104,7 @@ export class Relayer extends EventEmitter {
         gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
         estimatedBlockTime: 6000,
       })
-      : await GnoIbcClient.connectWithSigner(nodeB, signerB as GnoWallet, {
+      : await GnoIbcClient.connectWithSigner(nodeB, queryNodeB, signerB as GnoWallet, {
         senderAddress: (await (signerB as GnoWallet).getAddress()),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
@@ -114,7 +116,7 @@ export class Relayer extends EventEmitter {
         clientA, clientB, this.logger);
 
       const path = await storage.addRelayPath(
-        chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
+        chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
       );
       this.relayPaths = await storage.getRelayPaths();
 
@@ -131,7 +133,7 @@ export class Relayer extends EventEmitter {
         clientA, clientB, this.logger);
 
       const path = await storage.addRelayPath(
-        chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
+        chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
       );
       // this.relayPaths = await storage.getRelayPaths();
 
@@ -163,8 +165,10 @@ export class Relayer extends EventEmitter {
   async addExistingRelayPath(
     chainIdA: string,
     nodeA: string,
+    queryNodeA: string | undefined,
     chainIdB: string,
     nodeB: string,
+    queryNodeB: string | undefined,
     chainTypeA: ChainType,
     chainTypeB: ChainType,
     clientIdA: string,
@@ -172,7 +176,7 @@ export class Relayer extends EventEmitter {
     version: number = 1,
   ) {
     await storage.addRelayPath(
-      chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version,
+      chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version,
     );
   }
 
@@ -220,6 +224,8 @@ export class Relayer extends EventEmitter {
           });
           const feesA = await storage.getChainFees(path.chainIdA);
           const feesB = await storage.getChainFees(path.chainIdB);
+          this.logger.info(`Using signer for chain ${path.chainIdA} with prefix ${prefixA}`);
+          this.logger.info(`Using signer for chain ${path.chainIdB} with prefix ${prefixB}`);
 
           const clientA = path.chainTypeA == ChainType.Cosmos
             ? await TendermintIbcClient.connectWithSigner(path.nodeA, signerA as OfflineSigner, {
@@ -227,8 +233,9 @@ export class Relayer extends EventEmitter {
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
             })
-            : await GnoIbcClient.connectWithSigner(path.nodeA, signerA as GnoWallet, {
+            : await GnoIbcClient.connectWithSigner(path.nodeA, path.queryNodeA, signerA as GnoWallet, {
               senderAddress: (await (signerA as GnoWallet).getAddress()),
+              addressPrefix: prefixA,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
             });
@@ -238,8 +245,9 @@ export class Relayer extends EventEmitter {
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
             })
-            : await GnoIbcClient.connectWithSigner(path.nodeB, signerB as GnoWallet, {
+            : await GnoIbcClient.connectWithSigner(path.nodeB, path.queryNodeB, signerB as GnoWallet, {
               senderAddress: (await (signerB as GnoWallet).getAddress()),
+              addressPrefix: prefixB,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
             });
@@ -313,6 +321,7 @@ export class Relayer extends EventEmitter {
       }
       catch (e) {
         console.error("Caught error: ", e);
+        console.trace();
       }
       await this.sleep(options.poll);
     }

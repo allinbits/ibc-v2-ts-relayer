@@ -602,16 +602,19 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     clientId: string,
     src: BaseIbcClient,
   ): Promise<Height> {
-    const {
-      latestHeight,
-    } = await this.query.ibc.client.stateTm(clientId);
     let height: number = 0;
     if (isTendermint(src)) {
+      const {
+        latestHeight,
+      } = await this.query.ibc.client.stateTm(clientId);
       const header = await src.buildHeader(toIntHeight(latestHeight));
       await this.updateTendermintClient(clientId, header);
       height = Number(header.signedHeader?.header?.height ?? 0);
     }
     if (isGno(src)) {
+      const state = await this.query.ibc.client.state(clientId);
+      const clientState = ibc.lightclients.gno.v1.gno.ClientState.decode(state?.clientState?.value ?? new Uint8Array());
+      const latestHeight = clientState.latestHeight;
       const header = await src.buildHeader(toIntHeight(latestHeight));
       await this.updateGnoClient(clientId, header);
       height = Number(header.signedHeader?.header?.height ?? 0);
@@ -752,7 +755,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     clientId: string,
     header: ibc.lightclients.gno.v1.gno.Header,
   ): Promise<MsgResult> {
-    this.logger.verbose(`Update Tendermint client ${clientId}`);
+    this.logger.verbose(`Update Gno client ${clientId}`);
     const senderAddress = this.senderAddress;
     const updateMsg = {
       typeUrl: "/ibc.core.client.v1.MsgUpdateClient",
@@ -760,7 +763,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         signer: senderAddress,
         clientId,
         clientMessage: {
-          typeUrl: "/ibc.lightclients.tendermint.v1.Header",
+          typeUrl: "/ibc.lightclients.gno.v1.Header",
           value: ibc.lightclients.gno.v1.gno.Header.encode(header).finish(),
         },
       }),
@@ -1670,7 +1673,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       value: MsgRegisterCounterparty.fromPartial({
         clientId,
         counterpartyClientId,
-        counterpartyMerklePrefix: [merklePrefix, new Uint8Array()],
+        counterpartyMerklePrefix: [merklePrefix, toAscii("/pv/vm:gno.land/r/aib/ibc/core:")],
         signer: senderAddress,
       }),
     };

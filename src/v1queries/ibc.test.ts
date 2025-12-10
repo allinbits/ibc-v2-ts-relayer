@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable max-lines-per-function */
 import {
   createPagination,
   createProtobufRpcClient,

@@ -31,8 +31,6 @@ export const getSigner = async (chainId: string, chainType: ChainType, options?:
       if (!mnem) {
         throw new Error("Mnemonic not found in keyring");
       }
-      console.log("Using mnemonic from keyring for chain:", chainId);
-      console.log("Mnemonic starts with:", mnem.slice(0, 4) + "..." + mnem.slice(-4));
       return await DirectSecp256k1HdWallet.fromMnemonic(mnem, options);
     }
   }

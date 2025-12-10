@@ -78,8 +78,10 @@ export class SQLiteStorage implements IStorage {
   async addRelayPath(
     chainIdA: string,
     nodeA: string,
+    queryNodeA: string | undefined,
     chainIdB: string,
     nodeB: string,
+    queryNodeB: string | undefined,
     chainTypeA: ChainType,
     chainTypeB: ChainType,
     clientIdA: string,
@@ -88,8 +90,8 @@ export class SQLiteStorage implements IStorage {
   ): Promise<RelayPaths | undefined> {
     const db = await openDB(this.dbPath);
     await db.prepare(
-      "INSERT INTO relayPaths (chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientA, clientB, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run([chainIdA, nodeA, chainIdB, nodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version]);
+      "INSERT INTO relayPaths (chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, clientA, clientB, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run([chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, clientIdA, clientIdB, version]);
     return this.getRelayPath(chainIdA, chainIdB, clientIdA, clientIdB, version);
   }
 

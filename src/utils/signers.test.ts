@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   DirectSecp256k1HdWallet,
   OfflineSigner,
@@ -153,38 +154,6 @@ describe("signers", () => {
       await expect(
         getSigner("cosmoshub-4", ChainType.Cosmos),
       ).rejects.toThrow("Mnemonic not found in keyring");
-    });
-
-    it("should log mnemonic preview when loading from keyring", async () => {
-      const mockMnemonic = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12";
-      const mockWallet = {
-        getAccounts: vi.fn(),
-      } as unknown as DirectSecp256k1HdWallet;
-
-      const mockEntry = {
-        getPassword: vi.fn().mockReturnValue(mockMnemonic),
-      };
-
-      vi.mocked(Entry).mockImplementation(function (this: any) {
-        return mockEntry as any;
-      } as any);
-      vi.mocked(DirectSecp256k1HdWallet.fromMnemonic).mockResolvedValue(mockWallet);
-
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {
-      });
-
-      await getSigner("test-chain", ChainType.Cosmos);
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Using mnemonic from keyring for chain:",
-        "test-chain",
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Mnemonic starts with:",
-        expect.stringContaining("word...rd12"),
-      );
-
-      consoleSpy.mockRestore();
     });
   });
 

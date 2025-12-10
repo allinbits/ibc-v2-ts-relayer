@@ -163,7 +163,7 @@ describe("Relayer", () => {
 
   it("should add a new relay path (v1)", async () => {
     await relayer.addNewRelayPath(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 1,
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, 1,
     );
     expect(mockLoggerInfo).toHaveBeenCalledWith(
       "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
@@ -172,7 +172,7 @@ describe("Relayer", () => {
 
   it("should add a new relay path (v2)", async () => {
     await relayer.addNewRelayPath(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 2,
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, 2,
     );
     expect(mockLoggerInfo).toHaveBeenCalledWith(
       "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
@@ -181,10 +181,10 @@ describe("Relayer", () => {
 
   it("should add an existing relay path", async () => {
     await relayer.addExistingRelayPath(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
     );
     expect(storage.addRelayPath).toHaveBeenCalledWith(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
     );
   });
 

@@ -14,6 +14,9 @@ importers:
       '@clockworkgr/ibc-v2-client-ts':
         specifier: ^0.0.1
         version: 0.0.1(@cosmjs/proto-signing@0.36.2)(@cosmjs/stargate@0.36.2)(starknet@7.6.4)
+      '@cosmjs/crypto':
+        specifier: ^0.37.0
+        version: 0.37.0
       '@cosmjs/encoding':
         specifier: ^0.36.2
         version: 0.36.2
@@ -36,14 +39,14 @@ importers:
         specifier: ^1.4.5
         version: 1.4.5
       '@gnolang/gno-types':
-        specifier: ^1.0.7
-        version: 1.0.7(@bufbuild/protobuf@2.9.0)
+        specifier: ^1.0.8
+        version: 1.0.8(@bufbuild/protobuf@2.9.0)
       '@gnolang/tm2-js-client':
         specifier: ^1.3.3
         version: 1.3.3
       '@gnolang/tm2-rpc':
-        specifier: ^0.0.6
-        version: 0.0.6(encoding@0.1.13)
+        specifier: ^0.0.9
+        version: 0.0.9(encoding@0.1.13)
       '@napi-rs/keyring':
         specifier: ^1.2.0
         version: 1.2.0
@@ -62,6 +65,9 @@ importers:
       fake-indexeddb:
         specifier: ^6.2.4
         version: 6.2.4
+      graphql-request:
+        specifier: ^7.3.4
+        version: 7.3.4(graphql@16.12.0)
       handlebars:
         specifier: ^4.7.8
         version: 4.7.8
@@ -257,17 +263,17 @@ packages:
   '@cosmjs/amino@0.36.2':
     resolution: {integrity: sha512-r4yV1bhl412gwHGlyaUaJHIJnmldtyGsAwyz3oHHVxduiECj06Rv6wqeyLZfQa9W6hU+MlZwy7LabSUkkyGwjA==}
 
-  '@cosmjs/crypto@0.36.1':
-    resolution: {integrity: sha512-7vx9rZAuboyMxs9zv3hZhNA0JAFMpaW+fFgRDQzZzfIVj0z4h8RW4dJu0xx5cv3KBQXmoRUzWklpnFuMQYiGdg==}
-
   '@cosmjs/crypto@0.36.2':
     resolution: {integrity: sha512-QL4NHtcqR6DEKIN200aLeR8gKO433K0f5avKV0TVFP/g12UtnEGSk79PJq5Gv1PLc9GtATHgLLQI/3D8TEe+ig==}
+
+  '@cosmjs/crypto@0.37.0':
+    resolution: {integrity: sha512-rjnU7SEgNTUQAUotG686m7ahYSWgHh3J6n2JXoWoHJz0uVv4o4P+pbAFklyQ1PcPIR7u6LezCKDB5tP5Y5PeYQ==}
 
   '@cosmjs/encoding@0.36.2':
     resolution: {integrity: sha512-i3+P1EKYoLcONAsmpJPhDAc3Wh3ajZNRHt/hczi/JEQXmleTJLVzv2mXUyllM6Qa+B6ybbr3Z2lnEFa8L3yLqg==}
 
-  '@cosmjs/json-rpc@0.36.0':
-    resolution: {integrity: sha512-7cGE8cBFGrtAHsadYWFOWv0bNaK0VPNzquzU/Naj+3twgnppaGbRBrTLw3iwhqrg+Cvb9KwSYPHzaUsavojUWQ==}
+  '@cosmjs/encoding@0.37.0':
+    resolution: {integrity: sha512-xtdC0w+iVFOrod9a5RLJULUECv+6AvZr5FkD8AFr2vD853n7Z89/AVuEiJzd4GdUwlPzxcaamhAtmI+IB9DYvg==}
 
   '@cosmjs/json-rpc@0.36.2':
     resolution: {integrity: sha512-3IRamylHVCxBevXGlnIoWUdJCLsP5LwHbXYUsBnC9T8UttZ5oYRN5gDf6+2dQEPk+p9xOv2i8xrCwNWxo7675Q==}
@@ -278,20 +284,17 @@ packages:
   '@cosmjs/math@0.36.2':
     resolution: {integrity: sha512-uJZRzxqnBk3MgxFgeyUwLgUzWkAIcmznWSB/tgGCjGCnUNebzI+44dA3ncEDCMqQysi/MZ+cSwAcDU7IY2PFeA==}
 
+  '@cosmjs/math@0.37.0':
+    resolution: {integrity: sha512-FI+Tq8mhW0tuDawRvPdyX3K7qDZD2v1keRhiK/zHisvtQVzqoRRoOS1g5P9Pc7gWLQ1jPS15gDMYBu5+UYJ1+g==}
+
   '@cosmjs/proto-signing@0.36.2':
     resolution: {integrity: sha512-dyZsgZBQgGkaE4cazHVX8GDwrRJVKUVDnrODkyFXVNbxMnm4t6nxpK1qwgY9GHlWUhck3Dh9NT3BoMbXiMYTZQ==}
-
-  '@cosmjs/socket@0.36.0':
-    resolution: {integrity: sha512-rAeGDyQjIFWsP6DPSTJKUP9RDW6ZM5Cm074xKG/0Tdghn0kkOaQCzwJru4SSPWi7MOlOkoZHyEMATQiNA/cQ6Q==}
 
   '@cosmjs/socket@0.36.2':
     resolution: {integrity: sha512-Pb7JcTFWnq6yfY0IEejHrpSxNDJYcqjjAa1D29a6b/obk4qa4o3oIV5bIx6zAbdRq8uLoBfvWs0bHTNnVuBWJg==}
 
   '@cosmjs/stargate@0.36.2':
     resolution: {integrity: sha512-vnNK4dXF+s2v1aKPfYxKVrvXPcnBQb8rPoBScnTpPWnRt3XXbLw7Oo6fTQQWwKYNKQzi6DOApeEB+bCYcaPAAw==}
-
-  '@cosmjs/stream@0.36.0':
-    resolution: {integrity: sha512-gMezM+symoCWnJlrOJ5lxB+tVNUm9JUwFR3dpHzdccGTh1Sb7oVCf6VFias85O1j0fLkCIfQR2BI/RoX97+CGQ==}
 
   '@cosmjs/stream@0.36.2':
     resolution: {integrity: sha512-FlZx2Buovem837LdTLPkPFcxzuQ7zierAqSXwMPr/MG3k+qMxHNfLFTTCXMNWQ4ZlbYedud8ZqCL3/HKdS5mig==}
@@ -301,6 +304,9 @@ packages:
 
   '@cosmjs/utils@0.36.2':
     resolution: {integrity: sha512-OOr2HU/Ph+/GI1Fx2UCf3LOyX9YTCP51d2HitTOjjEJRYnkfKXP3lMBl1FZo5QaFWxnfuBc+Cj+cSoiQUJRyzQ==}
+
+  '@cosmjs/utils@0.37.0':
+    resolution: {integrity: sha512-j46yZg+cLBpANGc5sCxtQHJgPGBt5zSKlU+KX9FlDS6JU6q2vZYCpKgucFFpjekEiMagU1eu8cDSCRjTthEM6w==}
 
   '@csstools/color-helpers@5.1.0':
     resolution: {integrity: sha512-S11EXWJyy0Mz5SYvRmY8nJYTFFd1LCNV+7cXyAgQtOOuzb4EsgfqDufL+9esx72/eLhsRdGZwaldu/h+E4t4BA==}
@@ -548,16 +554,21 @@ packages:
   '@gnolang/gno-js-client@1.4.5':
     resolution: {integrity: sha512-2JrJFVEsAFuM0vpRLIzgqWXBrrFOpFR0PblRQGrouD0kK7tihz50KOdaGQe7Ay2Trs69sWOTMaNKIp/kduUPHw==}
 
-  '@gnolang/gno-types@1.0.7':
-    resolution: {integrity: sha512-xyTf6bDrRr/N7PGnUGHYZbCy48e6/WFb7ojN9XxuW52vhr/3uXqSygjFBt4UZ/2f4tKKvumwjkB7b+j4WYT0og==}
+  '@gnolang/gno-types@1.0.8':
+    resolution: {integrity: sha512-iK3U47tQxH7KaSFKqwgR+dEPPRuh/U2DyKZJ8b5Jt8awv8ZPfn/NMEd2YLYgGbhm2mWZGhv7xhfbMg5kzuEltQ==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.9.0
 
   '@gnolang/tm2-js-client@1.3.3':
     resolution: {integrity: sha512-MQ5ZDX/ErasPfHvShl5vfC5gJelJ2HzjPQopT51O4eTG45TCJqL9BaYZRTyFi3NQVuYREZiBNFW6axLbQ27Kow==}
 
-  '@gnolang/tm2-rpc@0.0.6':
-    resolution: {integrity: sha512-bkKBFqJzYI4uiM/FvxbBNFuEku4kaQDKdJ5pU/g+OuHZIJkGdyAO9tOY6+fSdJhdwoehQzXUoaGzEzNQ9iTu4Q==}
+  '@gnolang/tm2-rpc@0.0.9':
+    resolution: {integrity: sha512-jdgzwItdL0Z58NBOvNnLbFwKJ3OTZ8DZi2EegtsmDsKSd9T4GLBfr10xjuwuZD0zEafRXqNuWHMc+r/16jnjug==}
+
+  '@graphql-typed-document-node/core@3.2.0':
+    resolution: {integrity: sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ==}
+    peerDependencies:
+      graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
 
   '@hapi/address@5.1.1':
     resolution: {integrity: sha512-A+po2d/dVoY7cYajycYI43ZbYMXukuopIsqCjh5QzsBCipDtdofHntljDlpccMjIfTy6UOkg+5KPriwYch2bXA==}
@@ -997,6 +1008,12 @@ packages:
 
   '@scure/base@1.2.6':
     resolution: {integrity: sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg==}
+
+  '@scure/base@2.0.0':
+    resolution: {integrity: sha512-3E1kpuZginKkek01ovG8krQ0Z44E3DHPjc5S2rjJw9lZn3KSQOs8S7wqikF/AH7iRanHypj85uGyxk0XAyC37w==}
+
+  '@scure/bip39@1.6.0':
+    resolution: {integrity: sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A==}
 
   '@scure/starknet@1.1.0':
     resolution: {integrity: sha512-83g3M6Ix2qRsPN4wqLDqiRZ2GBNbjVWfboJE/9UjfG+MHr6oDSu/CWgy8hsBSJejr09DkkL+l0Ze4KVrlCIdtQ==}
@@ -1778,6 +1795,15 @@ packages:
 
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
+
+  graphql-request@7.3.4:
+    resolution: {integrity: sha512-kbpP5dw9hHIL5jN/2VS2JU0/Sc1hlsj7zrYBKSDiYd5iG8QfX7P79u26ZBi84eAijsqYVZEpLvCCwEzVxscWhg==}
+    peerDependencies:
+      graphql: 14 - 16
+
+  graphql@16.12.0:
+    resolution: {integrity: sha512-DKKrynuQRne0PNpEbzuEdHlYOMksHSUI8Zc9Unei5gTsMNA2/vMpoMz/yKba50pejK56qj98qM0SjYxAKi13gQ==}
+    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
 
   handlebars@4.7.8:
     resolution: {integrity: sha512-vafaFqs8MZkRrSX7sFVUdo3ap/eNiLnb4IakshzvP56X5Nr1iGKAIqdX6tMlm6HcNRIkr6AxO5jFEoJzzpT8aQ==}
@@ -3090,7 +3116,7 @@ snapshots:
 
   '@cosmjs/amino@0.36.1':
     dependencies:
-      '@cosmjs/crypto': 0.36.1
+      '@cosmjs/crypto': 0.36.2
       '@cosmjs/encoding': 0.36.2
       '@cosmjs/math': 0.36.2
       '@cosmjs/utils': 0.36.2
@@ -3102,16 +3128,6 @@ snapshots:
       '@cosmjs/math': 0.36.2
       '@cosmjs/utils': 0.36.2
 
-  '@cosmjs/crypto@0.36.1':
-    dependencies:
-      '@cosmjs/encoding': 0.36.2
-      '@cosmjs/math': 0.36.2
-      '@cosmjs/utils': 0.36.2
-      '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.7
-      '@noble/hashes': 1.8.0
-      hash-wasm: 4.12.0
-
   '@cosmjs/crypto@0.36.2':
     dependencies:
       '@cosmjs/encoding': 0.36.2
@@ -3122,16 +3138,28 @@ snapshots:
       '@noble/hashes': 1.8.0
       hash-wasm: 4.12.0
 
+  '@cosmjs/crypto@0.37.0':
+    dependencies:
+      '@cosmjs/encoding': 0.37.0
+      '@cosmjs/math': 0.37.0
+      '@cosmjs/utils': 0.37.0
+      '@noble/ciphers': 1.3.0
+      '@noble/curves': 1.9.7
+      '@noble/hashes': 1.8.0
+      '@scure/bip39': 1.6.0
+      hash-wasm: 4.12.0
+
   '@cosmjs/encoding@0.36.2':
     dependencies:
       base64-js: 1.5.1
       bech32: 1.1.4
       readonly-date: 1.0.0
 
-  '@cosmjs/json-rpc@0.36.0':
+  '@cosmjs/encoding@0.37.0':
     dependencies:
-      '@cosmjs/stream': 0.36.0
-      xstream: 11.14.0
+      '@scure/base': 2.0.0
+      base64-js: 1.5.1
+      readonly-date: 1.0.0
 
   '@cosmjs/json-rpc@0.36.2':
     dependencies:
@@ -3141,7 +3169,7 @@ snapshots:
   '@cosmjs/ledger-amino@0.36.1':
     dependencies:
       '@cosmjs/amino': 0.36.1
-      '@cosmjs/crypto': 0.36.1
+      '@cosmjs/crypto': 0.36.2
       '@cosmjs/encoding': 0.36.2
       '@cosmjs/math': 0.36.2
       '@cosmjs/utils': 0.36.2
@@ -3149,6 +3177,8 @@ snapshots:
       semver: 7.7.2
 
   '@cosmjs/math@0.36.2': {}
+
+  '@cosmjs/math@0.37.0': {}
 
   '@cosmjs/proto-signing@0.36.2':
     dependencies:
@@ -3158,16 +3188,6 @@ snapshots:
       '@cosmjs/math': 0.36.2
       '@cosmjs/utils': 0.36.2
       cosmjs-types: 0.10.1
-
-  '@cosmjs/socket@0.36.0':
-    dependencies:
-      '@cosmjs/stream': 0.36.0
-      isomorphic-ws: 4.0.1(ws@7.5.10)
-      ws: 7.5.10
-      xstream: 11.14.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   '@cosmjs/socket@0.36.2':
     dependencies:
@@ -3193,10 +3213,6 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@cosmjs/stream@0.36.0':
-    dependencies:
-      xstream: 11.14.0
-
   '@cosmjs/stream@0.36.2':
     dependencies:
       xstream: 11.14.0
@@ -3217,6 +3233,8 @@ snapshots:
       - utf-8-validate
 
   '@cosmjs/utils@0.36.2': {}
+
+  '@cosmjs/utils@0.37.0': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
@@ -3402,14 +3420,14 @@ snapshots:
       - debug
       - utf-8-validate
 
-  '@gnolang/gno-types@1.0.7(@bufbuild/protobuf@2.9.0)':
+  '@gnolang/gno-types@1.0.8(@bufbuild/protobuf@2.9.0)':
     dependencies:
       '@bufbuild/protobuf': 2.9.0
 
   '@gnolang/tm2-js-client@1.3.3':
     dependencies:
       '@cosmjs/amino': 0.36.1
-      '@cosmjs/crypto': 0.36.1
+      '@cosmjs/crypto': 0.36.2
       '@cosmjs/ledger-amino': 0.36.1
       '@types/uuid': 10.0.0
       axios: 1.12.2
@@ -3422,14 +3440,14 @@ snapshots:
       - debug
       - utf-8-validate
 
-  '@gnolang/tm2-rpc@0.0.6(encoding@0.1.13)':
+  '@gnolang/tm2-rpc@0.0.9(encoding@0.1.13)':
     dependencies:
-      '@cosmjs/crypto': 0.36.1
+      '@cosmjs/crypto': 0.36.2
       '@cosmjs/encoding': 0.36.2
-      '@cosmjs/json-rpc': 0.36.0
+      '@cosmjs/json-rpc': 0.36.2
       '@cosmjs/math': 0.36.2
-      '@cosmjs/socket': 0.36.0
-      '@cosmjs/stream': 0.36.0
+      '@cosmjs/socket': 0.36.2
+      '@cosmjs/stream': 0.36.2
       '@cosmjs/utils': 0.36.2
       cross-fetch: 4.1.0(encoding@0.1.13)
       readonly-date: 1.0.0
@@ -3438,6 +3456,10 @@ snapshots:
       - bufferutil
       - encoding
       - utf-8-validate
+
+  '@graphql-typed-document-node/core@3.2.0(graphql@16.12.0)':
+    dependencies:
+      graphql: 16.12.0
 
   '@hapi/address@5.1.1':
     dependencies:
@@ -3768,6 +3790,13 @@ snapshots:
   '@scure/base@1.2.1': {}
 
   '@scure/base@1.2.6': {}
+
+  '@scure/base@2.0.0': {}
+
+  '@scure/bip39@1.6.0':
+    dependencies:
+      '@noble/hashes': 1.8.0
+      '@scure/base': 1.2.6
 
   '@scure/starknet@1.1.0':
     dependencies:
@@ -4664,6 +4693,13 @@ snapshots:
   graceful-fs@4.2.11: {}
 
   graphemer@1.4.0: {}
+
+  graphql-request@7.3.4(graphql@16.12.0):
+    dependencies:
+      '@graphql-typed-document-node/core': 3.2.0(graphql@16.12.0)
+      graphql: 16.12.0
+
+  graphql@16.12.0: {}
 
   handlebars@4.7.8:
     dependencies:

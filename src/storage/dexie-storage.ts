@@ -81,8 +81,10 @@ export class DexieStorage implements IStorage {
   async addRelayPath(
     chainIdA: string,
     nodeA: string,
+    queryNodeA: string | undefined,
     chainIdB: string,
     nodeB: string,
+    queryNodeB: string | undefined,
     chainTypeA: ChainType,
     chainTypeB: ChainType,
     clientIdA: string,

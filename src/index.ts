@@ -18,7 +18,6 @@ import {
 } from "./utils/logging.js";
 
 const program = new Command();
-
 program.name(pkgJson.name).description(pkgJson.description).version(pkgJson.version);
 program.command("add-mnemonic")
   .description("Add a mnemonic to the keyring")
@@ -67,6 +66,8 @@ program.command("add-path")
   .requiredOption("-d, --destination <sourceChain>", "Source chain id")
   .requiredOption("--surl, --source-url <sourceUrl>", "Source chain URL")
   .requiredOption("--durl, --destination-url <destinationUrl>", "Destination chain URL")
+  .option("--squery, --source-query-url <sourceQueryUrl>", "Source chain query URL")
+  .option("--dquery, --destination-query-url <destinationQueryUrl>", "Destination chain query URL")
   .addOption(sourceTypeOption)
   .addOption(destinationTypeOption)
   .addOption(ibcVersionTypeOption)
@@ -75,8 +76,10 @@ program.command("add-path")
     await relayer.addNewRelayPath(
       options.source,
       options.sourceUrl,
+      options.sourceQueryUrl,
       options.destination,
       options.destinationUrl,
+      options.destinationQueryUrl,
       options.sourceType as ChainType,
       options.destinationType as ChainType,
       parseInt(options.ibcVersion, 10),

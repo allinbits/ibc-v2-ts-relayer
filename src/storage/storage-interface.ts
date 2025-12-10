@@ -59,8 +59,10 @@ export interface IStorage {
    *
    * @param chainIdA - Chain A identifier
    * @param nodeA - Chain A RPC endpoint
+   * @param queryNodeA - Chain A query RPC endpoint
    * @param chainIdB - Chain B identifier
    * @param nodeB - Chain B RPC endpoint
+   * @param queryNodeB - Chain B query RPC endpoint
    * @param chainTypeA - Type of chain A
    * @param chainTypeB - Type of chain B
    * @param clientIdA - Client ID on chain A
@@ -71,8 +73,10 @@ export interface IStorage {
   addRelayPath(
     chainIdA: string,
     nodeA: string,
+    queryNodeA: string | undefined,
     chainIdB: string,
     nodeB: string,
+    queryNodeB: string | undefined,
     chainTypeA: ChainType,
     chainTypeB: ChainType,
     clientIdA: string,

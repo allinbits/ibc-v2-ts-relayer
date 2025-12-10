@@ -24,7 +24,7 @@ import {
 } from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   fromBase64,
-  fromHex, toAscii, toBech32, toHex,
+  fromHex, toAscii, toBase64, toBech32, toHex,
 } from "@cosmjs/encoding";
 import {
   GasPrice,
@@ -33,17 +33,24 @@ import {
   arrayContentEquals, sleep,
 } from "@cosmjs/utils";
 import {
+  decodeTxMessages,
+  fundsToCoins,
   GnoJSONRPCProvider,
   GnoWallet,
   MemFile,
   MemPackage,
+  MsgEndpoint,
+  MsgRun,
 } from "@gnolang/gno-js-client";
 import {
   ibc,
+  tendermint,
 } from "@gnolang/gno-types";
 import {
   CreateWalletOptions,
   TransactionEndpoint,
+  Tx,
+  TxFee,
 } from "@gnolang/tm2-js-client";
 import {
   CommitResponse,
@@ -51,6 +58,12 @@ import {
 import {
   connectTm2, ReadonlyDateWithNanoseconds, Tm2Client,
 } from "@gnolang/tm2-rpc";
+import {
+  MerkleProof,
+} from "cosmjs-types/ibc/core/commitment/v1/commitment.js";
+import {
+  GraphQLClient,
+} from "graphql-request";
 import Long from "long";
 
 import {
@@ -63,13 +76,46 @@ import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
 } from "../BaseIbcClient.js";
 import {
-  createClientTemplate, registerCounterParty, updateClientTemplate,
+  acknowledgement,
+  createClientTemplate, recvPacket, registerCounterParty, timeout, updateClientTemplate,
 } from "./queries.js";
+import {
+  ProofHelper,
+} from "./templates/ProofHelper.js";
 
 export type GnoIbcClientOptions = CreateWalletOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
 };
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function replaceUint8Arrays(obj) {
+  // Handle null/undefined
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
 
+  // If it's a Uint8Array, apply the transform function
+  if (obj instanceof Uint8Array) {
+    return toBase64(obj);
+  }
+
+  // If it's an array, recurse on each element
+  if (Array.isArray(obj)) {
+    return obj.map(item => replaceUint8Arrays(item));
+  }
+
+  // If it's a plain object, recurse on each property
+  if (typeof obj === "object") {
+    const result = {
+    };
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = replaceUint8Arrays(value);
+    }
+    return result;
+  }
+
+  // For primitives (string, number, boolean, etc.), return as-is
+  return obj;
+}
 export interface GnoIbcClientTypes {
   header: ibc.lightclients.gno.v1.gno.GnoHeader
   consensusState: ibc.lightclients.gno.v1.gno.ConsensusState
@@ -80,10 +126,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   public readonly gasPrice: GasPrice;
   public readonly sign: GnoWallet;
   public readonly tm: Tm2Client;
+  public readonly graphClient: GraphQLClient;
   public readonly addressPrefix: string;
 
   public static async connectWithSigner(
     endpoint: string,
+    queryEndpoint: string,
     signer: GnoWallet,
     options: Partial<GnoIbcClientOptions>,
   ): Promise<GnoIbcClient> {
@@ -92,24 +140,27 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
     const provider = new GnoJSONRPCProvider(endpoint);
     const tmClient = await connectTm2(endpoint);
+    const graphClient = new GraphQLClient(queryEndpoint);
     const chainId = (await tmClient.status()).nodeInfo.network;
     options.chainId = chainId;
     options.clientType = ClientType.Gno;
     options.revisionNumber = parseRevisionNumber(chainId);
     signer.connect(provider);
     return new GnoIbcClient(
-      signer, tmClient, options as GnoIbcClientOptions,
+      signer, tmClient, graphClient, options as GnoIbcClientOptions,
     );
   }
 
   private constructor(
     signingClient: GnoWallet,
     tmClient: Tm2Client,
+    graphClient: GraphQLClient,
     options: GnoIbcClientOptions,
   ) {
     super(options);
     this.sign = signingClient;
     this.tm = tmClient;
+    this.graphClient = graphClient;
     this.addressPrefix = options.addressPrefix;
     this.gasPrice = options.gasPrice;
   }
@@ -154,7 +205,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       ...resp.blockMetas[0].header,
       height: BigInt(resp.blockMetas[0].header.height),
       time: timestampFromDateNanos(resp.blockMetas[0].header.time),
-      proposerAddress: toBech32(this.addressPrefix, resp.blockMetas[0].header.proposerAddress),
+      proposerAddress: resp.blockMetas[0].header.proposerAddress,
     };
   }
 
@@ -166,7 +217,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       ...block.block.header,
       height: BigInt(block.block.header.height),
       time: timestampFromDateNanos(block.block.header.time),
-      proposerAddress: toBech32(this.addressPrefix, block.block.header.proposerAddress),
+      proposerAddress: block.block.header.proposerAddress,
     };
   }
 
@@ -203,13 +254,14 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     await sleep(this.estimatedIndexerTime);
   }
 
-  public getGnoCommit(height?: number): Promise<CommitResponse> {
+  public async getGnoCommit(height?: number): Promise<CommitResponse> {
     this.logger.verbose(
       height === undefined
         ? "Get latest commit"
         : `Get commit for height ${height}`,
     );
-    return this.tm.commit(height);
+    const res = await this.tm.commit(height);
+    return res;
   }
 
   /** Returns the unbonding period in seconds */
@@ -238,7 +290,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       = await this.getGnoCommit(height);
     const header = ibc.lightclients.gno.v1.gno.GnoHeader.fromPartial({
       ...rpcHeader,
-      proposerAddress: toHex(rpcHeader.proposerAddress),
+      proposerAddress: rpcHeader.proposerAddress,
+      //  dataHash: rpcHeader.dataHash.length > 0 ? rpcHeader.dataHash : sha256(new Uint8Array()),
+      //  lastResultsHash: rpcHeader.lastResultsHash.length > 0 ? rpcHeader.lastResultsHash : sha256(new Uint8Array()),
       version: rpcHeader.version,
       height: BigInt(rpcHeader.height),
       time: timestampFromDateNanos(rpcHeader.time),
@@ -259,7 +313,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         hash: sig.blockId?.hash,
         partsHeader: sig.blockId?.parts,
       },
-      validatorAddress: toBech32(this.addressPrefix, sig.validatorAddress),
+      validatorAddress: sig.validatorAddress,
       validatorIndex: BigInt(sig.validatorIndex),
       timestamp: sig.timestamp && timestampFromDateNanos(sig.timestamp),
     }));
@@ -272,7 +326,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     });
     // For the vote sign bytes, it checks (from the commit):
     //   Height, Round, BlockId, TimeStamp, ChainID
-
     return {
       header,
       commit,
@@ -288,17 +341,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const validators = await this.tm.validators({
       height,
     });
+
     const mappedValidators = validators.validators.map(val => ({
       address: toBech32(this.addressPrefix, val.address),
-      pubKey: val.pubkey.algorithm == "ed25519"
-        ? {
-          typeUrl: "/tendermint.crypto.PubKeyEd25519",
-          value: val.pubkey.data,
-        }
-        : {
-          typeUrl: "/tendermint.crypto.PubKeySecp256k1",
-          value: val.pubkey.data,
-        },
+      pubKey: tendermint.crypto.keys.PublicKey.fromPartial({
+        ed25519: val.pubkey.data,
+      }),
       votingPower: val.votingPower,
       proposerPriority: val.proposerPriority
         ? BigInt(val.proposerPriority)
@@ -308,7 +356,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       val.address == proposerAddress,
     );
     return ibc.lightclients.gno.v1.gno.ValidatorSet.fromPartial({
-      validators: mappedValidators,
+      validators: mappedValidators.map((val) => {
+        return ibc.lightclients.gno.v1.gno.Validator.fromPartial(val);
+      }),
       proposer,
     });
   }
@@ -347,15 +397,23 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   public async getTendermintConsensusStateAtHeight(clientId: string, consensusHeight?: Height): Promise<TendermintConsensusState> {
-    const consensusState = await this.tm.abciQuery({
-      path: "vm/qrender",
-      data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/consensus_states/${consensusHeight.revisionNumber}/${consensusHeight.revisionHeight}`, "utf-8"),
-    });
+    const consensusState = consensusHeight
+      ? await this.tm.abciQuery({
+        path: "vm/qrender",
+        data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/consensus_states/${consensusHeight.revisionNumber}/${consensusHeight.revisionHeight}`, "utf-8"),
+      })
+      : await this.tm.abciQuery({
+        path: "vm/qrender",
+        data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}`, "utf-8"),
+      });
     if (consensusState.responseBase.error) {
       throw new Error(`Consensus state not found for client ID ${clientId} at height ${consensusHeight}:` + consensusState.responseBase.error);
     }
     try {
-      const data = JSON.parse(Buffer.from(consensusState.responseBase.data).toString("utf-8"));
+      let data = consensusHeight ? JSON.parse(Buffer.from(consensusState.responseBase.data).toString("utf-8")) : JSON.parse(Buffer.from(consensusState.responseBase.data).toString("utf-8")).last_consensus_state;
+      if (Array.isArray(data)) {
+        data = data[data.length - 1];
+      }
       return {
         timestamp: {
           seconds: data.timestamp,
@@ -554,7 +612,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       trustingPeriod: `time.Second * ${clientState.trustingPeriod?.seconds.toString() ?? "0"}`,
       maxClockDrift: `time.Second * ${clientState.maxClockDrift?.seconds.toString() ?? "0"}`,
       appHash: toHex(consensusState.root?.hash ?? new Uint8Array()),
-      nextValidatorsHash: toHex(consensusState.nextValidatorsHash ?? new Uint8Array()),
+      nextValHash: toHex(consensusState.nextValidatorsHash ?? new Uint8Array()),
       timestampSec: consensusState.timestamp?.seconds.toString() ?? "0",
       timestampNanos: consensusState.timestamp?.nanos.toString() ?? "0",
     });
@@ -569,10 +627,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 2000000),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 3000000),
       {
-        gas_wanted: new Long(30000000),
-        gas_fee: "75000ugnot",
+        gas_wanted: new Long(50000000),
+        gas_fee: "750000ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
@@ -600,10 +658,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     header: TendermintHeader,
   ): Promise<MsgResult> {
     this.logger.verbose(`Update Tendermint client ${clientId}`);
-
     const rundotgno = updateClientTemplate({
       clientId,
+      openBr: "{",
+      closeBr: "}",
       chainID: header.signedHeader.header.chainId,
+      appHash: toHex(header.signedHeader.header.appHash ?? new Uint8Array()),
       revisionNumber: header.signedHeader.header.height.toString(),
       revisionHeight: header.signedHeader.header.height.toString(),
       timeSec: header.signedHeader.header.time.seconds.toString(),
@@ -625,6 +685,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         pubKey: toHex(val.pubKey.ed25519 ?? val.pubKey.secp256k1 ?? new Uint8Array()),
         votingPower: val.votingPower.toString(),
       })),
+      proposerPubKey: toHex(header.validatorSet.validators.find(v => toHex(v.address) == toHex(header.signedHeader.header.proposerAddress))?.pubKey.ed25519 ?? new Uint8Array()),
+      proposerVotingPower: header.validatorSet.validators.find(v => toHex(v.address) == toHex(header.signedHeader.header.proposerAddress))?.votingPower.toString() ?? "0",
       trustedRevisionNumber: header.trustedHeight.revisionNumber.toString(),
       trustedRevisionHeight: header.trustedHeight.revisionHeight.toString(),
       trustedValidators: header.trustedValidators.validators.map(val => ({
@@ -634,6 +696,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       })),
       trustedProposerAddress: toHex(header.trustedValidators.proposer?.address ?? new Uint8Array()),
       trustedProposerPubKey: toHex(header.trustedValidators.proposer?.pubKey.ed25519 ?? header.trustedValidators.proposer?.pubKey.secp256k1 ?? new Uint8Array()),
+      trustedVotingPower: header.trustedValidators.validators.reduce((sum, val) => sum + val.votingPower, 0n).toString(),
       trustedProposerVotingPower: header.trustedValidators.proposer?.votingPower.toString() ?? "0",
       commitHeight: header.signedHeader.commit.height.toString(),
       commitRound: header.signedHeader.commit.round.toString(),
@@ -643,11 +706,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       commitSignatures: header.signedHeader.commit.signatures.map(sig => ({
         validatorAddress: toHex(sig.validatorAddress),
         signature: toHex(sig.signature),
+        timestampSeconds: sig.timestamp ? sig.timestamp.seconds.toString() : "0",
+        timestampNanos: sig.timestamp ? sig.timestamp.nanos.toString() : "0",
         blockIdFlag: sig.blockIdFlag,
       })),
     });
     this.logger.verbose("Update Tendermint client");
-
     const memFile = MemFile.fromPartial({
       name: "run.gno",
       body: rundotgno,
@@ -658,10 +722,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 2000000),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 3000000),
       {
-        gas_wanted: new Long(30000000),
-        gas_fee: "75000ugnot",
+        gas_wanted: new Long(100000000),
+        gas_fee: "100000ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
@@ -749,6 +813,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
+  public async getChannelV1Type(_portId: string, _channelId: string): Promise<Order> {
+    throw new Error("IBC v1 is not supported on Gno clients yet.");
+  }
+
   public receivePacket(
     _packet: Packet,
     _proofCommitment: Uint8Array,
@@ -774,11 +842,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   public async receivePacketsV2(
-    _packets: readonly PacketV2[],
-    _proofCommitments: readonly Uint8Array[],
-    _proofHeight?: Height,
+    packets: readonly PacketV2[],
+    proofCommitments: readonly Uint8Array[],
+    proofHeight?: Height,
   ): Promise<MsgResult> {
-    /*
     this.logger.verbose(`Receive ${packets.length} packets..`);
     if (packets.length !== proofCommitments.length) {
       throw new Error(
@@ -788,49 +855,80 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     if (packets.length === 0) {
       throw new Error("Must submit at least 1 packet");
     }
-
-    const senderAddress = this.senderAddress;
-    const msgs = [];
-    for (const i in packets) {
+    const messages = [];
+    for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
       this.logger.verbose(
         `Sending packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`,
         (packet.payloads),
       );
+      const ics23 = MerkleProof.decode(proofCommitments[i]);
+      const rundotgno = recvPacket({
+        sequence: packet.sequence.toString(),
+        sourceClient: packet.sourceClient,
+        destinationClient: packet.destinationClient,
+        timestamp: packet.timeoutTimestamp.toString(),
+        payloads: packet.payloads.map(p => ({
+          sourcePort: p.sourcePort,
+          destinationPort: p.destinationPort,
+          encoding: p.encoding,
+          version: p.version,
+          value: toHex(p.value),
+        })),
+        commitmentProof: ProofHelper(ics23),
+        proofRevision: proofHeight?.revisionNumber.toString() ?? "0",
+        proofHeight: proofHeight?.revisionHeight.toString() ?? "0",
+      });
+      const memFile = MemFile.fromPartial({
+        name: "run.gno",
+        body: rundotgno,
+      });
 
-      const msg = {
-        typeUrl: "/ibc.core.channel.v2.MsgRecvPacket",
-        value: MsgRecvPacketV2.fromPartial({
-          packet,
-          proofCommitment: proofCommitments[i],
-          proofHeight,
-          signer: senderAddress,
-        }),
+      const memPackage = MemPackage.fromPartial({
+        files: [memFile],
+        name: "main",
+        path: "",
+      });
+      const amount: string = fundsToCoins(new Map());
+      const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
+
+      // Fetch the wallet address
+      const caller: string = await this.sign.getAddress();
+      const runMsg: MsgRun = {
+        caller,
+        send: amount,
+        package: memPackage,
+        max_deposit: maxDepositAmount,
       };
-      msgs.push(msg);
+      messages.push(
+        {
+          type_url: MsgEndpoint.MSG_RUN,
+          value: MsgRun.encode(runMsg).finish(),
+        },
+      );
     }
-    this.logger.debug("MsgRecvPacket(s)", {
-      msgs: msgs.map(msg =>
-        deepCloneAndMutate(msg, (mutableMsg) => {
-          mutableMsg.value.proofCommitment = toBase64AsAny(
-            mutableMsg.value.proofCommitment,
-          );
-        }),
-      ),
-    });
-    const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
-    );
-    if (isDeliverTxFailure(result)) {
-      throw new Error(createDeliverTxFailureMessage(result));
+    const txFee: TxFee = {
+      gas_wanted: new Long(80000000 * packets.length),
+      gas_fee: 80000000 * packets.length * 0.001 + "ugnot",
+    };
+
+    const tx: Tx = {
+      messages: messages,
+      fee: txFee,
+      memo: "",
+      signatures: [], // No signature yet
+    };
+
+    const signedTx: Tx = await this.sign.signTransaction(tx, decodeTxMessages);
+    const result = await this.sign.sendTransaction(signedTx, TransactionEndpoint.BROADCAST_TX_COMMIT);
+    if (result.deliver_tx.ResponseBase.Error) {
+      throw new Error(`Failed to receive packets: ${result.deliver_tx.ResponseBase.Error}`);
     }
     return {
-      events: result.events,
-      transactionHash: result.transactionHash,
-      height: result.height,
+      events: [],
+      transactionHash: Buffer.from(fromBase64(result.hash)).toString("hex").toUpperCase(),
+      height: Number(result.height),
     };
-    */
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
   public acknowledgePacket(
@@ -858,61 +956,82 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   public async acknowledgePacketsV2(
-    _acks: readonly AckV2[],
-    _proofAckeds: readonly Uint8Array[],
-    _proofHeight?: Height,
+    acks: readonly AckV2[],
+    proofAckeds: readonly Uint8Array[],
+    proofHeight?: Height,
   ): Promise<MsgResult> {
-    /*
-    this.logger.verbose(`Acknowledge ${acks.length} packets...`);
-    if (acks.length !== proofAckeds.length) {
-      throw new Error(
-        `Have ${acks.length} acks, but ${proofAckeds.length} proofs`,
-      );
-    }
-    if (acks.length === 0) {
-      throw new Error("Must submit at least 1 ack");
-    }
+    const messages = [];
+    for (let i = 0; i < acks.length; i++) {
+      const ics23 = MerkleProof.decode(proofAckeds[i]);
+      const rundotgno = acknowledgement({
+        sequence: acks[i].originalPacket.sequence.toString(),
+        sourceClient: acks[i].originalPacket.sourceClient,
+        destinationClient: acks[i].originalPacket.destinationClient,
+        timestamp: acks[i].originalPacket.timeoutTimestamp.toString(),
+        payloads: acks[i].originalPacket.payloads.map(p => ({
+          sourcePort: p.sourcePort,
+          destinationPort: p.destinationPort,
+          encoding: p.encoding,
+          version: p.version,
+          value: toHex(p.value),
+        })),
+        appAcknowledgement: toHex(acks[i].acknowledgement).substring(4),
+        commitmentProof: ProofHelper(ics23),
+        proofRevision: proofHeight?.revisionNumber.toString() ?? "0",
+        proofHeight: proofHeight?.revisionHeight.toString() ?? "0",
+      });
+      this.logger.verbose("Send Ackcnowledgement:" + acks[i].originalPacket.sequence.toString());
+      const memFile = MemFile.fromPartial({
+        name: "run.gno",
+        body: rundotgno,
+      });
+      const memPackage = MemPackage.fromPartial({
+        files: [memFile],
+        name: "main",
+        path: "",
+      });
+      const amount: string = fundsToCoins(new Map());
+      const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
 
-    const senderAddress = this.senderAddress;
-    const msgs = [];
-    for (const i in acks) {
-      const packet = acks[i].originalPacket;
-      const acknowledgement = Acknowledgement.decode(acks[i].acknowledgement);
-      // TODO: construct Ack Message correctly
-      this.logger.verbose(
-        `Ack packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`, {
-          packet: packet.payloads,
-          ack: acknowledgement,
+      // Fetch the wallet address
+      const caller: string = await this.sign.getAddress();
+      const runMsg: MsgRun = {
+        caller,
+        send: amount,
+        package: memPackage,
+        max_deposit: maxDepositAmount,
+      };
+      messages.push(
+        {
+          type_url: MsgEndpoint.MSG_RUN,
+          value: MsgRun.encode(runMsg).finish(),
         },
       );
-      const msg = {
-        typeUrl: "/ibc.core.channel.v2.MsgAcknowledgement",
-        value: MsgAcknowledgementV2.fromPartial({
-          packet,
-          acknowledgement,
-          proofAcked: proofAckeds[i],
-          proofHeight,
-          signer: senderAddress,
-        }),
-      };
-      msgs.push(msg);
     }
-    this.logger.debug("MsgAcknowledgement(s)", {
-      msgs: msgs,
-    });
-    const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
-    );
-    if (isDeliverTxFailure(result)) {
-      throw new Error(createDeliverTxFailureMessage(result));
-    }
-    return {
-      events: result.events,
-      transactionHash: result.transactionHash,
-      height: result.height,
+    const txFee: TxFee = {
+      gas_wanted: new Long(60000000 * acks.length),
+      gas_fee: 60000000 * acks.length * 0.001 + "ugnot",
     };
-    */
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
+
+    const tx: Tx = {
+      messages: messages,
+      fee: txFee,
+      memo: "",
+      signatures: [], // No signature yet
+    };
+
+    const signedTx: Tx = await this.sign.signTransaction(tx, decodeTxMessages);
+    const result = await this.sign.sendTransaction(signedTx, TransactionEndpoint.BROADCAST_TX_COMMIT);
+
+    if (result.deliver_tx.ResponseBase.Error) {
+      throw new Error(`Failed to acknowledge packets: ${result.deliver_tx.ResponseBase.Error}`);
+    }
+
+    return {
+      events: [],
+      transactionHash: Buffer.from(fromBase64(result.hash)).toString("hex").toUpperCase(),
+      height: Number(result.height),
+    };
   }
 
   public timeoutPacket(
@@ -943,65 +1062,89 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     );
   }
 
-  public async getChannelV1Type(_portId: string, _channelId: string): Promise<Order> {
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
-  }
-
   public async timeoutPacketsV2(
-    _packets: PacketV2[],
-    _proofsUnreceived: Uint8Array[],
-    _proofHeight: Height,
+    packets: PacketV2[],
+    proofsUnreceived: Uint8Array[],
+    proofHeight: Height,
   ): Promise<MsgResult> {
-    /*
-    if (packets.length !== proofsUnreceived.length) {
-      throw new Error("Packets and proofs must be same length");
-    }
+    const messages = [];
+    for (let i = 0; i < packets.length; i++) {
+      const ics23 = MerkleProof.decode(proofsUnreceived[i]);
+      const rundotgno = timeout({
+        sequence: packets[i].sequence.toString(),
+        sourceClient: packets[i].sourceClient,
+        destinationClient: packets[i].destinationClient,
+        timestamp: packets[i].timeoutTimestamp.toString(),
+        payloads: packets[i].payloads.map(p => ({
+          sourcePort: p.sourcePort,
+          destinationPort: p.destinationPort,
+          encoding: p.encoding,
+          version: p.version,
+          value: toHex(p.value),
+        })),
+        commitmentProof: ProofHelper(ics23),
+        proofRevision: proofHeight?.revisionNumber.toString() ?? "0",
+        proofHeight: proofHeight?.revisionHeight.toString() ?? "0",
+      });
+      this.logger.verbose("Send Timeout " + packets[i].sequence.toString());
+      const memFile = MemFile.fromPartial({
+        name: "run.gno",
+        body: rundotgno,
+      });
+      const memPackage = MemPackage.fromPartial({
+        files: [memFile],
+        name: "main",
+        path: "",
+      });
+      const amount: string = fundsToCoins(new Map());
+      const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
 
-    this.logger.verbose(`Timeout ${packets.length} packets...`);
-    const senderAddress = this.senderAddress;
-
-    const msgs = [];
-    for (const i in packets) {
-      const packet = packets[i];
-      this.logger.verbose(
-        `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`, packet.payloads,
-      );
-
-      const msg = {
-        typeUrl: "/ibc.core.channel.v2.MsgTimeout",
-        value: MsgTimeoutV2.fromPartial({
-          packet,
-          proofUnreceived: proofsUnreceived[i],
-          proofHeight,
-          signer: senderAddress,
-        }),
+      // Fetch the wallet address
+      const caller: string = await this.sign.getAddress();
+      const runMsg: MsgRun = {
+        caller,
+        send: amount,
+        package: memPackage,
+        max_deposit: maxDepositAmount,
       };
-      msgs.push(msg);
+      messages.push(
+        {
+          type_url: MsgEndpoint.MSG_RUN,
+          value: MsgRun.encode(runMsg).finish(),
+        },
+      );
+    }
+    const txFee: TxFee = {
+      gas_wanted: new Long(60000000 * packets.length),
+      gas_fee: 60000000 * packets.length * 0.001 + "ugnot",
+    };
+
+    const tx: Tx = {
+      messages: messages,
+      fee: txFee,
+      memo: "",
+      signatures: [], // No signature yet
+    };
+
+    const signedTx: Tx = await this.sign.signTransaction(tx, decodeTxMessages);
+    const result = await this.sign.sendTransaction(signedTx, TransactionEndpoint.BROADCAST_TX_COMMIT);
+
+    if (result.deliver_tx.ResponseBase.Error) {
+      throw new Error(`Failed to create Tendermint client: ${result.deliver_tx.ResponseBase.Error}`);
     }
 
-    this.logger.debug("MsgTimeout", {
-      msgs: msgs,
-    });
-    const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
-    );
-    if (isDeliverTxFailure(result)) {
-      throw new Error(createDeliverTxFailureMessage(result));
-    }
     return {
-      events: result.events,
-      transactionHash: result.transactionHash,
-      height: result.height,
+      events: [],
+      transactionHash: Buffer.from(fromBase64(result.hash)).toString("hex").toUpperCase(),
+      height: Number(result.height),
     };
-    */
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
   public async queryRawProof(store: string, queryKey: Uint8Array, proofHeight: number): Promise<ProvenQuery> {
     const {
       key, value, height, proof, responseBase,
     } = await this.tm.abciQuery({
-      path: `/store/${store}/key`,
+      path: `.store/${store}/key`,
       data: queryKey,
       height: proofHeight,
       prove: true,
@@ -1058,9 +1201,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 2000000),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 3000000),
       {
-        gas_wanted: new Long(30000000),
+        gas_wanted: new Long(50000000),
         gas_fee: "75000ugnot",
       });
 
@@ -1108,34 +1251,20 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
-  public async getRawReceiptProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
-    const key = toAscii(
-      `receipts/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
-    );
-    const proven = await this.queryRawProof(
-      "ibc", key, Number(proofHeight.revisionHeight),
-    );
-    const proof = convertProofsToIcs23(proven.proof);
-    return {
-      data: proven.value,
-      proof,
-      proofHeight,
-    };
+  public async getRawReceiptProof(_portId: string, _channelId: string, _sequence: bigint, _proofHeight: Height): Promise<DataProof> {
+    throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
   public async getRawReceiptProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const buf = Buffer.allocUnsafe(8);
     buf.writeBigUint64BE(sequence);
     const seq = Uint8Array.from(buf);
     const sep = fromHex("02");
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = mergeUint8Arrays(toAscii(
-      `${clientId}`), sep, seq,
+      `/pv/vm:gno.land/r/aib/ibc/core:${clientId}`), sep, seq,
     );
     const proven = await this.queryRawProof(
-      "ibc", key, Number(proofHeight.revisionHeight),
+      "main", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
     return {
@@ -1145,21 +1274,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     };
   }
 
-  public async getRawPacketCommitmentProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
-    const key = toAscii(
-      `commitments/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
-    );
-    const proven = await this.queryRawProof(
-      "ibc", key, Number(proofHeight.revisionHeight),
-    );
-    const proof = convertProofsToIcs23(proven.proof);
-    this.logger.debug(proven);
-    return {
-      data: proven.value,
-      proof,
-      proofHeight,
-    };
+  public async getRawPacketCommitmentProof(_portId: string, _channelId: string, _sequence: bigint, _proofHeight: Height): Promise<DataProof> {
+    throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
   public async getRawPacketCommitmentProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
@@ -1167,12 +1283,11 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     buf.writeBigUint64BE(sequence);
     const seq = Uint8Array.from(buf);
     const sep = fromHex("01");
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = mergeUint8Arrays(toAscii(
-      `${clientId}`), sep, seq,
+      `/pv/vm:gno.land/r/aib/ibc/core:${clientId}`), sep, seq,
     );
     const proven = await this.queryRawProof(
-      "ibc", key, Number(proofHeight.revisionHeight),
+      "main", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
     this.logger.debug(proven);
@@ -1183,36 +1298,20 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     };
   }
 
-  public async getRawPacketAcknowledgementProof(portId: string, channelId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
-    const key = toAscii(
-      `acks/ports/${portId}/channels/${channelId}/sequences/${sequence}`,
-    );
-    const proven = await this.queryRawProof(
-      "ibc", key, Number(proofHeight.revisionHeight),
-    );
-    const proof = convertProofsToIcs23(proven.proof);
-
-    return {
-      data: proven.value,
-      proof,
-      proofHeight,
-    };
+  public async getRawPacketAcknowledgementProof(_portId: string, _channelId: string, _sequence: bigint, _proofHeight: Height): Promise<DataProof> {
+    throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
   public async getRawPacketAcknowledgementProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
-
     const buf = Buffer.allocUnsafe(8);
     buf.writeBigUint64BE(sequence);
     const seq = Uint8Array.from(buf);
     const sep = fromHex("03");
-    /* This replaces the QueryClient method which no longer supports QueryRawProof */
     const key = mergeUint8Arrays(toAscii(
-      `${clientId}`), sep, seq,
+      `/pv/vm:gno.land/r/aib/ibc/core:${clientId}`), sep, seq,
     );
     const proven = await this.queryRawProof(
-      "ibc", key, Number(proofHeight.revisionHeight),
+      "main", key, Number(proofHeight.revisionHeight),
     );
     const proof = convertProofsToIcs23(proven.proof);
 
@@ -1282,6 +1381,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "vm/qrender",
       data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}`, "utf-8"),
     });
+    this.logger.debug("Client State ABCI Query Result:", clientState);
     if (clientState.responseBase.error) {
       throw new Error(`Client state not found for client ID ${clientId}: ${clientState.responseBase.error}`);
     }
@@ -1332,59 +1432,204 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   public async querySentPacketsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketV2WithMetadata[]> {
-    const txsPackets = await this.getPacketsFromTxsV2(clientId, minHeight, maxHeight);
-    const eventsPackets = await this.getPacketsFromBlockEventsV2(clientId, minHeight, maxHeight);
-    return ([] as PacketV2WithMetadata[])
-      .concat(...txsPackets)
-      .concat(...eventsPackets);
+    if (minHeight && minHeight > 0) {
+      minHeight = minHeight - 2;
+    }
+    else {
+      minHeight = 0;
+    }
+    if (maxHeight) {
+      maxHeight = maxHeight + 1;
+    }
+    const query = maxHeight
+      ? `query getEvents {
+  getTransactions(where: {block_height: {gt: ${minHeight}, lt: ${maxHeight}}, success: {eq: true}, response: {
+    events: {
+      GnoEvent: {
+         type: {eq: "send_packet"}
+      }
+    }
+  }}) {
+    block_height
+    hash
+    response {
+      events {
+        ... on GnoEvent {
+          type
+          attrs {
+            key
+            value
+          }
+        }
+      }
+    }
+  }
+}`
+      : `query getEvents {
+  getTransactions(where: {block_height: {gt: ${minHeight}}, success: {eq: true}, response: {
+    events: {
+      GnoEvent: {
+         type: {eq: "send_packet"}
+      }
+    }
+  }}) {
+    block_height
+    hash
+    response {
+      events {
+        ... on GnoEvent {
+          type
+          attrs {
+            key
+            value
+          }
+        }
+      }
+    }
+  }
+}`;
+    const data = await this.graphClient.request(query);
+    const packets: PacketV2WithMetadata[] = [];
+    if (!data || !data.getTransactions) {
+      return packets;
+    }
+    for (const tx of data.getTransactions) {
+      const height = Number(tx.block_height);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sendPacketEvents = tx.response.events.filter((e: any) => e.type === "send_packet");
+      for (const e of sendPacketEvents) {
+        const packet: PacketV2WithMetadata = {
+          height,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          packet: PacketV2.decode(fromHex(e.attrs.find((attr: any) => attr.key === "encoded_packet_hex").value)),
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (e.attrs.find((attr: any) => attr.key === "packet_source_client").value === clientId) {
+          packets.push(packet);
+        }
+      }
+    }
+    return packets;
   }
 
   public async queryWrittenAcks(_connectionId: string, _minHeight: number | undefined, _maxHeight: number | undefined): Promise<AckWithMetadata[]> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
-  public async queryWrittenAcksV2(_clientId: string, _minHeight: number | undefined, _maxHeight: number | undefined): Promise<AckV2WithMetadata[]> {
-    /*
-    let query = `write_acknowledgement.packet_dest_client='${clientId}'`;
-    if (minHeight) {
-      query = `${query} AND tx.height>=${minHeight}`;
+  public async queryWrittenAcksV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckV2WithMetadata[]> {
+    if (minHeight && minHeight > 0) {
+      minHeight = minHeight - 2;
+    }
+    else {
+      minHeight = 0;
     }
     if (maxHeight) {
-      query = `${query} AND tx.height<=${maxHeight}`;
+      maxHeight = maxHeight + 1;
     }
-
-    const search = await this.searchTendermintTxs(query);
-    const out = search.txs.flatMap(({
-      height, result, hash,
-    }) => {
-      const events = result.events.map(fromTendermintEvent);
-      // const sender = logs.findAttribute(parsedLogs, 'message', 'sender').value;
-      return parseAcksFromTxEventsV2(events).map(
-        (ack): AckV2WithMetadata => ({
+    const query = maxHeight
+      ? `query getEvents {
+  getTransactions(where: {block_height: {gt: ${minHeight}, lt: ${maxHeight}}, success: {eq: true}, response: {
+    events: {
+      GnoEvent: {
+         type: {eq: "write_acknowledgement"}
+      }
+    }
+  }}) {
+    block_height
+    hash
+    response {
+      events {
+        ... on GnoEvent {
+          type
+          attrs {
+            key
+            value
+          }
+        }
+      }
+    }
+  }
+}`
+      : `query getEvents {
+  getTransactions(where: {block_height: {gt: ${minHeight}}, success: {eq: true}, response: {
+    events: {
+      GnoEvent: {
+         type: {eq: "write_acknowledgement"}
+      }
+    }
+  }}) {
+    block_height
+    hash
+    response {
+      events {
+        ... on GnoEvent {
+          type
+          attrs {
+            key
+            value
+          }
+        }
+      }
+    }
+  }
+}`;
+    const data = await this.graphClient.request(query);
+    const packets: AckV2WithMetadata[] = [];
+    if (!data || !data.getTransactions) {
+      return packets;
+    }
+    for (const tx of data.getTransactions) {
+      const height = Number(tx.block_height);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const writeAcknowledgementEvents = tx.response.events.filter((e: any) => e.type === "write_acknowledgement");
+      for (const e of writeAcknowledgementEvents) {
+        const packet: AckV2WithMetadata = {
           height,
-          txHash: toHex(hash).toUpperCase(),
-          txEvents: events,
-          ...ack,
-        }),
-      );
-    });
-    return out;
-    */
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
+          txHash: toHex(fromBase64(tx.hash)).toUpperCase(),
+          txEvents: [],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          acknowledgement: fromHex(e.attrs.find((attr: any) => attr.key === "encoded_acknowledgement_hex").value),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          originalPacket: PacketV2.decode(fromHex(e.attrs.find((attr: any) => attr.key === "encoded_packet_hex").value)),
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (e.attrs.find((attr: any) => attr.key === "packet_dest_client").value === clientId) {
+          packets.push(packet);
+        }
+      }
+    }
+    return packets;
   }
 
   public async queryUnreceivedPackets(_portId: string, _channelId: string, _sequences: readonly number[]): Promise<number[]> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
-  public async queryUnreceivedPacketsV2(_clientId: string, _sequences: readonly number[]): Promise<number[]> {
-    /*
-    const res = await this.query.ibc.channelV2.unreceivedPackets(
-      clientId, sequences,
-    );
-    return res.sequences.map(seq => Number(seq));
-    */
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
+  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
+    const result = await this.tm.abciQuery({
+      path: "vm/qrender",
+      data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/packet_receipts`, "utf-8"),
+    });
+
+    if (result.responseBase.error) {
+      throw new Error(`Unreceived packets for client ID ${clientId} and sequences ${sequences} not found. ` + result.responseBase.error);
+    }
+    try {
+      const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
+      const unreceived: number[] = [];
+      for (const seq of sequences) {
+        const packet = data.find((item: {
+          sequence: string
+        }) => BigInt(item.sequence) == BigInt(seq));
+        if (!packet) {
+          unreceived.push(seq);
+        }
+      }
+      return unreceived;
+    }
+    catch (e) {
+      throw new Error(`Failed to parse unreceived packets for client ID ${clientId} and sequences ${sequences}: ${e}`);
+    }
   }
 
   public async queryCommitments(_portId: string, _channelId: string, _sequence: bigint): Promise<Uint8Array> {
@@ -1397,28 +1642,61 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
-  public async queryCommitmentsV2(_clientId: string, _sequence: bigint): Promise<Uint8Array> {
-    /*
-    const res = await this.query.ibc.channelV2.packetCommitment(
-      clientId, Number(sequence),
-    );
-    return res.commitment;
-    */
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
+  public async queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array> {
+    const result = await this.tm.abciQuery({
+      path: "vm/qrender",
+      data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`, "utf-8"),
+    });
+
+    if (result.responseBase.error) {
+      throw new Error(`Commitment for client ID ${clientId} and sequence ${sequence} not found. ` + result.responseBase.error);
+    }
+    try {
+      const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
+      const commitment = data.find((item: {
+        sequence: string
+      }) => BigInt(item.sequence) == sequence);
+      if (commitment) {
+        return fromBase64(commitment.data);
+      }
+      else {
+        throw new Error(`Commitment for client ID ${clientId} and sequence ${sequence} not found in data.`);
+      }
+    }
+    catch (e) {
+      throw new Error(`Failed to parse commitment for client ID ${clientId} and sequence ${sequence}: ${e}`);
+    }
   }
 
   public async queryUnreceivedAcks(_portId: string, _channelId: string, _sequences: readonly number[]): Promise<number[]> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
-  public async queryUnreceivedAcksV2(_clientId: string, _sequences: readonly number[]): Promise<number[]> {
-    /*
-    const res = await this.query.ibc.channelV2.unreceivedAcks(
-      clientId, sequences,
-    );
-    return res.sequences.map(seq => Number(seq));
-    */
-    throw new Error("IBC v1 is not supported on Gno clients yet.");
+  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
+    const result = await this.tm.abciQuery({
+      path: "vm/qrender",
+      data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`, "utf-8"),
+    });
+
+    if (result.responseBase.error) {
+      throw new Error(`Unreceived ACKs for client ID ${clientId} and sequences ${sequences} not found. ` + result.responseBase.error);
+    }
+    try {
+      const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
+      const unreceived: number[] = [];
+      for (const seq of sequences) {
+        const ack = data.find((item: {
+          sequence: string
+        }) => BigInt(item.sequence) == BigInt(seq));
+        if (ack) {
+          unreceived.push(seq);
+        }
+      }
+      return unreceived;
+    }
+    catch (e) {
+      throw new Error(`Failed to parse unreceived ACKs for client ID ${clientId} and sequences ${sequences}: ${e}`);
+    }
   }
 
   public async buildCreateClientArgs(trustPeriodSec?: number | null): Promise<{

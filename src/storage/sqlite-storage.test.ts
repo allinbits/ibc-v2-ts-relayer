@@ -37,7 +37,7 @@ describe("SQLiteStorage", () => {
         fs.unlinkSync(testDbPath);
       }
     }
-    catch (err) {
+    catch (_err) {
       // Ignore cleanup errors
     }
   });
@@ -88,8 +88,10 @@ describe("SQLiteStorage", () => {
       const path = await storage.addRelayPath(
         "cosmoshub-4",
         "http://localhost:26657",
+        undefined,
         "osmosis-1",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-0",
@@ -111,8 +113,10 @@ describe("SQLiteStorage", () => {
       const path = await storage.addRelayPath(
         "juno-1",
         "http://localhost:26659",
+        undefined,
         "osmosis-1",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-2",
@@ -134,8 +138,10 @@ describe("SQLiteStorage", () => {
       const path = await storage.addRelayPath(
         "cosmoshub-4",
         "http://localhost:26657",
+        undefined,
         "osmosis-1",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-0",
@@ -157,8 +163,10 @@ describe("SQLiteStorage", () => {
       const path = await storage.addRelayPath(
         "fresh-chain-1",
         "http://localhost:26659",
+        undefined,
         "fresh-chain-2",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-99",
@@ -180,8 +188,10 @@ describe("SQLiteStorage", () => {
       const result = await storage.addRelayPath(
         "cosmoshub-4",
         "http://localhost:26657",
+        undefined,
         "osmosis-1",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-0",
@@ -205,8 +215,10 @@ describe("SQLiteStorage", () => {
       await storage.addRelayPath(
         "cosmoshub-4",
         "http://localhost:26657",
+        undefined,
         "osmosis-1",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-0",
@@ -245,8 +257,10 @@ describe("SQLiteStorage", () => {
       await storage.addRelayPath(
         "cosmoshub-4",
         "http://localhost:26657",
+        undefined,
         "osmosis-1",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-0",
@@ -257,8 +271,10 @@ describe("SQLiteStorage", () => {
       await storage.addRelayPath(
         "juno-1",
         "http://localhost:26659",
+        undefined,
         "osmosis-1",
         "http://localhost:26658",
+        undefined,
         ChainType.Cosmos,
         ChainType.Cosmos,
         "07-tendermint-2",
@@ -303,7 +319,7 @@ describe("SQLiteStorage", () => {
             fs.unlinkSync(isolatedDbPath);
           }
         }
-        catch (err) {
+        catch (_err) {
           // Ignore cleanup errors
         }
       }

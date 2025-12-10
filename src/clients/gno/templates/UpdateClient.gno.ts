@@ -2,12 +2,10 @@
 export const UpdateClient = `package main
 
 import (
-	"crypto/sha256"
 	"time"
-	"hex"
+	"encoding/hex"
 
 	"gno.land/p/aib/ibc/lightclient/tendermint"
-	"gno.land/p/aib/ibc/lightclient/tendermint/testing"
 	"gno.land/p/aib/ibc/types"
 	"gno.land/r/aib/ibc/core"
 )
@@ -19,14 +17,9 @@ func hexDec(s string) []byte {
 }
 func main() {
 	var (
-		clientID      = {{ clientId }}                 
-		chainID       = {{ chainId }}                       
-		timestamp     = time.Unix({{ timestampSec }}, {{ timestampNanos }})
-		blockhash     = hexDec("{{ blockHash }}")
-		parsethash    = hexDec("{{ partSetHash }}")
-		consensushash = hexDec("{{ consensusHash }}")
-		apphash       = hexDec("{{ appHash }}")
-		height        = types.Height{{{ revisionNumber }}, {{ revisionHeight}}}                 // TODO update
+		clientID      = "{{ clientId }}"                 
+		chainID       = "{{ chainID }}"          
+		height        = types.Height{{ openBr }}{{ revisionNumber }}, {{ revisionHeight }}{{ closeBr }}                  // TODO update
 		valset        = &tendermint.ValidatorSet{          // TODO update
 			Validators: []*tendermint.Validator{
         {{#each validators}}
@@ -42,9 +35,9 @@ func main() {
 				PubKey:      hexDec("{{ proposerPubKey }}"),
 				VotingPower: {{ proposerVotingPower }},
 			},
-			TotalVotingPower: {{ totalVotingPower}},
+			TotalVotingPower: {{ totalVotingPower }},
 		}
-		trustedHeight = types.Height{{{ trustedRevisionNumber }}, {{ trustedRevisionHeight }}}        // TODO update
+		trustedHeight = types.Height{{ openBr }}{{ trustedRevisionNumber }}, {{ trustedRevisionHeight }}{{ closeBr }}        // TODO update
 		trustedValset = &tendermint.ValidatorSet{ // TODO update
 			Validators: []*tendermint.Validator{
         {{#each trustedValidators}}
@@ -70,7 +63,7 @@ func main() {
 				},
 				ChainID: chainID,
 				Height:  height.RevisionHeight,
-				Time:    time.Unix({{ timestampSec }}, {{ timestampNanos }}),
+				Time:    time.Unix({{ timeSec }}, {{ timeNanos }}),
 				LastBlockID: tendermint.BlockID{
 					Hash: hexDec("{{ blockHash }}"),
 					PartSetHeader: tendermint.PartSetHeader{
@@ -78,8 +71,8 @@ func main() {
 						Hash:  hexDec("{{ partSetHash }}"),
 					},
 				},
-				LastCommitHash:     hexDec("{{ LastCommitHash }}"), //FIXME
-				DataHash:           hexDec("{{ DataHash }}"), //FIXME
+				LastCommitHash:     hexDec("{{ lastCommitHash }}"), //FIXME
+				DataHash:           hexDec("{{ dataHash }}"), //FIXME
 				ValidatorsHash:     hexDec("{{ validatorsHash }}"),
 				NextValidatorsHash: hexDec("{{ nextValidatorsHash }}"),
 				ConsensusHash:      hexDec("{{ consensusHash }}"),
@@ -104,6 +97,7 @@ func main() {
 						BlockIDFlag:      {{ this.blockIdFlag }},
 						ValidatorAddress: hexDec("{{ this.validatorAddress }}"),
 						Signature:        hexDec("{{ this.signature }}"),
+						Timestamp:        time.Unix({{ this.timestampSeconds }}, {{ this.timestampNanos }}),
 					},
           {{/each}}
 				},
