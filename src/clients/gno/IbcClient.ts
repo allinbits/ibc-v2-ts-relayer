@@ -1009,8 +1009,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       );
     }
     const txFee: TxFee = {
-      gas_wanted: new Long(60000000 * acks.length),
-      gas_fee: 60000000 * acks.length * 0.001 + "ugnot",
+      gas_wanted: new Long(70000000 * acks.length),
+      gas_fee: 70000000 * acks.length * 0.001 + "ugnot",
     };
 
     const tx: Tx = {
