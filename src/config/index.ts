@@ -109,7 +109,7 @@ function getPositiveInt(
   }
 
   const parsed = parseInt(envValue, 10);
-  if (isNaN(parsed) || parsed < (min ?? 0)) {
+  if (Number.isNaN(parsed) || parsed < (min ?? 0)) {
     console.warn(`Invalid number "${envValue}". Using default: ${defaultValue}`);
     return defaultValue;
   }

@@ -403,10 +403,10 @@ export function parseHeightAttribute(attribute?: string): Height | undefined {
     return undefined;
   }
 
-  const revisionNumber = BigInt(isNaN(Number(timeoutRevisionNumber))
+  const revisionNumber = BigInt(Number.isNaN(Number(timeoutRevisionNumber))
     ? 0
     : timeoutRevisionNumber);
-  const revisionHeight = BigInt(isNaN(Number(timeoutRevisionHeight))
+  const revisionHeight = BigInt(Number.isNaN(Number(timeoutRevisionHeight))
     ? 0
     : timeoutRevisionHeight);
   // note: 0 revisionNumber is allowed. If there is bad data, '' or '0-0', we will get 0 for the height
