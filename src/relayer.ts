@@ -324,7 +324,7 @@ export class Relayer extends EventEmitter {
                 relayHeights, config.relay.timeoutBlocks, config.relay.timeoutSeconds),
             };
             this.relayedHeights.set(id, relayHeights);
-            storage.updateRelayedHeights(id, relayHeights.packetHeightA, relayHeights.packetHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
+            await storage.updateRelayedHeights(id, relayHeights.packetHeightA, relayHeights.packetHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
             this.logger.info(`Updated relay heights for path ${id}:`, relayHeights);
           }
           await link.updateClientIfStale("A", options.maxAgeDest);
