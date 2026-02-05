@@ -13,6 +13,52 @@ import {
 } from "./storage-interface.js";
 
 /**
+ * Type guard for RelayedHeights database result.
+ */
+function isRelayedHeights(obj: unknown): obj is RelayedHeights {
+  return (
+    obj !== null
+    && typeof obj === "object"
+    && "id" in obj
+    && "relayPathId" in obj
+    && "packetHeightA" in obj
+    && "packetHeightB" in obj
+    && "ackHeightA" in obj
+    && "ackHeightB" in obj
+  );
+}
+
+/**
+ * Type guard for RelayPaths database result.
+ */
+function isRelayPaths(obj: unknown): obj is RelayPaths {
+  return (
+    obj !== null
+    && typeof obj === "object"
+    && "id" in obj
+    && "chainIdA" in obj
+    && "chainIdB" in obj
+    && "clientA" in obj
+    && "clientB" in obj
+    && "version" in obj
+  );
+}
+
+/**
+ * Type guard for ChainFees database result.
+ */
+function isChainFees(obj: unknown): obj is ChainFees {
+  return (
+    obj !== null
+    && typeof obj === "object"
+    && "id" in obj
+    && "chainId" in obj
+    && "gasPrice" in obj
+    && "gasDenom" in obj
+  );
+}
+
+/**
  * SQLite-based storage implementation for Node.js environments.
  * Uses better-sqlite3 for synchronous database operations.
  */
@@ -32,10 +78,10 @@ export class SQLiteStorage implements IStorage {
   async getChainFees(chainId: string): Promise<ChainFees> {
     const db = await openDB(this.dbPath);
     const res = await db.prepare("SELECT * FROM chainFees WHERE chainId = ?").get([chainId]);
-    if (!res) {
+    if (!isChainFees(res)) {
       throw new Error(`Chain fees not found for chain ID: ${chainId}`);
     }
-    return res as ChainFees;
+    return res;
   }
 
   async updateRelayedHeights(
@@ -59,8 +105,8 @@ export class SQLiteStorage implements IStorage {
   async getRelayedHeights(pathId: number): Promise<RelayedHeights> {
     try {
       const db = await openDB(this.dbPath);
-      const res = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]) as unknown as RelayedHeights;
-      if (!res) {
+      const res = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]);
+      if (!isRelayedHeights(res)) {
         throw new Error("Heights not found");
       }
       return res;
@@ -106,11 +152,18 @@ export class SQLiteStorage implements IStorage {
     const res = await db.prepare(
       "SELECT * FROM relayPaths WHERE chainIdA = ? AND chainIdB = ? AND clientA = ? AND clientB = ? AND version = ?",
     ).get([chainIdA, chainIdB, clientIdA, clientIdB, version]);
-    return res as RelayPaths | undefined;
+    if (res === undefined) {
+      return undefined;
+    }
+    if (!isRelayPaths(res)) {
+      throw new Error(`Invalid relay path data for chain ${chainIdA} <-> ${chainIdB}`);
+    }
+    return res;
   }
 
   async getRelayPaths(): Promise<RelayPaths[]> {
     const db = await openDB(this.dbPath);
-    return db.prepare("SELECT * FROM relayPaths ORDER BY id ASC").all() as unknown as RelayPaths[];
+    const results = await db.prepare("SELECT * FROM relayPaths ORDER BY id ASC").all();
+    return results.filter(isRelayPaths);
   }
 }

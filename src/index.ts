@@ -17,6 +17,22 @@ import {
   log,
 } from "./utils/logging.js";
 
+// Global error handlers for uncaught exceptions and unhandled rejections
+process.on("uncaughtException", (error) => {
+  log.error("Uncaught exception", {
+    error: error.message,
+    stack: error.stack,
+  });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  log.error("Unhandled promise rejection", {
+    reason,
+  });
+  process.exit(1);
+});
+
 const program = new Command();
 program.name(pkgJson.name).description(pkgJson.description).version(pkgJson.version);
 program.command("add-mnemonic")

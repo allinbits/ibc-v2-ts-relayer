@@ -94,8 +94,10 @@ export class DexieStorage implements IStorage {
     await db.relayPaths.add({
       chainIdA,
       nodeA,
+      queryNodeA,
       chainIdB,
       nodeB,
+      queryNodeB,
       chainTypeA,
       chainTypeB,
       clientA: clientIdA,

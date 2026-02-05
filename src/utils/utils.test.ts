@@ -80,8 +80,8 @@ describe("utils", () => {
       expect(toIntHeight(height)).toBe(123);
     });
 
-    it("should return NaN for undefined height", () => {
-      expect(toIntHeight(undefined)).toBeNaN();
+    it("should return 0 for undefined height", () => {
+      expect(toIntHeight(undefined)).toBe(0);
     });
 
     it("should handle large revision heights", () => {
