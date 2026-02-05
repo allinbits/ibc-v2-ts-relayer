@@ -433,7 +433,7 @@ export class Link {
     } = await this.doCheckAndRelay(
       relayFrom, timedoutThresholdBlocks, timedoutThresholdSeconds,
     );
-    this.logger.verbose("next heights to relay", heights as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    this.logger.verbose(`next heights to relay: ${JSON.stringify(heights)}`);
     return heights;
   }
 

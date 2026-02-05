@@ -122,6 +122,33 @@ export interface GnoIbcClientTypes {
   clientState: ibc.lightclients.gno.v1.gno.ClientState
   lightClientHeader: ibc.lightclients.gno.v1.gno.Header
 }
+
+/** Represents an attribute in a Gno event */
+interface GnoEventAttr {
+  key: string
+  value: string
+}
+
+/** Represents a Gno event from GraphQL response */
+interface GnoEvent {
+  type: string
+  attrs: GnoEventAttr[]
+}
+
+/** Represents a transaction response from GraphQL */
+interface GnoTxResponse {
+  block_height: string
+  hash: string
+  response: {
+    events: GnoEvent[]
+  }
+}
+
+/** Represents the GraphQL response for transaction queries */
+interface GnoGraphQLResponse {
+  getTransactions: GnoTxResponse[] | null
+}
+
 export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   public readonly gasPrice: GasPrice;
   public readonly sign: GnoWallet;
@@ -1488,23 +1515,25 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
   }
 }`;
-    const data = await this.graphClient.request(query);
+    const data = await this.graphClient.request<GnoGraphQLResponse>(query);
     const packets: PacketV2WithMetadata[] = [];
     if (!data || !data.getTransactions) {
       return packets;
     }
     for (const tx of data.getTransactions) {
       const height = Number(tx.block_height);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sendPacketEvents = tx.response.events.filter((e: any) => e.type === "send_packet");
+      const sendPacketEvents = tx.response.events.filter((e: GnoEvent) => e.type === "send_packet");
       for (const e of sendPacketEvents) {
+        const encodedPacketAttr = e.attrs.find((attr: GnoEventAttr) => attr.key === "encoded_packet_hex");
+        const sourceClientAttr = e.attrs.find((attr: GnoEventAttr) => attr.key === "packet_source_client");
+        if (!encodedPacketAttr || !sourceClientAttr) {
+          continue;
+        }
         const packet: PacketV2WithMetadata = {
           height,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          packet: PacketV2.decode(fromHex(e.attrs.find((attr: any) => attr.key === "encoded_packet_hex").value)),
+          packet: PacketV2.decode(fromHex(encodedPacketAttr.value)),
         };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (e.attrs.find((attr: any) => attr.key === "packet_source_client").value === clientId) {
+        if (sourceClientAttr.value === clientId) {
           packets.push(packet);
         }
       }
@@ -1573,27 +1602,29 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
   }
 }`;
-    const data = await this.graphClient.request(query);
+    const data = await this.graphClient.request<GnoGraphQLResponse>(query);
     const packets: AckV2WithMetadata[] = [];
     if (!data || !data.getTransactions) {
       return packets;
     }
     for (const tx of data.getTransactions) {
       const height = Number(tx.block_height);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const writeAcknowledgementEvents = tx.response.events.filter((e: any) => e.type === "write_acknowledgement");
+      const writeAcknowledgementEvents = tx.response.events.filter((e: GnoEvent) => e.type === "write_acknowledgement");
       for (const e of writeAcknowledgementEvents) {
+        const ackAttr = e.attrs.find((attr: GnoEventAttr) => attr.key === "encoded_acknowledgement_hex");
+        const packetAttr = e.attrs.find((attr: GnoEventAttr) => attr.key === "encoded_packet_hex");
+        const destClientAttr = e.attrs.find((attr: GnoEventAttr) => attr.key === "packet_dest_client");
+        if (!ackAttr || !packetAttr || !destClientAttr) {
+          continue;
+        }
         const packet: AckV2WithMetadata = {
           height,
           txHash: toHex(fromBase64(tx.hash)).toUpperCase(),
           txEvents: [],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          acknowledgement: fromHex(e.attrs.find((attr: any) => attr.key === "encoded_acknowledgement_hex").value),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          originalPacket: PacketV2.decode(fromHex(e.attrs.find((attr: any) => attr.key === "encoded_packet_hex").value)),
+          acknowledgement: fromHex(ackAttr.value),
+          originalPacket: PacketV2.decode(fromHex(packetAttr.value)),
         };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (e.attrs.find((attr: any) => attr.key === "packet_dest_client").value === clientId) {
+        if (destClientAttr.value === clientId) {
           packets.push(packet);
         }
       }

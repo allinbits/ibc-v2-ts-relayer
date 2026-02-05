@@ -93,8 +93,15 @@ export function deepCloneAndMutate<T extends Record<string, unknown>>(
   return deepClonedObject;
 }
 
-export function toBase64AsAny(...input: Parameters<typeof toBase64>) {
-  return toBase64(...input) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+/**
+ * Converts input to base64 with an intentionally loosened return type.
+ * Used in deep object mutations for logging where Uint8Array fields are converted
+ * to base64 strings. The `any` return type allows assignment to the original field
+ * types without type errors.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toBase64AsAny(...input: Parameters<typeof toBase64>): any {
+  return toBase64(...input);
 }
 export function createDeliverTxFailureMessage(result: DeliverTxResponse): string {
   return `Error when broadcasting tx ${result.transactionHash} at height ${result.height}. Code: ${result.code}; Raw log: ${result.rawLog}`;
@@ -160,9 +167,10 @@ export function mapRpcPubKeyToProto(pubkey?: RpcPubKey): ProtoPubKey | undefined
     };
   }
   else {
-    throw new Error(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      `Unknown validator pubkey type: ${(pubkey as any).algorithm}`);
+    // Exhaustive check - should never reach here based on RpcPubKey type,
+    // but handle gracefully for runtime safety
+    const _exhaustiveCheck: never = pubkey;
+    throw new Error(`Unknown validator pubkey type: ${JSON.stringify(_exhaustiveCheck)}`);
   }
 }
 
