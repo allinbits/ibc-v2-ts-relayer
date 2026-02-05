@@ -108,8 +108,11 @@ export function createDeliverTxFailureMessage(result: DeliverTxResponse): string
 }
 
 export function toIntHeight(height?: Height): number {
-  // eslint-disable-next-line no-constant-binary-expression
-  return Number(height?.revisionHeight) ?? 0;
+  const revisionHeight = height?.revisionHeight;
+  if (revisionHeight === undefined) {
+    return 0;
+  }
+  return Number(revisionHeight);
 }
 
 export function ensureIntHeight(height: bigint | Height): number {

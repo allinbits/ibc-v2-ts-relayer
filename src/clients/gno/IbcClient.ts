@@ -24,7 +24,7 @@ import {
 } from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   fromBase64,
-  fromHex, toAscii, toBase64, toBech32, toHex,
+  fromHex, toAscii, toBech32, toHex,
 } from "@cosmjs/encoding";
 import {
   GasPrice,
@@ -86,36 +86,7 @@ import {
 export type GnoIbcClientOptions = CreateWalletOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
 };
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function replaceUint8Arrays(obj) {
-  // Handle null/undefined
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
 
-  // If it's a Uint8Array, apply the transform function
-  if (obj instanceof Uint8Array) {
-    return toBase64(obj);
-  }
-
-  // If it's an array, recurse on each element
-  if (Array.isArray(obj)) {
-    return obj.map(item => replaceUint8Arrays(item));
-  }
-
-  // If it's a plain object, recurse on each property
-  if (typeof obj === "object") {
-    const result = {
-    };
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = replaceUint8Arrays(value);
-    }
-    return result;
-  }
-
-  // For primitives (string, number, boolean, etc.), return as-is
-  return obj;
-}
 export interface GnoIbcClientTypes {
   header: ibc.lightclients.gno.v1.gno.GnoHeader
   consensusState: ibc.lightclients.gno.v1.gno.ConsensusState
