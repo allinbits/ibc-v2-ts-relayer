@@ -70,7 +70,7 @@ import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
 import {
-  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, heightQueryString, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight,
+  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight,
 } from "../../utils/utils.js";
 import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
@@ -428,7 +428,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       };
     }
     catch (e) {
-      throw new Error(`Failed to parse consensus state for client ID ${clientId} at height ${consensusHeight}: ${e.message}`);
+      throw new Error(`Failed to parse consensus state for client ID ${clientId} at height ${consensusHeight}: ${getErrorMessage(e)}`);
     }
   }
 
@@ -483,7 +483,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       return clientStateTm;
     }
     catch (e) {
-      throw new Error("Failed to parse client state" + e);
+      throw new Error(`Failed to parse client state: ${getErrorMessage(e)}`);
     }
   }
 
@@ -1393,7 +1393,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       return counterparty;
     }
     catch (e) {
-      throw new Error(`Failed to parse client state for client ID ${clientId}: ${e}`);
+      throw new Error(`Failed to parse client state for client ID ${clientId}: ${getErrorMessage(e)}`);
     }
   }
 
@@ -1634,7 +1634,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       return unreceived;
     }
     catch (e) {
-      throw new Error(`Failed to parse unreceived packets for client ID ${clientId} and sequences ${sequences}: ${e}`);
+      throw new Error(`Failed to parse unreceived packets for client ID ${clientId} and sequences ${sequences}: ${getErrorMessage(e)}`);
     }
   }
 
@@ -1670,7 +1670,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       }
     }
     catch (e) {
-      throw new Error(`Failed to parse commitment for client ID ${clientId} and sequence ${sequence}: ${e}`);
+      throw new Error(`Failed to parse commitment for client ID ${clientId} and sequence ${sequence}: ${getErrorMessage(e)}`);
     }
   }
 
@@ -1701,7 +1701,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       return unreceived;
     }
     catch (e) {
-      throw new Error(`Failed to parse unreceived ACKs for client ID ${clientId} and sequences ${sequences}: ${e}`);
+      throw new Error(`Failed to parse unreceived ACKs for client ID ${clientId} and sequences ${sequences}: ${getErrorMessage(e)}`);
     }
   }
 

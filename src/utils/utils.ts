@@ -71,6 +71,20 @@ import {
   Ack, AckV2, ChainType, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types/index.js";
 
+/**
+ * Safely extracts an error message from an unknown caught value.
+ * Handles Error objects, strings, and other types.
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return String(error);
+}
+
 export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
   if (chainType === ChainType.Cosmos) {
     const tmClient = await connectComet(node);
