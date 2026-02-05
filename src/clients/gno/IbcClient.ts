@@ -197,13 +197,17 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
   public async header(height: number): Promise<ibc.lightclients.gno.v1.gno.GnoHeader> {
     this.logger.verbose(`Get header for height ${height}`);
-    // TODO: expose header method on tmClient and use thate
+    // TODO: expose header method on tmClient and use that
     const resp = await this.tm.blockchain(height, height);
+    if (resp.blockMetas.length === 0) {
+      throw new Error(`No block found at height ${height}`);
+    }
+    const blockMeta = resp.blockMetas[0];
     return {
-      ...resp.blockMetas[0].header,
-      height: BigInt(resp.blockMetas[0].header.height),
-      time: timestampFromDateNanos(resp.blockMetas[0].header.time),
-      proposerAddress: resp.blockMetas[0].header.proposerAddress,
+      ...blockMeta.header,
+      height: BigInt(blockMeta.header.height),
+      time: timestampFromDateNanos(blockMeta.header.time),
+      proposerAddress: blockMeta.header.proposerAddress,
     };
   }
 

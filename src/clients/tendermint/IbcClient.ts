@@ -144,7 +144,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     signer: OfflineSigner,
     options: Partial<TendermintIbcClientOptions>,
   ): Promise<TendermintIbcClient> {
-    options.senderAddress = (await signer.getAccounts())[0].address;
+    const accounts = await signer.getAccounts();
+    if (accounts.length === 0) {
+      throw new Error("No accounts found in signer");
+    }
+    options.senderAddress = accounts[0].address;
     // override any registry setup, use the other options
     const mergedOptions = {
       ...options,
@@ -213,6 +217,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.verbose(`Get header for height ${height}`);
     // TODO: expose header method on tmClient and use that
     const resp = await this.tm.blockchain(height, height);
+    if (resp.blockMetas.length === 0) {
+      throw new Error(`No block found at height ${height}`);
+    }
     return resp.blockMetas[0].header;
   }
 
