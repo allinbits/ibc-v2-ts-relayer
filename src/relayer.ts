@@ -42,6 +42,14 @@ import {
   getPrefix,
 } from "./utils/utils.js";
 
+async function getSenderAddress(signer: OfflineSigner, chainId: string): Promise<string> {
+  const accounts = await signer.getAccounts();
+  if (accounts.length === 0) {
+    throw new Error(`No accounts found for chain ${chainId}`);
+  }
+  return accounts[0].address;
+}
+
 export class Relayer extends EventEmitter {
   private logger: winston.Logger;
   private relayedHeights: Map<number, RelayedHeights> = new Map();
@@ -83,9 +91,9 @@ export class Relayer extends EventEmitter {
     const feesA = await storage.getChainFees(chainIdA);
     const feesB = await storage.getChainFees(chainIdB);
 
-    const clientA = chainTypeA == ChainType.Cosmos
+    const clientA = chainTypeA === ChainType.Cosmos
       ? await TendermintIbcClient.connectWithSigner(nodeA, signerA as OfflineSigner, {
-        senderAddress: (await (signerA as OfflineSigner).getAccounts())[0].address,
+        senderAddress: await getSenderAddress(signerA as OfflineSigner, chainIdA),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
         estimatedBlockTime: 6000,
@@ -97,9 +105,9 @@ export class Relayer extends EventEmitter {
         addressPrefix: prefixA,
         estimatedBlockTime: 6000,
       });
-    const clientB = chainTypeB == ChainType.Cosmos
+    const clientB = chainTypeB === ChainType.Cosmos
       ? await TendermintIbcClient.connectWithSigner(nodeB, signerB as OfflineSigner, {
-        senderAddress: (await (signerB as OfflineSigner).getAccounts())[0].address,
+        senderAddress: await getSenderAddress(signerB as OfflineSigner, chainIdB),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
         estimatedBlockTime: 6000,
@@ -135,10 +143,10 @@ export class Relayer extends EventEmitter {
       const path = await storage.addRelayPath(
         chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, link.endA.connectionID ?? link.endA.clientID, link.endB.connectionID ?? link.endB.clientID, version,
       );
-      // this.relayPaths = await storage.getRelayPaths();
+      this.relayPaths = await storage.getRelayPaths();
 
       if (path) {
-        // this.links.set(path.id, link);
+        this.links.set(path.id, link);
         this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
       }
     }
@@ -158,7 +166,11 @@ export class Relayer extends EventEmitter {
     gasPrice: string,
     gasDenom: string,
   ) {
-    await storage.addChainFees(chainId, parseFloat(gasPrice), gasDenom);
+    const price = parseFloat(gasPrice);
+    if (Number.isNaN(price)) {
+      throw new Error(`Invalid gas price: ${gasPrice}`);
+    }
+    await storage.addChainFees(chainId, price, gasDenom);
     this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}`);
   }
 
@@ -227,9 +239,9 @@ export class Relayer extends EventEmitter {
           this.logger.info(`Using signer for chain ${path.chainIdA} with prefix ${prefixA}`);
           this.logger.info(`Using signer for chain ${path.chainIdB} with prefix ${prefixB}`);
 
-          const clientA = path.chainTypeA == ChainType.Cosmos
+          const clientA = path.chainTypeA === ChainType.Cosmos
             ? await TendermintIbcClient.connectWithSigner(path.nodeA, signerA as OfflineSigner, {
-              senderAddress: (await (signerA as OfflineSigner).getAccounts())[0].address,
+              senderAddress: await getSenderAddress(signerA as OfflineSigner, path.chainIdA),
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
             })
@@ -239,9 +251,9 @@ export class Relayer extends EventEmitter {
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
             });
-          const clientB = path.chainTypeB == ChainType.Cosmos
+          const clientB = path.chainTypeB === ChainType.Cosmos
             ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
-              senderAddress: (await (signerB as OfflineSigner).getAccounts())[0].address,
+              senderAddress: await getSenderAddress(signerB as OfflineSigner, path.chainIdB),
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
             })
@@ -283,7 +295,7 @@ export class Relayer extends EventEmitter {
   }) {
     while (this.running) {
       try {
-        this.init();
+        await this.init();
         for (const [id, link] of this.links.entries()) {
           this.logger.info(`Checking relay path ${id}...`);
           if (!this.relayedHeights) {
@@ -320,8 +332,9 @@ export class Relayer extends EventEmitter {
         }
       }
       catch (e) {
-        console.error("Caught error: ", e);
-        console.trace();
+        this.logger.error("Error in relayer loop", {
+          error: e,
+        });
       }
       await this.sleep(options.poll);
     }

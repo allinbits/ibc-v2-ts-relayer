@@ -565,8 +565,8 @@ export class Link {
           );
           return packet;
         }
-        catch (e) {
-          console.log(e);
+        catch {
+          // Commitment not found - packet may have already been timed out
           return undefined;
         }
       }),
