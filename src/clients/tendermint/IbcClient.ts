@@ -652,8 +652,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const clientId = result.events
-      .find(x => x.type == "create_client")
-      ?.attributes.find(x => x.key == "client_id")?.value;
+      .find(x => x.type === "create_client")
+      ?.attributes.find(x => x.key === "client_id")?.value;
     if (!clientId) {
       throw new Error("Could not read TX events.");
     }
@@ -696,8 +696,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const clientId = result.events
-      .find(x => x.type == "create_client")
-      ?.attributes.find(x => x.key == "client_id")?.value;
+      .find(x => x.type === "create_client")
+      ?.attributes.find(x => x.key === "client_id")?.value;
     if (!clientId) {
       throw new Error("Could not read TX events.");
     }
@@ -821,8 +821,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const connectionId = result.events
-      .find(x => x.type == "connection_open_init")
-      ?.attributes.find(x => x.key == "connection_id")?.value;
+      .find(x => x.type === "connection_open_init")
+      ?.attributes.find(x => x.key === "connection_id")?.value;
     if (!connectionId) {
       throw new Error("Could not read TX events.");
     }
@@ -894,8 +894,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const myConnectionId = result.events
-      .find(x => x.type == "connection_open_try")
-      ?.attributes.find(x => x.key == "connection_id")?.value;
+      .find(x => x.type === "connection_open_try")
+      ?.attributes.find(x => x.key === "connection_id")?.value;
     if (!myConnectionId) {
       throw new Error("Could not read TX events.");
     }
@@ -1042,8 +1042,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const channelId = result.events
-      .find(x => x.type == "channel_open_init")
-      ?.attributes.find(x => x.key == "channel_id")?.value;
+      .find(x => x.type === "channel_open_init")
+      ?.attributes.find(x => x.key === "channel_id")?.value;
     if (!channelId) {
       throw new Error("Could not read TX events.");
     }
@@ -1104,8 +1104,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     const channelId = result.events
-      .find(x => x.type == "channel_open_try")
-      ?.attributes.find(x => x.key == "channel_id")?.value;
+      .find(x => x.type === "channel_open_try")
+      ?.attributes.find(x => x.key === "channel_id")?.value;
     if (!channelId) {
       throw new Error("Could not read TX events.");
     }

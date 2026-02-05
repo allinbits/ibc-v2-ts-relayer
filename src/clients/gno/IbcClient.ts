@@ -351,7 +351,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         : undefined,
     }));
     const proposer = mappedValidators.find(val =>
-      val.address == proposerAddress,
+      val.address === proposerAddress,
     );
     return ibc.lightclients.gno.v1.gno.ValidatorSet.fromPartial({
       validators: mappedValidators.map((val) => {
@@ -683,8 +683,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         pubKey: toHex(val.pubKey.ed25519 ?? val.pubKey.secp256k1 ?? new Uint8Array()),
         votingPower: val.votingPower.toString(),
       })),
-      proposerPubKey: toHex(header.validatorSet.validators.find(v => toHex(v.address) == toHex(header.signedHeader.header.proposerAddress))?.pubKey.ed25519 ?? new Uint8Array()),
-      proposerVotingPower: header.validatorSet.validators.find(v => toHex(v.address) == toHex(header.signedHeader.header.proposerAddress))?.votingPower.toString() ?? "0",
+      proposerPubKey: toHex(header.validatorSet.validators.find(v => toHex(v.address) === toHex(header.signedHeader.header.proposerAddress))?.pubKey.ed25519 ?? new Uint8Array()),
+      proposerVotingPower: header.validatorSet.validators.find(v => toHex(v.address) === toHex(header.signedHeader.header.proposerAddress))?.votingPower.toString() ?? "0",
       trustedRevisionNumber: header.trustedHeight.revisionNumber.toString(),
       trustedRevisionHeight: header.trustedHeight.revisionHeight.toString(),
       trustedValidators: header.trustedValidators.validators.map(val => ({
@@ -1622,7 +1622,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       for (const seq of sequences) {
         const packet = data.find((item: {
           sequence: string
-        }) => BigInt(item.sequence) == BigInt(seq));
+        }) => BigInt(item.sequence) === BigInt(seq));
         if (!packet) {
           unreceived.push(seq);
         }
@@ -1657,7 +1657,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
       const commitment = data.find((item: {
         sequence: string
-      }) => BigInt(item.sequence) == sequence);
+      }) => BigInt(item.sequence) === sequence);
       if (commitment) {
         return fromBase64(commitment.data);
       }
@@ -1689,7 +1689,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       for (const seq of sequences) {
         const ack = data.find((item: {
           sequence: string
-        }) => BigInt(item.sequence) == BigInt(seq));
+        }) => BigInt(item.sequence) === BigInt(seq));
         if (ack) {
           unreceived.push(seq);
         }

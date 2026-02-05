@@ -66,6 +66,7 @@ export default tseslint.config([
           skipComments: true,
         },
       ],
+      eqeqeq: ["error", "always"],
     },
   },
   {
