@@ -147,13 +147,13 @@ export function mapRpcPubKeyToProto(pubkey?: RpcPubKey): ProtoPubKey | undefined
   if (pubkey === undefined) {
     return undefined;
   }
-  if (pubkey.algorithm == "ed25519") {
+  if (pubkey.algorithm === "ed25519") {
     return {
       ed25519: pubkey.data,
       secp256k1: undefined,
     };
   }
-  else if (pubkey.algorithm == "secp256k1") {
+  else if (pubkey.algorithm === "secp256k1") {
     return {
       ed25519: undefined,
       secp256k1: pubkey.data,
@@ -399,7 +399,7 @@ export function parseHeightAttribute(attribute?: string): Height | undefined {
     ? 0
     : timeoutRevisionHeight);
   // note: 0 revisionNumber is allowed. If there is bad data, '' or '0-0', we will get 0 for the height
-  if (revisionHeight == 0n) {
+  if (revisionHeight === 0n) {
     return undefined;
   }
   return {
@@ -564,7 +564,7 @@ export function heightGreater(a: Height | undefined, b: Height): boolean {
      * convert to numbers to compare safely
      */
   const [numA, heightA, numB, heightB] = [Number(a.revisionNumber), Number(a.revisionHeight), Number(b.revisionNumber), Number(b.revisionHeight)];
-  const valid = numA > numB || (numA == numB && heightA > heightB);
+  const valid = numA > numB || (numA === numB && heightA > heightB);
   return valid;
 }
 
@@ -573,7 +573,7 @@ export function heightGreater(a: Height | undefined, b: Height): boolean {
  * note a is nanoseconds, while b is seconds
  */
 export function timeGreater(a: bigint | undefined, b: number): boolean {
-  if (a === undefined || a == 0n) {
+  if (a === undefined || a === 0n) {
     return true;
   }
   const valid = Number(a) > b * 1_000_000_000;
@@ -582,7 +582,7 @@ export function timeGreater(a: bigint | undefined, b: number): boolean {
 
 // in IBC v2 both a and b are in seconds
 export function timeGreaterV2(a: bigint | undefined, b: number): boolean {
-  if (a === undefined || a == 0n) {
+  if (a === undefined || a === 0n) {
     return true;
   }
   const valid = Number(a) > b;

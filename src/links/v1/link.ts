@@ -157,12 +157,12 @@ export class Link {
       );
     }
     // ensure the connection is open
-    if (connectionA.state != State.STATE_OPEN) {
+    if (connectionA.state !== State.STATE_OPEN) {
       throw new Error(
         `Connection on ${chainA} must be in state open, it has state ${connectionA.state}`,
       );
     }
-    if (connectionB.state != State.STATE_OPEN) {
+    if (connectionB.state !== State.STATE_OPEN) {
       throw new Error(
         `Connection on ${chainB} must be in state open, it has state ${connectionB.state}`,
       );

@@ -77,7 +77,7 @@ export function isTendermintConsensusState(consensusState: ReturnType<typeof dec
 }
 
 export function isGnoClientState(clientState: ReturnType<typeof decodeClientState>): clientState is ibc.lightclients.gno.v1.gno.ClientState {
-  if ((clientState as ibc.lightclients.gno.v1.gno.ClientState).lcType == "10-gno") {
+  if ((clientState as ibc.lightclients.gno.v1.gno.ClientState).lcType === "10-gno") {
     return true;
   }
   else {
@@ -85,7 +85,7 @@ export function isGnoClientState(clientState: ReturnType<typeof decodeClientStat
   }
 }
 export function isGnoConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is ibc.lightclients.gno.v1.gno.ConsensusState {
-  if ((consensusState as ibc.lightclients.gno.v1.gno.ConsensusState).lcType == "10-gno") {
+  if ((consensusState as ibc.lightclients.gno.v1.gno.ConsensusState).lcType === "10-gno") {
     return true;
   }
   else {
@@ -93,11 +93,6 @@ export function isGnoConsensusState(consensusState: ReturnType<typeof decodeCons
   }
 }
 
-/*
- *export function isGno(client: BaseIbcClient): client is GnoIbcClient {
- *  return client.clientType === ClientType.Gno;
- *}
- */
 export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   /**
      * The chain ID of the chain this client is connected to.
