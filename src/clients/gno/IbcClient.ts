@@ -1611,17 +1611,59 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
-  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
+  public async pagedAbciQuery(path: string, query: string): Promise<unknown[]> {
     const result = await this.tm.abciQuery({
-      path: "vm/qrender",
-      data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/packet_receipts`, "utf-8"),
+      path,
+      data: Buffer.from(query, "utf-8"),
     });
-
     if (result.responseBase.error) {
-      throw new Error(`Unreceived packets for client ID ${clientId} and sequences ${sequences} not found. ` + result.responseBase.error);
+      throw new Error("Query: " + query + " failed. Error: " + result.responseBase.error);
     }
+    let items = [];
     try {
       const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
+      if (Array.isArray(data)) {
+        return data;
+      }
+      else {
+        if (data.items && Array.isArray(data.items) && data.total === 1) {
+          return data.items;
+        }
+        else {
+          if (data.total > 1) {
+            items = [...data.items];
+            for (let i = 2; i <= data.total; i++) {
+              const result = await this.tm.abciQuery({
+                path,
+                data: Buffer.from(query + "&page=" + i, "utf-8"),
+              });
+              if (result.responseBase.error) {
+                throw new Error("Query: " + query + "&page=" + i + " failed. Error: " + result.responseBase.error);
+              }
+              const pageData = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
+              if (pageData.items && Array.isArray(pageData.items)) {
+                items = [...items, ...pageData.items];
+              }
+              else {
+                throw new Error("Invalid data format for page " + i + ": " + result.responseBase.data);
+              }
+            }
+          }
+        }
+      }
+    }
+    catch (e) {
+      throw new Error(`Failed to parse query result for query ${query}: ${getErrorMessage(e)}`);
+    }
+  }
+
+  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
+    try {
+      const data = await this.pagedAbciQuery(
+        "vm/qrender",
+        `gno.land/r/aib/ibc/core:clients/${clientId}/packet_receipts`,
+      );
+
       const unreceived: number[] = [];
       for (const seq of sequences) {
         const packet = data.find((item: {
@@ -1649,21 +1691,16 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   public async queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array> {
-    const result = await this.tm.abciQuery({
-      path: "vm/qrender",
-      data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`, "utf-8"),
-    });
-
-    if (result.responseBase.error) {
-      throw new Error(`Commitment for client ID ${clientId} and sequence ${sequence} not found. ` + result.responseBase.error);
-    }
     try {
-      const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
+      const data = await this.pagedAbciQuery("vm/qrender", `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`);
+
       const commitment = data.find((item: {
         sequence: string
       }) => BigInt(item.sequence) === sequence);
       if (commitment) {
-        return fromBase64(commitment.data);
+        return fromBase64((commitment as {
+          data: string
+        }).data);
       }
       else {
         throw new Error(`Commitment for client ID ${clientId} and sequence ${sequence} not found in data.`);
@@ -1679,16 +1716,11 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
-    const result = await this.tm.abciQuery({
-      path: "vm/qrender",
-      data: Buffer.from(`gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`, "utf-8"),
-    });
-
-    if (result.responseBase.error) {
-      throw new Error(`Unreceived ACKs for client ID ${clientId} and sequences ${sequences} not found. ` + result.responseBase.error);
-    }
     try {
-      const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
+      const data = await this.pagedAbciQuery(
+        "vm/qrender", `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`,
+      );
+
       const unreceived: number[] = [];
       for (const seq of sequences) {
         const ack = data.find((item: {

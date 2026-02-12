@@ -148,13 +148,14 @@ func main() {
     addressPrefix: prefix || "g",
   });
   wallet.connect(provider);
-  const result = await wallet.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()).set(denom, Number(amount)), (new Map()).set("ugnot", 3000000),
+  const result = await wallet.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()), (new Map()).set("ugnot", 3000000),
     {
       gas_wanted: new Long(60000000),
       gas_fee: "750000ugnot",
     });
+  console.log("Gno transfer result:", result);
   return result;
 };
 
-// transferFromAtomone("10-gno-0", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");
+//transferFromAtomone("10-gno-0", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");
 transferFromGno("07-tendermint-1", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "transfer/07-tendermint-1/uatone", "test transfer", "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");

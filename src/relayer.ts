@@ -332,7 +332,7 @@ export class Relayer extends EventEmitter {
         }
       }
       catch (e) {
-        this.logger.error("Error in relayer loop", {
+        this.logger.error("Error in relayer loop: " + e, {
           error: e,
         });
       }
