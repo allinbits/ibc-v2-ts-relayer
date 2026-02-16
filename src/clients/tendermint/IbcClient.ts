@@ -92,7 +92,7 @@ import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
 import {
-  buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight,
+  buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
 import {
   IbcExtension, setupIbcExtension,
@@ -104,9 +104,7 @@ import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
 } from "../BaseIbcClient.js";
 
-function ibcRegistry(): Registry {
-  return new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as GeneratedType]]);
-}
+const ibcRegistryInstance = new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as GeneratedType]]);
 export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
 };
@@ -152,12 +150,12 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     // override any registry setup, use the other options
     const mergedOptions = {
       ...options,
-      registry: ibcRegistry(),
+      registry: ibcRegistryInstance,
     };
-    const signingClient = await SigningStargateClient.connectWithSigner(
-      endpoint, signer, mergedOptions,
-    );
     const tmClient = await connectComet(endpoint);
+    const signingClient = SigningStargateClient.createWithSigner(
+      tmClient, signer, mergedOptions,
+    );
     const chainId = await signingClient.getChainId();
     options.chainId = chainId;
     options.clientType = ClientType.Tendermint;
@@ -179,6 +177,12 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.query = QueryClient.withExtensions(
       tmClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
     );
+  }
+
+  private debugMsg<T extends Record<string, unknown>>(label: string, msg: T, mutate: (m: T) => void): void {
+    if (this.logger.isLevelEnabled("debug")) {
+      this.logger.debug(label, deepCloneAndMutate(msg, mutate));
+    }
   }
 
   public revisionHeight(height: number): Height {
@@ -735,15 +739,13 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
 
-    this.logger.debug(
-      "MsgUpdateClient", deepCloneAndMutate(updateMsg, (mutableMsg) => {
-        if (mutableMsg.value.clientMessage?.value) {
-          mutableMsg.value.clientMessage.value = toBase64AsAny(
-            mutableMsg.value.clientMessage.value,
-          );
-        }
-      }),
-    );
+    this.debugMsg("MsgUpdateClient", updateMsg, (mutableMsg) => {
+      if (mutableMsg.value.clientMessage?.value) {
+        mutableMsg.value.clientMessage.value = toBase64AsAny(
+          mutableMsg.value.clientMessage.value,
+        );
+      }
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [updateMsg], "auto",
@@ -776,15 +778,13 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       }),
     };
 
-    this.logger.debug(
-      "MsgUpdateClient", deepCloneAndMutate(updateMsg, (mutableMsg) => {
-        if (mutableMsg.value.clientMessage?.value) {
-          mutableMsg.value.clientMessage.value = toBase64AsAny(
-            mutableMsg.value.clientMessage.value,
-          );
-        }
-      }),
-    );
+    this.debugMsg("MsgUpdateClient", updateMsg, (mutableMsg) => {
+      if (mutableMsg.value.clientMessage?.value) {
+        mutableMsg.value.clientMessage.value = toBase64AsAny(
+          mutableMsg.value.clientMessage.value,
+        );
+      }
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [updateMsg], "auto",
@@ -881,17 +881,15 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         consensusHeight,
       }),
     };
-    this.logger.debug(
-      "MsgConnectionOpenTry", deepCloneAndMutate(msg, (mutableMsg) => {
-        mutableMsg.value.proofClient = toBase64AsAny(
-          mutableMsg.value.proofClient,
-        );
-        mutableMsg.value.proofConsensus = toBase64AsAny(
-          mutableMsg.value.proofConsensus,
-        );
-        mutableMsg.value.proofInit = toBase64AsAny(mutableMsg.value.proofInit);
-      }),
-    );
+    this.debugMsg("MsgConnectionOpenTry", msg, (mutableMsg) => {
+      mutableMsg.value.proofClient = toBase64AsAny(
+        mutableMsg.value.proofClient,
+      );
+      mutableMsg.value.proofConsensus = toBase64AsAny(
+        mutableMsg.value.proofConsensus,
+      );
+      mutableMsg.value.proofInit = toBase64AsAny(mutableMsg.value.proofInit);
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [msg], "auto",
@@ -950,17 +948,15 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         consensusHeight,
       }),
     };
-    this.logger.debug(
-      "MsgConnectionOpenAck", deepCloneAndMutate(msg, (mutableMsg) => {
-        mutableMsg.value.proofConsensus = toBase64AsAny(
-          mutableMsg.value.proofConsensus,
-        );
-        mutableMsg.value.proofTry = toBase64AsAny(mutableMsg.value.proofTry);
-        mutableMsg.value.proofClient = toBase64AsAny(
-          mutableMsg.value.proofClient,
-        );
-      }),
-    );
+    this.debugMsg("MsgConnectionOpenAck", msg, (mutableMsg) => {
+      mutableMsg.value.proofConsensus = toBase64AsAny(
+        mutableMsg.value.proofConsensus,
+      );
+      mutableMsg.value.proofTry = toBase64AsAny(mutableMsg.value.proofTry);
+      mutableMsg.value.proofClient = toBase64AsAny(
+        mutableMsg.value.proofClient,
+      );
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [msg], "auto",
@@ -993,11 +989,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         proofAck,
       }),
     };
-    this.logger.debug(
-      "MsgConnectionOpenConfirm", deepCloneAndMutate(msg, (mutableMsg) => {
-        mutableMsg.value.proofAck = toBase64AsAny(mutableMsg.value.proofAck);
-      }),
-    );
+    this.debugMsg("MsgConnectionOpenConfirm", msg, (mutableMsg) => {
+      mutableMsg.value.proofAck = toBase64AsAny(mutableMsg.value.proofAck);
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [msg], "auto",
@@ -1097,11 +1091,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         signer: senderAddress,
       }),
     };
-    this.logger.debug(
-      "MsgChannelOpenTry", deepCloneAndMutate(msg, (mutableMsg) => {
-        mutableMsg.value.proofInit = toBase64AsAny(mutableMsg.value.proofInit);
-      }),
-    );
+    this.debugMsg("MsgChannelOpenTry", msg, (mutableMsg) => {
+      mutableMsg.value.proofInit = toBase64AsAny(mutableMsg.value.proofInit);
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [msg], "auto",
@@ -1154,11 +1146,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         signer: senderAddress,
       }),
     };
-    this.logger.debug(
-      "MsgChannelOpenAck", deepCloneAndMutate(msg, (mutableMsg) => {
-        mutableMsg.value.proofTry = toBase64AsAny(mutableMsg.value.proofTry);
-      }),
-    );
+    this.debugMsg("MsgChannelOpenAck", msg, (mutableMsg) => {
+      mutableMsg.value.proofTry = toBase64AsAny(mutableMsg.value.proofTry);
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [msg], "auto",
@@ -1195,12 +1185,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         signer: senderAddress,
       }),
     };
-    this.logger.debug(
-      "MsgChannelOpenConfirm "
-      + deepCloneAndMutate(msg, (mutableMsg) => {
-        mutableMsg.value.proofAck = toBase64AsAny(mutableMsg.value.proofAck);
-      }),
-    );
+    this.debugMsg("MsgChannelOpenConfirm", msg, (mutableMsg) => {
+      mutableMsg.value.proofAck = toBase64AsAny(mutableMsg.value.proofAck);
+    });
 
     const result = await this.sign.signAndBroadcast(
       senderAddress, [msg], "auto",
@@ -1257,20 +1244,22 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       };
       msgs.push(msg);
     }
-    this.logger.debug("MsgRecvPacket(s)", {
-      msgs: msgs.map(msg =>
-        deepCloneAndMutate(msg, (mutableMsg) => {
-          mutableMsg.value.proofCommitment = toBase64AsAny(
-            mutableMsg.value.proofCommitment,
-          );
-          if (mutableMsg.value.packet?.data) {
-            mutableMsg.value.packet.data = toBase64AsAny(
-              mutableMsg.value.packet.data,
+    if (this.logger.isLevelEnabled("debug")) {
+      this.logger.debug("MsgRecvPacket(s)", {
+        msgs: msgs.map(msg =>
+          deepCloneAndMutate(msg, (mutableMsg) => {
+            mutableMsg.value.proofCommitment = toBase64AsAny(
+              mutableMsg.value.proofCommitment,
             );
-          }
-        }),
-      ),
-    });
+            if (mutableMsg.value.packet?.data) {
+              mutableMsg.value.packet.data = toBase64AsAny(
+                mutableMsg.value.packet.data,
+              );
+            }
+          }),
+        ),
+      });
+    }
     const result = await this.sign.signAndBroadcast(
       senderAddress, msgs, "auto",
     );
@@ -1327,15 +1316,17 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       };
       msgs.push(msg);
     }
-    this.logger.debug("MsgRecvPacket(s)", {
-      msgs: msgs.map(msg =>
-        deepCloneAndMutate(msg, (mutableMsg) => {
-          mutableMsg.value.proofCommitment = toBase64AsAny(
-            mutableMsg.value.proofCommitment,
-          );
-        }),
-      ),
-    });
+    if (this.logger.isLevelEnabled("debug")) {
+      this.logger.debug("MsgRecvPacket(s)", {
+        msgs: msgs.map(msg =>
+          deepCloneAndMutate(msg, (mutableMsg) => {
+            mutableMsg.value.proofCommitment = toBase64AsAny(
+              mutableMsg.value.proofCommitment,
+            );
+          }),
+        ),
+      });
+    }
     const result = await this.sign.signAndBroadcast(
       senderAddress, msgs, "auto",
     );
@@ -1396,23 +1387,25 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       };
       msgs.push(msg);
     }
-    this.logger.debug("MsgAcknowledgement(s)", {
-      msgs: msgs.map(msg =>
-        deepCloneAndMutate(msg, (mutableMsg) => {
-          mutableMsg.value.acknowledgement = toBase64AsAny(
-            mutableMsg.value.acknowledgement,
-          );
-          mutableMsg.value.proofAcked = toBase64AsAny(
-            mutableMsg.value.proofAcked,
-          );
-          if (mutableMsg.value.packet?.data) {
-            mutableMsg.value.packet.data = toBase64AsAny(
-              mutableMsg.value.packet.data,
+    if (this.logger.isLevelEnabled("debug")) {
+      this.logger.debug("MsgAcknowledgement(s)", {
+        msgs: msgs.map(msg =>
+          deepCloneAndMutate(msg, (mutableMsg) => {
+            mutableMsg.value.acknowledgement = toBase64AsAny(
+              mutableMsg.value.acknowledgement,
             );
-          }
-        }),
-      ),
-    });
+            mutableMsg.value.proofAcked = toBase64AsAny(
+              mutableMsg.value.proofAcked,
+            );
+            if (mutableMsg.value.packet?.data) {
+              mutableMsg.value.packet.data = toBase64AsAny(
+                mutableMsg.value.packet.data,
+              );
+            }
+          }),
+        ),
+      });
+    }
     const result = await this.sign.signAndBroadcast(
       senderAddress, msgs, "auto",
     );
@@ -1538,20 +1531,22 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       msgs.push(msg);
     }
 
-    this.logger.debug("MsgTimeout", {
-      msgs: msgs.map(msg =>
-        deepCloneAndMutate(msg, (mutableMsg) => {
-          if (mutableMsg.value.packet?.data) {
-            mutableMsg.value.packet.data = toBase64AsAny(
-              mutableMsg.value.packet.data,
+    if (this.logger.isLevelEnabled("debug")) {
+      this.logger.debug("MsgTimeout", {
+        msgs: msgs.map(msg =>
+          deepCloneAndMutate(msg, (mutableMsg) => {
+            if (mutableMsg.value.packet?.data) {
+              mutableMsg.value.packet.data = toBase64AsAny(
+                mutableMsg.value.packet.data,
+              );
+            }
+            mutableMsg.value.proofUnreceived = toBase64AsAny(
+              mutableMsg.value.proofUnreceived,
             );
-          }
-          mutableMsg.value.proofUnreceived = toBase64AsAny(
-            mutableMsg.value.proofUnreceived,
-          );
-        }),
-      ),
-    });
+          }),
+        ),
+      });
+    }
     const result = await this.sign.signAndBroadcast(
       senderAddress, msgs, "auto",
     );
@@ -1965,7 +1960,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   public async queryWrittenAcks(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckWithMetadata[]> {
-    let query = `write_acknowledgement.packet_connection='${connectionId}'`;
+    let query = `write_acknowledgement.packet_connection='${validateIbcIdentifier(connectionId, "connectionId")}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
     }
@@ -1993,7 +1988,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
   public async queryWrittenAcksV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckV2WithMetadata[]> {
     // TODO: Get V2 acks from events
-    let query = `write_acknowledgement.packet_dest_client='${clientId}'`;
+    let query = `write_acknowledgement.packet_dest_client='${validateIbcIdentifier(clientId, "clientId")}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
     }
@@ -2081,7 +2076,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   async getPacketsFromBlockEvents(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_connection='${connectionId}'`;
+    let query = `send_packet.packet_connection='${validateIbcIdentifier(connectionId, "connectionId")}'`;
     if (minHeight) {
       query = `${query} AND block.height>=${minHeight}`;
     }
@@ -2108,7 +2103,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   async getPacketsFromTxs(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_connection='${connectionId}'`;
+    let query = `send_packet.packet_connection='${validateIbcIdentifier(connectionId, "connectionId")}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
     }
@@ -2130,7 +2125,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   async getPacketsFromBlockEventsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_source_client='${clientId}'`;
+    let query = `send_packet.packet_source_client='${validateIbcIdentifier(clientId, "clientId")}'`;
     if (minHeight) {
       query = `${query} AND block.height>=${minHeight}`;
     }
@@ -2157,7 +2152,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   async getPacketsFromTxsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_source_client='${clientId}'`;
+    let query = `send_packet.packet_source_client='${validateIbcIdentifier(clientId, "clientId")}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
     }
@@ -2176,5 +2171,9 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         })),
     );
     return resultsNested.flat();
+  }
+
+  public disconnect(): void {
+    this.tm.disconnect();
   }
 }

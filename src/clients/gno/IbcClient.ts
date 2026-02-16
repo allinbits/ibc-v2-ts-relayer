@@ -70,7 +70,7 @@ import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
 import {
-  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight,
+  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
 import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
@@ -607,7 +607,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     consensusState: TendermintConsensusState,
   ): Promise<CreateClientResult> {
     const rundotgno = createClientTemplate({
-      chainID: clientState.chainId,
+      chainID: validateIbcIdentifier(clientState.chainId, "chainId"),
       revisionNumber: clientState.latestHeight?.revisionNumber.toString() ?? "0",
       revisionHeight: clientState.latestHeight?.revisionHeight.toString() ?? "0",
       unbondingPeriod: `time.Second * ${clientState.unbondingPeriod?.seconds.toString() ?? "0"}`,
@@ -661,10 +661,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   ): Promise<MsgResult> {
     this.logger.verbose(`Update Tendermint client ${clientId}`);
     const rundotgno = updateClientTemplate({
-      clientId,
+      clientId: validateIbcIdentifier(clientId, "clientId"),
       openBr: "{",
       closeBr: "}",
-      chainID: header.signedHeader.header.chainId,
+      chainID: validateIbcIdentifier(header.signedHeader.header.chainId, "chainId"),
       appHash: toHex(header.signedHeader.header.appHash ?? new Uint8Array()),
       revisionNumber: header.signedHeader.header.height.toString(),
       revisionHeight: header.signedHeader.header.height.toString(),
@@ -858,6 +858,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       throw new Error("Must submit at least 1 packet");
     }
     const messages = [];
+    const amount: string = fundsToCoins(new Map());
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
+    const caller: string = await this.sign.getAddress();
     for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
       this.logger.verbose(
@@ -867,14 +870,14 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       const ics23 = MerkleProof.decode(proofCommitments[i]);
       const rundotgno = recvPacket({
         sequence: packet.sequence.toString(),
-        sourceClient: packet.sourceClient,
-        destinationClient: packet.destinationClient,
+        sourceClient: validateIbcIdentifier(packet.sourceClient, "sourceClient"),
+        destinationClient: validateIbcIdentifier(packet.destinationClient, "destinationClient"),
         timestamp: packet.timeoutTimestamp.toString(),
         payloads: packet.payloads.map(p => ({
-          sourcePort: p.sourcePort,
-          destinationPort: p.destinationPort,
-          encoding: p.encoding,
-          version: p.version,
+          sourcePort: validateIbcIdentifier(p.sourcePort, "sourcePort"),
+          destinationPort: validateIbcIdentifier(p.destinationPort, "destinationPort"),
+          encoding: validateIbcIdentifier(p.encoding, "encoding"),
+          version: validateIbcIdentifier(p.version, "version"),
           value: toHex(p.value),
         })),
         commitmentProof: ProofHelper(ics23),
@@ -891,11 +894,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         name: "main",
         path: "",
       });
-      const amount: string = fundsToCoins(new Map());
-      const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
-
-      // Fetch the wallet address
-      const caller: string = await this.sign.getAddress();
       const runMsg: MsgRun = {
         caller,
         send: amount,
@@ -963,18 +961,21 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     proofHeight?: Height,
   ): Promise<MsgResult> {
     const messages = [];
+    const amount: string = fundsToCoins(new Map());
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
+    const caller: string = await this.sign.getAddress();
     for (let i = 0; i < acks.length; i++) {
       const ics23 = MerkleProof.decode(proofAckeds[i]);
       const rundotgno = acknowledgement({
         sequence: acks[i].originalPacket.sequence.toString(),
-        sourceClient: acks[i].originalPacket.sourceClient,
-        destinationClient: acks[i].originalPacket.destinationClient,
+        sourceClient: validateIbcIdentifier(acks[i].originalPacket.sourceClient, "sourceClient"),
+        destinationClient: validateIbcIdentifier(acks[i].originalPacket.destinationClient, "destinationClient"),
         timestamp: acks[i].originalPacket.timeoutTimestamp.toString(),
         payloads: acks[i].originalPacket.payloads.map(p => ({
-          sourcePort: p.sourcePort,
-          destinationPort: p.destinationPort,
-          encoding: p.encoding,
-          version: p.version,
+          sourcePort: validateIbcIdentifier(p.sourcePort, "sourcePort"),
+          destinationPort: validateIbcIdentifier(p.destinationPort, "destinationPort"),
+          encoding: validateIbcIdentifier(p.encoding, "encoding"),
+          version: validateIbcIdentifier(p.version, "version"),
           value: toHex(p.value),
         })),
         appAcknowledgement: toHex(acks[i].acknowledgement).substring(4),
@@ -992,11 +993,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         name: "main",
         path: "",
       });
-      const amount: string = fundsToCoins(new Map());
-      const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
-
-      // Fetch the wallet address
-      const caller: string = await this.sign.getAddress();
       const runMsg: MsgRun = {
         caller,
         send: amount,
@@ -1070,18 +1066,21 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     proofHeight: Height,
   ): Promise<MsgResult> {
     const messages = [];
+    const amount: string = fundsToCoins(new Map());
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
+    const caller: string = await this.sign.getAddress();
     for (let i = 0; i < packets.length; i++) {
       const ics23 = MerkleProof.decode(proofsUnreceived[i]);
       const rundotgno = timeout({
         sequence: packets[i].sequence.toString(),
-        sourceClient: packets[i].sourceClient,
-        destinationClient: packets[i].destinationClient,
+        sourceClient: validateIbcIdentifier(packets[i].sourceClient, "sourceClient"),
+        destinationClient: validateIbcIdentifier(packets[i].destinationClient, "destinationClient"),
         timestamp: packets[i].timeoutTimestamp.toString(),
         payloads: packets[i].payloads.map(p => ({
-          sourcePort: p.sourcePort,
-          destinationPort: p.destinationPort,
-          encoding: p.encoding,
-          version: p.version,
+          sourcePort: validateIbcIdentifier(p.sourcePort, "sourcePort"),
+          destinationPort: validateIbcIdentifier(p.destinationPort, "destinationPort"),
+          encoding: validateIbcIdentifier(p.encoding, "encoding"),
+          version: validateIbcIdentifier(p.version, "version"),
           value: toHex(p.value),
         })),
         commitmentProof: ProofHelper(ics23),
@@ -1098,11 +1097,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         name: "main",
         path: "",
       });
-      const amount: string = fundsToCoins(new Map());
-      const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
-
-      // Fetch the wallet address
-      const caller: string = await this.sign.getAddress();
       const runMsg: MsgRun = {
         caller,
         send: amount,
@@ -1188,8 +1182,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     );
 
     const rundotgno = registerCounterParty({
-      clientId: clientId.trim(),
-      counterpartyClientId: counterpartyClientId.trim(),
+      clientId: validateIbcIdentifier(clientId.trim(), "clientId"),
+      counterpartyClientId: validateIbcIdentifier(counterpartyClientId.trim(), "counterpartyClientId"),
       iavlStoreKey: toHex(merklePrefix),
       storeKey: "",
     });
@@ -1619,7 +1613,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     if (result.responseBase.error) {
       throw new Error("Query: " + query + " failed. Error: " + result.responseBase.error);
     }
-    let items = [];
+    const items = [];
     try {
       const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
       if (Array.isArray(data)) {
@@ -1631,7 +1625,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         }
         else {
           if (data.total > 1) {
-            items = [...data.items];
+            items.push(...data.items);
             for (let i = 2; i <= data.total; i++) {
               const result = await this.tm.abciQuery({
                 path,
@@ -1642,7 +1636,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
               }
               const pageData = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
               if (pageData.items && Array.isArray(pageData.items)) {
-                items = [...items, ...pageData.items];
+                items.push(...pageData.items);
               }
               else {
                 throw new Error("Invalid data format for page " + i + ": " + result.responseBase.data);
@@ -1651,6 +1645,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
           }
         }
       }
+      return items;
     }
     catch (e) {
       throw new Error(`Failed to parse query result for query ${query}: ${getErrorMessage(e)}`);
@@ -1664,16 +1659,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         `gno.land/r/aib/ibc/core:clients/${clientId}/packet_receipts`,
       );
 
-      const unreceived: number[] = [];
-      for (const seq of sequences) {
-        const packet = data.find((item: {
-          sequence: string
-        }) => BigInt(item.sequence) === BigInt(seq));
-        if (!packet) {
-          unreceived.push(seq);
-        }
-      }
-      return unreceived;
+      const receivedSet = new Set(data.map((item: {
+        sequence: string
+      }) => BigInt(item.sequence)));
+      return sequences.filter(seq => !receivedSet.has(BigInt(seq)));
     }
     catch (e) {
       throw new Error(`Failed to parse unreceived packets for client ID ${clientId} and sequences ${sequences}: ${getErrorMessage(e)}`);
@@ -1721,16 +1710,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         "vm/qrender", `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`,
       );
 
-      const unreceived: number[] = [];
-      for (const seq of sequences) {
-        const ack = data.find((item: {
-          sequence: string
-        }) => BigInt(item.sequence) === BigInt(seq));
-        if (ack) {
-          unreceived.push(seq);
-        }
-      }
-      return unreceived;
+      const committedSet = new Set(data.map((item: {
+        sequence: string
+      }) => BigInt(item.sequence)));
+      return sequences.filter(seq => committedSet.has(BigInt(seq)));
     }
     catch (e) {
       throw new Error(`Failed to parse unreceived ACKs for client ID ${clientId} and sequences ${sequences}: ${getErrorMessage(e)}`);
@@ -1757,7 +1740,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   async getPacketsFromBlockEvents(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_connection='${connectionId}'`;
+    let query = `send_packet.packet_connection='${validateIbcIdentifier(connectionId, "connectionId")}'`;
     if (minHeight) {
       query = `${query} AND block.height>=${minHeight}`;
     }
@@ -1784,7 +1767,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   async getPacketsFromTxs(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_connection='${connectionId}'`;
+    let query = `send_packet.packet_connection='${validateIbcIdentifier(connectionId, "connectionId")}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
     }
@@ -1806,7 +1789,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   async getPacketsFromBlockEventsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_source_client='${clientId}'`;
+    let query = `send_packet.packet_source_client='${validateIbcIdentifier(clientId, "clientId")}'`;
     if (minHeight) {
       query = `${query} AND block.height>=${minHeight}`;
     }
@@ -1833,7 +1816,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   async getPacketsFromTxsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined) {
-    let query = `send_packet.packet_source_client='${clientId}'`;
+    let query = `send_packet.packet_source_client='${validateIbcIdentifier(clientId, "clientId")}'`;
     if (minHeight) {
       query = `${query} AND tx.height>=${minHeight}`;
     }
@@ -1852,5 +1835,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         })),
     );
     return resultsNested.flat();
+  }
+
+  public disconnect(): void {
+    this.tm.disconnect();
   }
 }

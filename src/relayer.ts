@@ -39,6 +39,9 @@ import {
   storage,
 } from "./utils/storage.js";
 import {
+  closeDB,
+} from "./storage/sqlite.js";
+import {
   getPrefix,
 } from "./utils/utils.js";
 
@@ -286,6 +289,22 @@ export class Relayer extends EventEmitter {
   async stop() {
     this.running = false;
     this.logger.info("Stopping relayer...");
+    for (const link of this.links.values()) {
+      try {
+        link.endA.client.disconnect();
+      }
+      catch (e) {
+        this.logger.warn(`Failed to disconnect client A: ${e}`);
+      }
+      try {
+        link.endB.client.disconnect();
+      }
+      catch (e) {
+        this.logger.warn(`Failed to disconnect client B: ${e}`);
+      }
+    }
+    this.links.clear();
+    closeDB();
   }
 
   async relayerLoop(options = {

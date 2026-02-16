@@ -2,6 +2,7 @@
  * Relayer configuration module.
  * Loads and validates configuration from environment variables with sensible defaults.
  */
+import path from "node:path";
 
 export type LogLevel = "error" | "warn" | "info" | "debug" | "verbose";
 
@@ -83,11 +84,13 @@ function getLogLevel(envValue: string | undefined, defaultValue: LogLevel): LogL
  * @returns The validated path
  * @throws Error if path contains directory traversal attempts
  */
-function validateDbPath(path: string): string {
-  if (path.includes("..") || path.startsWith("/etc/") || path.startsWith("/sys/")) {
-    throw new Error(`Invalid database path: ${path}. Path traversal or system directories not allowed.`);
+function validateFilePath(filePath: string, label: string): string {
+  const resolved = path.resolve(filePath);
+  const allowedDir = path.resolve(process.cwd());
+  if (!resolved.startsWith(allowedDir + path.sep) && resolved !== allowedDir) {
+    throw new Error(`Invalid ${label} path: ${filePath}. Path must be within the working directory (${allowedDir}).`);
   }
-  return path;
+  return resolved;
 }
 
 /**
@@ -130,11 +133,11 @@ function loadConfig(): RelayerConfig {
   return {
     logging: {
       level: getLogLevel(process.env.LOG_LEVEL, "debug"),
-      errorFile: process.env.ERROR_LOG_FILE || "error.log",
-      combinedFile: process.env.COMBINED_LOG_FILE || "combined.log",
+      errorFile: validateFilePath(process.env.ERROR_LOG_FILE || "error.log", "error log"),
+      combinedFile: validateFilePath(process.env.COMBINED_LOG_FILE || "combined.log", "combined log"),
     },
     database: {
-      file: validateDbPath(process.env.DB_FILE || "relayer.db"),
+      file: validateFilePath(process.env.DB_FILE || "relayer.db", "database"),
     },
     relay: {
       pollInterval: getPositiveInt(process.env.RELAY_POLL_INTERVAL, 5000, 1000, 60000),

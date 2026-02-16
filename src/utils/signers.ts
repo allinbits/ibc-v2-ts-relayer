@@ -49,4 +49,7 @@ export const getSigner = async (chainId: string, chainType: ChainType, options?:
       });
     }
   }
+  else {
+    throw new Error(`Unsupported chain type: ${chainType}`);
+  }
 };

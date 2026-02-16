@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   afterEach,
   beforeEach,
@@ -34,9 +35,9 @@ describe("config", () => {
       } = await import("./index.js");
 
       expect(config.logging.level).toBe("debug");
-      expect(config.logging.errorFile).toBe("error.log");
-      expect(config.logging.combinedFile).toBe("combined.log");
-      expect(config.database.file).toBe("relayer.db");
+      expect(config.logging.errorFile).toBe(path.resolve("error.log"));
+      expect(config.logging.combinedFile).toBe(path.resolve("combined.log"));
+      expect(config.database.file).toBe(path.resolve("relayer.db"));
       expect(config.relay.pollInterval).toBe(5000);
       expect(config.relay.maxAgeDest).toBe(86400);
       expect(config.relay.maxAgeSrc).toBe(86400);
@@ -91,7 +92,7 @@ describe("config", () => {
         config,
       } = await import("./index.js");
 
-      expect(config.logging.errorFile).toBe("custom-error.log");
+      expect(config.logging.errorFile).toBe(path.resolve("custom-error.log"));
     });
 
     it("should accept custom combined log file", async () => {
@@ -100,7 +101,7 @@ describe("config", () => {
         config,
       } = await import("./index.js");
 
-      expect(config.logging.combinedFile).toBe("custom-combined.log");
+      expect(config.logging.combinedFile).toBe(path.resolve("custom-combined.log"));
     });
   });
 
@@ -111,7 +112,7 @@ describe("config", () => {
         config,
       } = await import("./index.js");
 
-      expect(config.database.file).toBe("custom.db");
+      expect(config.database.file).toBe(path.resolve("custom.db"));
     });
 
     it("should reject path with directory traversal", async () => {
@@ -144,7 +145,7 @@ describe("config", () => {
         config,
       } = await import("./index.js");
 
-      expect(config.database.file).toBe("data/relayer.db");
+      expect(config.database.file).toBe(path.resolve("data/relayer.db"));
     });
   });
 
@@ -424,9 +425,9 @@ describe("config", () => {
       } = await import("./index.js");
 
       expect(config.logging.level).toBe("info");
-      expect(config.logging.errorFile).toBe("errors.log");
-      expect(config.logging.combinedFile).toBe("logs.log");
-      expect(config.database.file).toBe("mydb.db");
+      expect(config.logging.errorFile).toBe(path.resolve("errors.log"));
+      expect(config.logging.combinedFile).toBe(path.resolve("logs.log"));
+      expect(config.database.file).toBe(path.resolve("mydb.db"));
       expect(config.relay.pollInterval).toBe(7500);
       expect(config.relay.maxAgeDest).toBe(3600);
       expect(config.relay.maxAgeSrc).toBe(7200);

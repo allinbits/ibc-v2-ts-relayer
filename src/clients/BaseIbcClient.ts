@@ -268,4 +268,9 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   abstract getLatestClientState(clientId: string, type: ClientType): Promise<AnyClientState>;
   abstract getConsensusStateAtHeight(clientId: string, type: ClientType, consensusHeight?: Height): Promise<AnyConsensusState>;
   abstract getNextSequenceRecv(portId: string, channelId: string): Promise<bigint>;
+
+  /**
+   * Disconnect all RPC connections held by this client.
+   */
+  abstract disconnect(): void;
 }

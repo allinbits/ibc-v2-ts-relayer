@@ -728,16 +728,14 @@ export class Link {
       };
     }
 
-    const packetsPerDestination = packets.reduce(
-      (sorted: Record<string, readonly number[]>, packet) => {
-        const key = idFunc(packet);
-        return {
-          ...sorted,
-          [key]: [...(sorted[key] ?? []), Number(packet.sequence)],
-        };
-      }, {
-      },
-    );
+    const packetsPerDestination: Record<string, number[]> = {};
+    for (const packet of packets) {
+      const key = idFunc(packet);
+      if (!packetsPerDestination[key]) {
+        packetsPerDestination[key] = [];
+      }
+      packetsPerDestination[key].push(Number(packet.sequence));
+    }
     const unreceivedResponses = await Promise.all(
       Object.entries(packetsPerDestination).map(
         async ([destination, sequences]) => {
@@ -750,17 +748,10 @@ export class Link {
         },
       ),
     );
-    const unreceived = unreceivedResponses.reduce(
-      (nested: Record<string, Set<number>>, {
-        key, sequences,
-      }) => {
-        return {
-          ...nested,
-          [key]: new Set(sequences),
-        };
-      }, {
-      },
-    );
+    const unreceived: Record<string, Set<number>> = {};
+    for (const { key, sequences } of unreceivedResponses) {
+      unreceived[key] = new Set(sequences);
+    }
     return unreceived;
   }
 

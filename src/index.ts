@@ -36,11 +36,27 @@ process.on("unhandledRejection", (reason) => {
 const program = new Command();
 program.name(pkgJson.name).description(pkgJson.description).version(pkgJson.version);
 program.command("add-mnemonic")
-  .description("Add a mnemonic to the keyring")
+  .description("Add a mnemonic to the keyring. Reads from --mnemonic option, MNEMONIC env var, or prompts on stdin.")
   .requiredOption("-c, --chain-id <chainId>", "Chain ID for the mnemonic")
-  .argument("<string>")
-  .action(async (mnemonic, options) => {
+  .option("-m, --mnemonic <mnemonic>", "Mnemonic phrase (prefer env var MNEMONIC or stdin for security)")
+  .action(async (options) => {
     try {
+      let mnemonic: string = options.mnemonic || process.env.MNEMONIC || "";
+      if (!mnemonic) {
+        // Read from stdin
+        process.stderr.write("Enter mnemonic: ");
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) {
+          chunks.push(chunk);
+          // Stop after first line
+          if (chunk.toString().includes("\n")) break;
+        }
+        mnemonic = Buffer.concat(chunks).toString().trim();
+      }
+      if (!mnemonic) {
+        log.error("No mnemonic provided. Use --mnemonic, MNEMONIC env var, or pipe via stdin.");
+        process.exit(1);
+      }
       const relayer = new Relayer(log);
       await relayer.addMnemonic(mnemonic, options.chainId);
     }

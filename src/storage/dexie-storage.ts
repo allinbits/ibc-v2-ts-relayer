@@ -56,26 +56,27 @@ export class DexieStorage implements IStorage {
   }
 
   async getRelayedHeights(pathId: number): Promise<RelayedHeights> {
-    try {
-      const res = await db.relayedHeights.where({
-        relayPathId: pathId,
-      }).first();
-      if (!res) {
-        throw new Error("Heights not found");
-      }
+    const res = await db.relayedHeights.where({
+      relayPathId: pathId,
+    }).first();
+    if (res) {
       return res;
     }
-    catch (_error) {
-      // Initialize if not found
-      await db.relayedHeights.add({
-        packetHeightA: 0,
-        packetHeightB: 0,
-        ackHeightA: 0,
-        ackHeightB: 0,
-        relayPathId: pathId,
-      });
-      return this.getRelayedHeights(pathId);
+    // Initialize if not found
+    await db.relayedHeights.add({
+      packetHeightA: 0,
+      packetHeightB: 0,
+      ackHeightA: 0,
+      ackHeightB: 0,
+      relayPathId: pathId,
+    });
+    const inserted = await db.relayedHeights.where({
+      relayPathId: pathId,
+    }).first();
+    if (!inserted) {
+      throw new Error(`Failed to initialize relayed heights for path ${pathId}`);
     }
+    return inserted;
   }
 
   async addRelayPath(

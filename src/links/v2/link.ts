@@ -10,7 +10,7 @@ import {
 import * as winston from "winston";
 
 import {
-  BaseIbcClient, isGno, isGnoClientState, isTendermint, isTendermintClientState, isTendermintConsensusState,
+  BaseIbcClient, isGno, isGnoClientState, isGnoConsensusState, isTendermint, isTendermintClientState, isTendermintConsensusState,
 } from "../../clients/BaseIbcClient.js";
 import {
   GnoIbcClient,
@@ -317,9 +317,9 @@ export class Link {
       src.client.clientType,
     );
 
-    if (!isTendermintConsensusState(knownHeader)) {
+    if (!isTendermintConsensusState(knownHeader) && !isGnoConsensusState(knownHeader)) {
       throw new Error(
-        `Expected TendermintConsensusState, got ${knownHeader}`,
+        `Expected TendermintConsensusState or GnoConsensusState, got ${knownHeader}`,
       );
     }
     if (!isTendermint(src.client) && !isGno(src.client)) {
@@ -327,12 +327,21 @@ export class Link {
         `updateClientIfStale only supported for Tendermint/Gno clients, got ${src.client.clientType}`,
       );
     }
-    if (isTendermint(src.client)) {
-      const currentHeader = await src.client.latestHeader();
 
-      // quit now if we don't need to update
-      const knownSeconds = Number(knownHeader.timestamp?.seconds);
-      if (knownSeconds) {
+    let knownSeconds: number;
+    if (isTendermintConsensusState(knownHeader)) {
+      knownSeconds = Number(knownHeader.timestamp?.seconds);
+    }
+    else if (isGnoConsensusState(knownHeader)) {
+      knownSeconds = Number(knownHeader.timestamp?.seconds);
+    }
+    else {
+      knownSeconds = 0;
+    }
+
+    if (knownSeconds) {
+      if (isTendermint(src.client)) {
+        const currentHeader = await src.client.latestHeader();
         const curSeconds = Number(
           timestampFromDateNanos(currentHeader.time).seconds,
         );
@@ -340,14 +349,8 @@ export class Link {
           return null;
         }
       }
-    }
-
-    if (isGno(src.client)) {
-      const currentHeader = await src.client.latestHeader();
-
-      // quit now if we don't need to update
-      const knownSeconds = Number(knownHeader.timestamp?.seconds);
-      if (knownSeconds) {
+      else if (isGno(src.client)) {
+        const currentHeader = await src.client.latestHeader();
         const curSeconds = Number(currentHeader.time.seconds);
         if (curSeconds - knownSeconds < maxAge) {
           return null;
@@ -614,16 +617,14 @@ export class Link {
       };
     }
 
-    const packetsPerDestination = packets.reduce(
-      (sorted: Record<string, readonly number[]>, packet) => {
-        const key = idFunc(packet);
-        return {
-          ...sorted,
-          [key]: [...(sorted[key] ?? []), Number(packet.sequence)],
-        };
-      }, {
-      },
-    );
+    const packetsPerDestination: Record<string, number[]> = {};
+    for (const packet of packets) {
+      const key = idFunc(packet);
+      if (!packetsPerDestination[key]) {
+        packetsPerDestination[key] = [];
+      }
+      packetsPerDestination[key].push(Number(packet.sequence));
+    }
     const unreceivedResponses = await Promise.all(
       Object.entries(packetsPerDestination).map(
         async ([destination, sequences]) => {
@@ -636,17 +637,10 @@ export class Link {
         },
       ),
     );
-    const unreceived = unreceivedResponses.reduce(
-      (nested: Record<string, Set<number>>, {
-        key, sequences,
-      }) => {
-        return {
-          ...nested,
-          [key]: new Set(sequences),
-        };
-      }, {
-      },
-    );
+    const unreceived: Record<string, Set<number>> = {};
+    for (const { key, sequences } of unreceivedResponses) {
+      unreceived[key] = new Set(sequences);
+    }
     return unreceived;
   }
 

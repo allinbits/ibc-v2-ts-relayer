@@ -103,22 +103,20 @@ export class SQLiteStorage implements IStorage {
   }
 
   async getRelayedHeights(pathId: number): Promise<RelayedHeights> {
-    try {
-      const db = await openDB(this.dbPath);
-      const res = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]);
-      if (!isRelayedHeights(res)) {
-        throw new Error("Heights not found");
-      }
+    const db = await openDB(this.dbPath);
+    const res = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]);
+    if (isRelayedHeights(res)) {
       return res;
     }
-    catch (_error) {
-      // Initialize if not found
-      const db = await openDB(this.dbPath);
-      await db.prepare(
-        "INSERT INTO relayedHeights (packetHeightA, packetHeightB, ackHeightA, ackHeightB, relayPathId) VALUES (?, ?, ?, ?, ?)",
-      ).run([0, 0, 0, 0, pathId]);
-      return this.getRelayedHeights(pathId);
+    // Initialize if not found
+    await db.prepare(
+      "INSERT INTO relayedHeights (packetHeightA, packetHeightB, ackHeightA, ackHeightB, relayPathId) VALUES (?, ?, ?, ?, ?)",
+    ).run([0, 0, 0, 0, pathId]);
+    const inserted = await db.prepare("SELECT * FROM relayedHeights WHERE relayPathId = ?").get([pathId]);
+    if (!isRelayedHeights(inserted)) {
+      throw new Error(`Failed to initialize relayed heights for path ${pathId}`);
     }
+    return inserted;
   }
 
   async addRelayPath(

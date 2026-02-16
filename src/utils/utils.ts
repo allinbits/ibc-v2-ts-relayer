@@ -85,12 +85,23 @@ export function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+const SAFE_IBC_ID_PATTERN = /^[a-zA-Z0-9._\-\/]+$/;
+
+export function validateIbcIdentifier(value: string, label: string): string {
+  if (!SAFE_IBC_ID_PATTERN.test(value)) {
+    throw new Error(`Invalid ${label}: "${value}" contains disallowed characters`);
+  }
+  return value;
+}
+
 export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
   if (chainType === ChainType.Cosmos) {
     const tmClient = await connectComet(node);
     const client = QueryClient.withExtensions(tmClient);
     const res = await client.queryAbci("/cosmos.auth.v1beta1.Query/Bech32Prefix", new Uint8Array());
-    return Bech32PrefixResponse.decode(res.value).bech32Prefix;
+    const prefix = Bech32PrefixResponse.decode(res.value).bech32Prefix;
+    tmClient.disconnect();
+    return prefix;
   }
   else {
     return "g";
@@ -439,13 +450,10 @@ export function parsePacket({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
 
   return Packet.fromPartial({
     sequence: may(BigInt, attributesObj.packet_sequence),
@@ -481,13 +489,10 @@ export function parsePacketV2({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
   const data = fromHex(attributesObj.encoded_packet_hex);
   return PacketV2.decode(data);
 }
@@ -512,13 +517,10 @@ export function parseAck({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string | undefined> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
   const originalPacket = Packet.fromPartial({
     sequence: may(BigInt, attributesObj.packet_sequence),
 
@@ -558,13 +560,10 @@ export function parseAckV2({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string | undefined> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
   if (!attributesObj.encoded_packet_hex) {
     throw new Error("Missing encoded_packet_hex in write_acknowledgement event");
   }
@@ -616,12 +615,11 @@ export function timeGreaterV2(a: bigint | undefined, b: number): boolean {
 export function mergeUint8Arrays(...arrays: Uint8Array[]): Uint8Array {
   const totalSize = arrays.reduce((acc, e) => acc + e.length, 0);
   const merged = new Uint8Array(totalSize);
-
-  arrays.forEach((array, i, arrays) => {
-    const offset = arrays.slice(0, i).reduce((acc, e) => acc + e.length, 0);
+  let offset = 0;
+  for (const array of arrays) {
     merged.set(array, offset);
-  });
-
+    offset += array.length;
+  }
   return merged;
 }
 
@@ -638,39 +636,25 @@ export function splitPendingPackets<T extends (PacketWithMetadata | PacketV2With
   readonly toSubmit: readonly T[]
   readonly toTimeout: readonly T[]
 } {
-  return packets.reduce((acc, packet) => {
+  const toSubmit: T[] = [];
+  const toTimeout: T[] = [];
+  for (const packet of packets) {
+    let validPacket: boolean;
     if (isV2Packet(packet.packet)) {
-      // no timeout height, so we can submit it
-      const validPacket
-        = timeGreaterV2(packet.packet.timeoutTimestamp, currentTime);
-      return validPacket
-        ? {
-          ...acc,
-          toSubmit: [...acc.toSubmit, packet],
-        }
-        : {
-          ...acc,
-          toTimeout: [...acc.toTimeout, packet],
-        };
+      validPacket = timeGreaterV2(packet.packet.timeoutTimestamp, currentTime);
     }
     else {
-      const validPacket
-        = heightGreater(packet.packet.timeoutHeight, currentHeight)
-          && timeGreater(packet.packet.timeoutTimestamp, currentTime);
-      return validPacket
-        ? {
-          ...acc,
-          toSubmit: [...acc.toSubmit, packet],
-        }
-        : {
-          ...acc,
-          toTimeout: [...acc.toTimeout, packet],
-        };
+      validPacket = heightGreater(packet.packet.timeoutHeight, currentHeight)
+        && timeGreater(packet.packet.timeoutTimestamp, currentTime);
     }
-  }, {
-    toSubmit: [] as readonly T[],
-    toTimeout: [] as readonly T[],
-  });
+    if (validPacket) {
+      toSubmit.push(packet);
+    }
+    else {
+      toTimeout.push(packet);
+    }
+  }
+  return { toSubmit, toTimeout };
 }
 
 export function presentPacketData(data: Uint8Array): Record<string, unknown> {
