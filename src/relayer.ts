@@ -30,6 +30,9 @@ import {
   Link as LinkV2,
 } from "./links/v2/link.js";
 import {
+  closeDB,
+} from "./storage/sqlite.js";
+import {
   ChainType, RelayedHeights, RelayPaths,
 } from "./types/index.js";
 import {
@@ -38,9 +41,6 @@ import {
 import {
   storage,
 } from "./utils/storage.js";
-import {
-  closeDB,
-} from "./storage/sqlite.js";
 import {
   getPrefix,
 } from "./utils/utils.js";

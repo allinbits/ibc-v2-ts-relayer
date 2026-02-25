@@ -157,5 +157,21 @@ func main() {
   return result;
 };
 
-//transferFromAtomone("10-gno-0", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");
-transferFromGno("07-tendermint-1", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "transfer/07-tendermint-1/uatone", "test transfer", "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");
+export const transferFromGnoGRC = async (clientId: string, sender: string, receiver: string, amount: string, denom: string, memo: string, mnem: string) => {
+  const prefix = await getPrefix(ChainType.Gno, "http://localhost:26657");
+
+  const provider = new GnoJSONRPCProvider("http://localhost:26657");
+  const wallet = await GnoWallet.fromMnemonic(mnem, {
+    addressPrefix: prefix || "g",
+  });
+  wallet.connect(provider);
+  const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "TransferGRC20", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString()], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()), (new Map()).set("ugnot", 3000000),
+    {
+      gas_wanted: new Long(60000000),
+      gas_fee: "750000ugnot",
+    });
+  console.log("Gno transfer result:", result);
+  return result;
+};
+// transferFromAtomone("10-gno-0", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");
+transferFromGnoGRC("07-tendermint-1", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/F9A67CB19B2CAD2ADEC20AD475BE86DF851DEC2B6F6CABC9B7B781BD9131D18F", "test transfer", "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy");
