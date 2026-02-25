@@ -15,7 +15,8 @@ FROM ignitehq/cli
 
 ENV DO_NOT_TRACK="1"
 
-COPY config.yml /config.yml
+COPY mars/config.yml /config.yml
+COPY serve.sh /serve.sh
 
 COPY --from=builder /apps /apps
 COPY --from=builder /home/tendermint /home/tendermint
@@ -24,4 +25,4 @@ COPY --from=builder /go/bin/marsd /go/bin/marsd
 
 WORKDIR /apps/mars
 
-ENTRYPOINT ["ignite", "chain", "serve", "--config", "/config.yml", "--skip-build", "--skip-proto", "-r", "-o", "/dev/stdout"]
+ENTRYPOINT ["/serve.sh"]

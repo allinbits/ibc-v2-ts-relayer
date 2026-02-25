@@ -12,15 +12,36 @@ jobs:
       mars:
         image: ghcr.io/allinbits/ibc-v2-ts-relayer/mars
         options: --name mars
+        env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
         ports:
           - 1317:1317
           - 26657:26657
       venus:
         image: ghcr.io/allinbits/ibc-v2-ts-relayer/venus
         options: --name venus
+        env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
         ports:
           - 2317:1317
           - 36657:26657
+      gno:
+        image: ghcr.io/allinbits/ibc-v2-ts-relayer/gno
+        options: --name gno
+        env:
+          GNO_RELAYER_ADDRESS: ${{ secrets.GNO_RELAYER_ADDRESS }}
+        ports:
+          - 46657:26657
+          - 8888:8888
+          - 8546:8546
+      a1gno:
+        image: ghcr.io/allinbits/ibc-v2-ts-relayer/a1gno
+        options: --name a1gno
+        env:
+          ATOMONE_RELAYER_ADDRESS: ${{ secrets.ATOMONE_RELAYER_ADDRESS }}
+        ports:
+          - 56657:26657
+          - 3317:1317
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -36,17 +57,28 @@ jobs:
 
     - name: Wait for services to be ready
       run: |
-        ./node_modules/.bin/wait-on http://localhost:1317 http://localhost:2317 http://localhost:26657 http://localhost:36657 --timeout 60000
+        ./node_modules/.bin/wait-on http://localhost:1317 http://localhost:2317 http://localhost:26657 http://localhost:36657 http://localhost:46657 http://localhost:8546 http://localhost:56657 --timeout 60000
 
     - name: Run E2E tests
+      env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
+          DB_FILE: /tmp/relayer.db
       run: pnpm test:e2e
 
+    - name: Run GNO E2E tests
+      env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
+          DB_FILE: /tmp/gno-relayer.db
+      run: pnpm test:gno:e2e
+
     - name: Dockerize relayer and run commands
+      env:
+        RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
       run: |
         cd ${{ github.workspace }} && docker build -t ts-relayer .
-        docker run -d --name ts-relayer --network container:mars --cap-add IPC_LOCK ts-relayer 
-        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c mars --mnemonic "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
-        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c venus --mnemonic "other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy"
+        docker run -d --name ts-relayer --network container:mars --cap-add IPC_LOCK ts-relayer
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c mars --mnemonic "$RELAYER_MNEMONIC"
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c venus --mnemonic "$RELAYER_MNEMONIC"
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c mars 0.025umars
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c venus 0.025uvenus
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-path -s mars -d venus --surl http://mars:26657 --durl http://venus:26657 --ibcv 2

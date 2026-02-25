@@ -4,7 +4,7 @@ accounts:
     - name: alice
       coins:
         - 2000000000umars
-      mnemonic: other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy
+      mnemonic: __RELAYER_MNEMONIC__
     - name: bob
       coins:
         - 100000000umars

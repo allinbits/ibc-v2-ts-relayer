@@ -59,7 +59,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        chain: [mars, venus]
+        chain: [mars, venus, gno, a1gno]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -71,6 +71,7 @@ jobs:
         filters: |
           chain:
             - 'docker/chains/${{ matrix.chain }}/**'
+            - 'docker/chains/serve.sh'
 
     - name: Set up Docker Buildx
       if: steps.changes.outputs.chain == 'true'
@@ -97,7 +98,8 @@ jobs:
       if: steps.changes.outputs.chain == 'true'
       uses: docker/build-push-action@v5
       with:
-        context: docker/chains/${{ matrix.chain }}
+        context: docker/chains
+        file: docker/chains/${{ matrix.chain }}/Dockerfile
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         platforms: linux/amd64,linux/arm64
