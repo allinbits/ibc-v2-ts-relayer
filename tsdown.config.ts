@@ -26,6 +26,7 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     dts: true,
+    outExtensions: () => ({ js: '.js' , ts: '.ts'}),
     format: ["esm"],
   },
   {
@@ -38,6 +39,7 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     dts: true,
+    outExtensions: () => ({ js: '.js' , ts: '.ts'}),
     format: ["esm"],
   },
 ]);
