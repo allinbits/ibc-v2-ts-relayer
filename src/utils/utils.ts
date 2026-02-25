@@ -1,49 +1,45 @@
 import {
   Bech32PrefixResponse,
-} from "@atomone/cosmos-ibc-types/build/cosmos/auth/v1beta1/query.js";
+} from "@atomone/cosmos-ibc-types/cosmos/auth/v1beta1/query.js";
 import {
   CommitmentProof, HashOp, LengthOp,
-} from "@atomone/cosmos-ibc-types/build/cosmos/ics23/v1/proofs.js";
+} from "@atomone/cosmos-ibc-types/cosmos/ics23/v1/proofs.js";
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/any.js";
+} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
 import {
   Timestamp,
-} from "@atomone/cosmos-ibc-types/build/google/protobuf/timestamp.js";
+} from "@atomone/cosmos-ibc-types/google/protobuf/timestamp.js";
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v1/channel.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   MerkleProof,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/commitment/v1/commitment.js";
-import {
-  ClientState as SolomachineV2ClientState,
-  ConsensusState as SolomachineV2ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v2/solomachine.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/commitment/v1/commitment.js";
 import {
   ClientState as SolomachineV3ClientState,
   ConsensusState as SolomachineV3ConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/solomachine/v3/solomachine.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/solomachine/v3/solomachine.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ClientState as WasmClientState,
   ConsensusState as WasmConsensusState,
-} from "@atomone/cosmos-ibc-types/build/ibc/lightclients/wasm/v1/wasm.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/wasm/v1/wasm.js";
 import {
   PublicKey as ProtoPubKey,
-} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/keys.js";
+} from "@atomone/cosmos-ibc-types/tendermint/crypto/keys.js";
 import {
   ProofOps,
-} from "@atomone/cosmos-ibc-types/build/tendermint/crypto/proof.js";
+} from "@atomone/cosmos-ibc-types/tendermint/crypto/proof.js";
 import {
   fromHex, fromUtf8, toBase64, toHex,
 } from "@cosmjs/encoding";
@@ -64,6 +60,9 @@ import {
 import {
   arrayContentEquals,
 } from "@cosmjs/utils";
+import {
+  ibc,
+} from "@gnolang/gno-types";
 
 import {
   BaseIbcClient,
@@ -72,15 +71,40 @@ import {
   Ack, AckV2, ChainType, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types/index.js";
 
+/**
+ * Safely extracts an error message from an unknown caught value.
+ * Handles Error objects, strings, and other types.
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return String(error);
+}
+
+const SAFE_IBC_ID_PATTERN = /^[a-zA-Z0-9._\-\/]+$/;
+
+export function validateIbcIdentifier(value: string, label: string): string {
+  if (!SAFE_IBC_ID_PATTERN.test(value)) {
+    throw new Error(`Invalid ${label}: "${value}" contains disallowed characters`);
+  }
+  return value;
+}
+
 export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
   if (chainType === ChainType.Cosmos) {
     const tmClient = await connectComet(node);
     const client = QueryClient.withExtensions(tmClient);
     const res = await client.queryAbci("/cosmos.auth.v1beta1.Query/Bech32Prefix", new Uint8Array());
-    return Bech32PrefixResponse.decode(res.value).bech32Prefix;
+    const prefix = Bech32PrefixResponse.decode(res.value).bech32Prefix;
+    tmClient.disconnect();
+    return prefix;
   }
   else {
-    return "";
+    return "g";
   }
 }
 
@@ -94,16 +118,26 @@ export function deepCloneAndMutate<T extends Record<string, unknown>>(
   return deepClonedObject;
 }
 
-export function toBase64AsAny(...input: Parameters<typeof toBase64>) {
-  return toBase64(...input) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+/**
+ * Converts input to base64 with an intentionally loosened return type.
+ * Used in deep object mutations for logging where Uint8Array fields are converted
+ * to base64 strings. The `any` return type allows assignment to the original field
+ * types without type errors.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toBase64AsAny(...input: Parameters<typeof toBase64>): any {
+  return toBase64(...input);
 }
 export function createDeliverTxFailureMessage(result: DeliverTxResponse): string {
   return `Error when broadcasting tx ${result.transactionHash} at height ${result.height}. Code: ${result.code}; Raw log: ${result.rawLog}`;
 }
 
 export function toIntHeight(height?: Height): number {
-  // eslint-disable-next-line no-constant-binary-expression
-  return Number(height?.revisionHeight) ?? 0;
+  const revisionHeight = height?.revisionHeight;
+  if (revisionHeight === undefined) {
+    return 0;
+  }
+  return Number(revisionHeight);
 }
 
 export function ensureIntHeight(height: bigint | Height): number {
@@ -148,22 +182,23 @@ export function mapRpcPubKeyToProto(pubkey?: RpcPubKey): ProtoPubKey | undefined
   if (pubkey === undefined) {
     return undefined;
   }
-  if (pubkey.algorithm == "ed25519") {
+  if (pubkey.algorithm === "ed25519") {
     return {
       ed25519: pubkey.data,
       secp256k1: undefined,
     };
   }
-  else if (pubkey.algorithm == "secp256k1") {
+  else if (pubkey.algorithm === "secp256k1") {
     return {
       ed25519: undefined,
       secp256k1: pubkey.data,
     };
   }
   else {
-    throw new Error(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      `Unknown validator pubkey type: ${(pubkey as any).algorithm}`);
+    // Exhaustive check - should never reach here based on RpcPubKey type,
+    // but handle gracefully for runtime safety
+    const _exhaustiveCheck: never = pubkey;
+    throw new Error(`Unknown validator pubkey type: ${JSON.stringify(_exhaustiveCheck)}`);
   }
 }
 
@@ -189,6 +224,16 @@ export function buildTendermintConsensusState(header: tendermint34.Header | tend
   });
 }
 
+export function buildGnoConsensusState(header: ibc.lightclients.gno.v1.gno.GnoHeader): ibc.lightclients.gno.v1.gno.ConsensusState {
+  return ibc.lightclients.gno.v1.gno.ConsensusState.fromPartial({
+    timestamp: header.time,
+    root: {
+      hash: header.appHash,
+    },
+    lcType: "10-gno",
+    nextValidatorsHash: header.nextValidatorsHash,
+  });
+}
 // Note: we hardcode a number of assumptions, like trust level, clock drift, and assume revisionNumber is 1
 export function buildTendermintClientState(
   chainId: string,
@@ -256,6 +301,72 @@ export function buildTendermintClientState(
   });
 }
 
+// Note: we hardcode a number of assumptions, like trust level, clock drift, and assume revisionNumber is 1
+export function buildGnoClientState(
+  chainId: string,
+  unbondingPeriodSec: number,
+  trustPeriodSec: number,
+  height: Height,
+): ibc.lightclients.gno.v1.gno.ClientState {
+  /*
+     * Copied here until https://github.com/confio/ics23/issues/36 is resolved
+     * https://github.com/confio/ics23/blob/master/js/src/proofs.ts#L11-L26
+     */
+  const iavlSpec = {
+    leafSpec: {
+      prefix: Uint8Array.from([0]),
+      hash: HashOp.SHA256,
+      prehashValue: HashOp.SHA256,
+      prehashKey: HashOp.NO_HASH,
+      length: LengthOp.VAR_PROTO,
+    },
+    innerSpec: {
+      childOrder: [0, 1],
+      minPrefixLength: 4,
+      maxPrefixLength: 12,
+      childSize: 33,
+      hash: HashOp.SHA256,
+    },
+  };
+  const tendermintSpec = {
+    leafSpec: {
+      prefix: Uint8Array.from([0]),
+      hash: HashOp.SHA256,
+      prehashValue: HashOp.SHA256,
+      prehashKey: HashOp.NO_HASH,
+      length: LengthOp.VAR_PROTO,
+    },
+    innerSpec: {
+      childOrder: [0, 1],
+      minPrefixLength: 1,
+      maxPrefixLength: 1,
+      childSize: 32,
+      hash: HashOp.SHA256,
+    },
+  };
+
+  return ibc.lightclients.gno.v1.gno.ClientState.fromPartial({
+    chainId,
+    trustLevel: {
+      numerator: 1n,
+      denominator: 3n,
+    },
+    unbondingPeriod: {
+      seconds: BigInt(unbondingPeriodSec),
+    },
+    trustingPeriod: {
+      seconds: BigInt(trustPeriodSec),
+    },
+    maxClockDrift: {
+      seconds: 20n,
+    },
+    latestHeight: height,
+    proofSpecs: [iavlSpec, tendermintSpec],
+    upgradePath: ["upgrade", "upgradedIBCState"],
+    allowUpdateAfterExpiry: false,
+    allowUpdateAfterMisbehaviour: false,
+  });
+}
 export function parsePacketsFromBlockResult(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): Packet[] {
   if ((result as comet38.BlockResultsResponse).finalizeBlockEvents) {
     return parsePacketsFromTendermintEvents([...(result as comet38.BlockResultsResponse).finalizeBlockEvents]);
@@ -317,14 +428,14 @@ export function parseHeightAttribute(attribute?: string): Height | undefined {
     return undefined;
   }
 
-  const revisionNumber = BigInt(isNaN(Number(timeoutRevisionNumber))
+  const revisionNumber = BigInt(Number.isNaN(Number(timeoutRevisionNumber))
     ? 0
     : timeoutRevisionNumber);
-  const revisionHeight = BigInt(isNaN(Number(timeoutRevisionHeight))
+  const revisionHeight = BigInt(Number.isNaN(Number(timeoutRevisionHeight))
     ? 0
     : timeoutRevisionHeight);
   // note: 0 revisionNumber is allowed. If there is bad data, '' or '0-0', we will get 0 for the height
-  if (revisionHeight == 0n) {
+  if (revisionHeight === 0n) {
     return undefined;
   }
   return {
@@ -339,13 +450,10 @@ export function parsePacket({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
 
   return Packet.fromPartial({
     sequence: may(BigInt, attributesObj.packet_sequence),
@@ -381,13 +489,10 @@ export function parsePacketV2({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
   const data = fromHex(attributesObj.encoded_packet_hex);
   return PacketV2.decode(data);
 }
@@ -412,13 +517,10 @@ export function parseAck({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string | undefined> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
   const originalPacket = Packet.fromPartial({
     sequence: may(BigInt, attributesObj.packet_sequence),
 
@@ -458,13 +560,10 @@ export function parseAckV2({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = attributes.reduce((acc, {
-    key, value,
-  }) => ({
-    ...acc,
-    [key]: value,
-  }), {
-  });
+  const attributesObj: Record<string, string | undefined> = {};
+  for (const { key, value } of attributes) {
+    attributesObj[key] = value;
+  }
   if (!attributesObj.encoded_packet_hex) {
     throw new Error("Missing encoded_packet_hex in write_acknowledgement event");
   }
@@ -489,7 +588,7 @@ export function heightGreater(a: Height | undefined, b: Height): boolean {
      * convert to numbers to compare safely
      */
   const [numA, heightA, numB, heightB] = [Number(a.revisionNumber), Number(a.revisionHeight), Number(b.revisionNumber), Number(b.revisionHeight)];
-  const valid = numA > numB || (numA == numB && heightA > heightB);
+  const valid = numA > numB || (numA === numB && heightA > heightB);
   return valid;
 }
 
@@ -498,7 +597,7 @@ export function heightGreater(a: Height | undefined, b: Height): boolean {
  * note a is nanoseconds, while b is seconds
  */
 export function timeGreater(a: bigint | undefined, b: number): boolean {
-  if (a === undefined || a == 0n) {
+  if (a === undefined || a === 0n) {
     return true;
   }
   const valid = Number(a) > b * 1_000_000_000;
@@ -507,7 +606,7 @@ export function timeGreater(a: bigint | undefined, b: number): boolean {
 
 // in IBC v2 both a and b are in seconds
 export function timeGreaterV2(a: bigint | undefined, b: number): boolean {
-  if (a === undefined || a == 0n) {
+  if (a === undefined || a === 0n) {
     return true;
   }
   const valid = Number(a) > b;
@@ -516,12 +615,11 @@ export function timeGreaterV2(a: bigint | undefined, b: number): boolean {
 export function mergeUint8Arrays(...arrays: Uint8Array[]): Uint8Array {
   const totalSize = arrays.reduce((acc, e) => acc + e.length, 0);
   const merged = new Uint8Array(totalSize);
-
-  arrays.forEach((array, i, arrays) => {
-    const offset = arrays.slice(0, i).reduce((acc, e) => acc + e.length, 0);
+  let offset = 0;
+  for (const array of arrays) {
     merged.set(array, offset);
-  });
-
+    offset += array.length;
+  }
   return merged;
 }
 
@@ -538,39 +636,25 @@ export function splitPendingPackets<T extends (PacketWithMetadata | PacketV2With
   readonly toSubmit: readonly T[]
   readonly toTimeout: readonly T[]
 } {
-  return packets.reduce((acc, packet) => {
+  const toSubmit: T[] = [];
+  const toTimeout: T[] = [];
+  for (const packet of packets) {
+    let validPacket: boolean;
     if (isV2Packet(packet.packet)) {
-      // no timeout height, so we can submit it
-      const validPacket
-        = timeGreaterV2(packet.packet.timeoutTimestamp, currentTime);
-      return validPacket
-        ? {
-          ...acc,
-          toSubmit: [...acc.toSubmit, packet],
-        }
-        : {
-          ...acc,
-          toTimeout: [...acc.toTimeout, packet],
-        };
+      validPacket = timeGreaterV2(packet.packet.timeoutTimestamp, currentTime);
     }
     else {
-      const validPacket
-        = heightGreater(packet.packet.timeoutHeight, currentHeight)
-          && timeGreater(packet.packet.timeoutTimestamp, currentTime);
-      return validPacket
-        ? {
-          ...acc,
-          toSubmit: [...acc.toSubmit, packet],
-        }
-        : {
-          ...acc,
-          toTimeout: [...acc.toTimeout, packet],
-        };
+      validPacket = heightGreater(packet.packet.timeoutHeight, currentHeight)
+        && timeGreater(packet.packet.timeoutTimestamp, currentTime);
     }
-  }, {
-    toSubmit: [] as readonly T[],
-    toTimeout: [] as readonly T[],
-  });
+    if (validPacket) {
+      toSubmit.push(packet);
+    }
+    else {
+      toTimeout.push(packet);
+    }
+  }
+  return { toSubmit, toTimeout };
 }
 
 export function presentPacketData(data: Uint8Array): Record<string, unknown> {
@@ -648,12 +732,12 @@ export function decodeClientState(clientState: Any) {
   switch (clientState?.typeUrl) {
     case "/ibc.lightclients.tendermint.v1.ClientState":
       return TendermintClientState.decode(clientState.value);
-    case "/ibc.lightclients.solomachine.v2.ClientState":
-      return SolomachineV2ClientState.decode(clientState.value);
     case "/ibc.lightclients.solomachine.v3.ClientState":
       return SolomachineV3ClientState.decode(clientState.value);
     case "/ibc.lightclients.wasm.v1.ClientState":
       return WasmClientState.decode(clientState.value);
+    case "/ibc.lightclients.gno.v1.ClientState":
+      return ibc.lightclients.gno.v1.gno.ClientState.decode(clientState.value);
     default:
       throw new Error(`Unexpected client state type: ${clientState?.typeUrl}`);
   }
@@ -663,12 +747,12 @@ export function decodeConsensusState(consensusState: Any | undefined) {
   switch (consensusState?.typeUrl) {
     case "/ibc.lightclients.tendermint.v1.ConsensusState":
       return TendermintConsensusState.decode(consensusState.value);
-    case "/ibc.lightclients.solomachine.v2.ConsensusState":
-      return SolomachineV2ConsensusState.decode(consensusState.value);
     case "/ibc.lightclients.solomachine.v3.ConsensusState":
       return SolomachineV3ConsensusState.decode(consensusState.value);
     case "/ibc.lightclients.wasm.v1.ConsensusState":
       return WasmConsensusState.decode(consensusState.value);
+    case "/ibc.lightclients.gno.v1.ConsensusState":
+      return ibc.lightclients.gno.v1.gno.ConsensusState.decode(consensusState.value);
     default:
       throw new Error(`Unexpected consensus state type: ${consensusState?.typeUrl}`);
   }

@@ -28,4 +28,16 @@ export default defineConfig([
     dts: true,
     format: ["esm"],
   },
+  {
+    entry: ["./src/tests.ts"],
+    unbundle: true,
+    attw: true,
+    platform: "node",
+    target: "es2020",
+    outDir: "./dist",
+    clean: true,
+    sourcemap: true,
+    dts: true,
+    format: ["esm"],
+  },
 ]);

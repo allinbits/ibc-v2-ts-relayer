@@ -1,17 +1,20 @@
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/channel/v2/packet.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/build/ibc/core/client/v1/client.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   arrayContentEquals, isDefined,
 } from "@cosmjs/utils";
 import * as winston from "winston";
 
 import {
-  BaseIbcClient, isTendermint, isTendermintClientState, isTendermintConsensusState,
+  BaseIbcClient, isGno, isGnoClientState, isGnoConsensusState, isTendermint, isTendermintClientState, isTendermintConsensusState,
 } from "../../clients/BaseIbcClient.js";
+import {
+  GnoIbcClient,
+} from "../../clients/gno/IbcClient.js";
 import {
   TendermintIbcClient,
 } from "../../clients/tendermint/IbcClient.js";
@@ -22,11 +25,9 @@ import {
   TendermintEndpoint,
 } from "../../endpoints/TendermintEndpoint.js";
 import {
-  AckV2WithMetadata, ChannelInfo, ClientType, PacketV2WithMetadata, QueryOpts,
+  AckV2WithMetadata, AnyClientState, ChannelInfo, ClientType, PacketV2WithMetadata, QueryOpts,
 } from "../../types/index.js";
 import {
-  decodeClientState,
-  decodeConsensusState,
   parseAcksFromTxEventsV2,
   secondsFromDateNanos,
   splitPendingPackets,
@@ -123,7 +124,7 @@ export class Link {
   public async assertHeadersMatchConsensusState(
     proofSide: Side,
     clientId: string,
-    clientState: ReturnType<typeof decodeClientState>,
+    clientState: AnyClientState,
   ): Promise<void> {
     const {
       src, dest,
@@ -134,8 +135,8 @@ export class Link {
     if (isTendermintClientState(clientState) && isTendermint(dest.client)) {
       const height = clientState.latestHeight;
       // Check headers match consensus state (at least validators)
-      const [rawConsensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, height), dest.client.header(toIntHeight(height)), 3]);
-      const consensusState = decodeConsensusState(rawConsensusState);
+      const [consensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, dest.client.clientType, height), dest.client.header(toIntHeight(height)), 3]);
+
       if (isTendermintConsensusState(consensusState)) {
         // ensure consensus and headers match for next validator hashes
         if (
@@ -177,8 +178,16 @@ export class Link {
       nodeA, nodeB, trustPeriodA, trustPeriodB,
     );
     await Promise.all([nodeA.waitOneBlock(), nodeB.waitOneBlock()]);
-    await nodeB.registerCounterParty(clientIdB, clientIdA, Buffer.from("ibc", "utf-8"));
-    await nodeA.registerCounterParty(clientIdA, clientIdB, Buffer.from("ibc", "utf-8"));
+    let merklePrefixA = Buffer.from("ibc", "utf-8");
+    let merklePrefixB = Buffer.from("ibc", "utf-8");
+    if (isGno(nodeA)) {
+      merklePrefixA = Buffer.from("main", "utf-8");
+    }
+    if (isGno(nodeB)) {
+      merklePrefixB = Buffer.from("main", "utf-8");
+    }
+    await nodeB.registerCounterParty(clientIdB, clientIdA, merklePrefixA);
+    await nodeA.registerCounterParty(clientIdA, clientIdB, merklePrefixB);
     const endA = getEndpoint(nodeA, clientIdA);
     const endB = getEndpoint(nodeB, clientIdB);
     return new Link(endA, endB, logger);
@@ -214,10 +223,10 @@ export class Link {
         `Client ID on [${chainB}] : ${clientIdB}  dos not match counterparty client ID on [${chainA}] : ${connectionA}`,
       );
     }
+
     // An additional check for clients where client state contains a chain ID e.g. Tendermint
-    const [rawClientStateA, rawClientStateB] = await Promise.all([nodeA.getLatestClientState(clientIdA), nodeB.getLatestClientState(clientIdB)]);
-    const clientStateA = decodeClientState(rawClientStateA);
-    const clientStateB = decodeClientState(rawClientStateB);
+    const [clientStateA, clientStateB] = await Promise.all([nodeA.getLatestClientState(clientIdA, nodeB.clientType), nodeB.getLatestClientState(clientIdB, nodeA.clientType)]);
+
     if (isTendermintClientState(clientStateB)) {
       if (nodeA.chainId !== clientStateB.chainId) {
         throw new Error(
@@ -241,7 +250,6 @@ export class Link {
     const endA = getEndpoint(nodeA, clientIdA);
     const endB = getEndpoint(nodeB, clientIdB);
     const link = new Link(endA, endB, logger);
-
     await Promise.all([
       link.assertHeadersMatchConsensusState(
         "A", clientIdA, clientStateA,
@@ -304,34 +312,51 @@ export class Link {
     } = this.getEnds(sender);
     // The following checks are for Termendmint clients.
     // TODO: Add support for other client types
-
-    if (!isTendermint(src.client)) {
-      throw new Error(
-        `updateClientIfStale only supported for Tendermint clients, got ${dest.client.clientType}`,
-      );
-    }
-    const rawKnownHeader = await dest.client.getConsensusStateAtHeight(
+    const knownHeader = await dest.client.getConsensusStateAtHeight(
       dest.clientID,
+      src.client.clientType,
     );
-    const knownHeader = decodeConsensusState(rawKnownHeader);
-    if (!isTendermintConsensusState(knownHeader)) {
+
+    if (!isTendermintConsensusState(knownHeader) && !isGnoConsensusState(knownHeader)) {
       throw new Error(
-        `Expected TendermintConsensusState, got ${rawKnownHeader.typeUrl}`,
+        `Expected TendermintConsensusState or GnoConsensusState, got ${knownHeader}`,
       );
     }
-    const currentHeader = await src.client.latestHeader();
-
-    // quit now if we don't need to update
-    const knownSeconds = Number(knownHeader.timestamp?.seconds);
-    if (knownSeconds) {
-      const curSeconds = Number(
-        timestampFromDateNanos(currentHeader.time).seconds,
+    if (!isTendermint(src.client) && !isGno(src.client)) {
+      throw new Error(
+        `updateClientIfStale only supported for Tendermint/Gno clients, got ${src.client.clientType}`,
       );
-      if (curSeconds - knownSeconds < maxAge) {
-        return null;
+    }
+
+    let knownSeconds: number;
+    if (isTendermintConsensusState(knownHeader)) {
+      knownSeconds = Number(knownHeader.timestamp?.seconds);
+    }
+    else if (isGnoConsensusState(knownHeader)) {
+      knownSeconds = Number(knownHeader.timestamp?.seconds);
+    }
+    else {
+      knownSeconds = 0;
+    }
+
+    if (knownSeconds) {
+      if (isTendermint(src.client)) {
+        const currentHeader = await src.client.latestHeader();
+        const curSeconds = Number(
+          timestampFromDateNanos(currentHeader.time).seconds,
+        );
+        if (curSeconds - knownSeconds < maxAge) {
+          return null;
+        }
+      }
+      else if (isGno(src.client)) {
+        const currentHeader = await src.client.latestHeader();
+        const curSeconds = Number(currentHeader.time.seconds);
+        if (curSeconds - knownSeconds < maxAge) {
+          return null;
+        }
       }
     }
-
     // otherwise, do the update
     return this.updateClient(sender);
   }
@@ -357,16 +382,16 @@ export class Link {
     } = this.getEnds(source);
     // The following checks are for Termendmint clients.
     // TODO: Add support for other client types
-    if (!isTendermint(src.client)) {
+    if (!isTendermint(src.client) && !isGno(src.client)) {
       throw new Error(
-        `updateClientToHeight only supported for Tendermint clients, got ${src.client.clientType}`,
+        `updateClientToHeight only supported for Tendermint/Gno clients, got ${src.client.clientType}`,
       );
     }
-    const rawClientState = await dest.client.getLatestClientState(dest.clientID);
-    const clientState = decodeClientState(rawClientState);
-    if (!isTendermintClientState(clientState)) {
+    const clientState = await dest.client.getLatestClientState(dest.clientID, src.client.clientType);
+
+    if (!isTendermintClientState(clientState) && !isGnoClientState(clientState)) {
       throw new Error(
-        `Expected TendermintClientState, got ${rawClientState.typeUrl}`,
+        `Expected TendermintClientState, got ${clientState}`,
       );
     }
     // TODO: revisit where revision number comes from - this must be the number from the source chain
@@ -411,7 +436,7 @@ export class Link {
     } = await this.doCheckAndRelay(
       relayFrom, timedoutThresholdBlocks, timedoutThresholdSeconds,
     );
-    this.logger.verbose("next heights to relay", heights as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    this.logger.verbose(`next heights to relay: ${JSON.stringify(heights)}`);
     return heights;
   }
 
@@ -456,7 +481,6 @@ export class Link {
     } = splitPendingPackets(
       cutoffHeightA, cutoffTimeA, filteredPacketsA,
     );
-
     const cutoffHeightB = await this.endA.client.timeoutHeight(
       timedoutThresholdBlocks,
     );
@@ -468,7 +492,6 @@ export class Link {
     } = splitPendingPackets(
       cutoffHeightB, cutoffTimeB, filteredPacketsB,
     );
-
     // FIXME: use the returned acks first? Then query for others?
     await Promise.all([this.relayPackets("A", submitA), this.relayPackets("B", submitB)]);
 
@@ -520,7 +543,6 @@ export class Link {
       src, dest,
     } = this.getEnds(source);
     const allPackets = await src.querySentPackets(opts.minHeight, opts.maxHeight) as PacketV2WithMetadata[];
-
     const toFilter = allPackets.map(({
       packet,
     }) => packet);
@@ -547,6 +569,7 @@ export class Link {
           return packet;
         }
         catch {
+          // Commitment not found - packet may have already been timed out
           return undefined;
         }
       }),
@@ -594,16 +617,14 @@ export class Link {
       };
     }
 
-    const packetsPerDestination = packets.reduce(
-      (sorted: Record<string, readonly number[]>, packet) => {
-        const key = idFunc(packet);
-        return {
-          ...sorted,
-          [key]: [...(sorted[key] ?? []), Number(packet.sequence)],
-        };
-      }, {
-      },
-    );
+    const packetsPerDestination: Record<string, number[]> = {};
+    for (const packet of packets) {
+      const key = idFunc(packet);
+      if (!packetsPerDestination[key]) {
+        packetsPerDestination[key] = [];
+      }
+      packetsPerDestination[key].push(Number(packet.sequence));
+    }
     const unreceivedResponses = await Promise.all(
       Object.entries(packetsPerDestination).map(
         async ([destination, sequences]) => {
@@ -616,17 +637,10 @@ export class Link {
         },
       ),
     );
-    const unreceived = unreceivedResponses.reduce(
-      (nested: Record<string, Set<number>>, {
-        key, sequences,
-      }) => {
-        return {
-          ...nested,
-          [key]: new Set(sequences),
-        };
-      }, {
-      },
-    );
+    const unreceived: Record<string, Set<number>> = {};
+    for (const { key, sequences } of unreceivedResponses) {
+      unreceived[key] = new Set(sequences);
+    }
     return unreceived;
   }
 
@@ -799,6 +813,8 @@ function getEndpoint(
   switch (client.clientType) {
     case ClientType.Tendermint:
       return new TendermintEndpoint(client as TendermintIbcClient, clientId, connectionId);
+    case ClientType.Gno:
+      return new TendermintEndpoint(client as GnoIbcClient, clientId, connectionId);
     default:
       throw new Error(`Unsupported client type: ${client.clientType}`);
   }
@@ -824,6 +840,17 @@ async function createClients(
     clientIdB = clientId;
   }
 
+  if (isGno(nodeA)) {
+    const args = await nodeA.buildCreateClientArgs(trustPeriodA);
+    const {
+      clientId,
+    } = await nodeB.createGnoClient(
+      args.clientState, args.consensusState,
+    );
+    nodeB.logger.info(`Created client for nodeB: ${clientId}`);
+    clientIdB = clientId;
+  }
+
   // client on A pointing to B
   if (isTendermint(nodeB)) {
     const args2 = await nodeB.buildCreateClientArgs(trustPeriodB);
@@ -836,5 +863,15 @@ async function createClients(
     clientIdA = clientId;
   }
 
-  return [clientIdA, clientIdB];
+  if (isGno(nodeB)) {
+    const args2 = await nodeB.buildCreateClientArgs(trustPeriodB);
+    const {
+      clientId,
+    } = await nodeA.createGnoClient(
+      args2.clientState, args2.consensusState,
+    );
+    nodeA.logger.info(`Created client for nodeA: ${clientId}`);
+    clientIdA = clientId;
+  }
+  return [clientIdA.trim(), clientIdB.trim()];
 }

@@ -53,7 +53,7 @@ export default tseslint.config([
       "max-lines": [
         "warn",
         {
-          max: 700,
+          max: 1000,
           skipBlankLines: true,
           skipComments: true,
         },
@@ -61,11 +61,12 @@ export default tseslint.config([
       "max-lines-per-function": [
         "warn",
         {
-          max: 350,
+          max: 500,
           skipBlankLines: true,
           skipComments: true,
         },
       ],
+      eqeqeq: ["error", "always"],
     },
   },
   {

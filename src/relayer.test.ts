@@ -14,16 +14,19 @@ import {
   ChainType,
 } from "./types";
 import {
-  addRelayPath, getRelayPaths,
+  storage,
 } from "./utils/storage";
 
 // Mocks
 globalThis.setTimeout = vi.fn(fn => fn()) as unknown as typeof setTimeout;
 
+const mockLoggerInfo = vi.fn();
+const mockLoggerError = vi.fn();
+
 vi.mock("winston", () => ({
   createLogger: vi.fn(() => ({
-    info: vi.fn(),
-    error: vi.fn(),
+    info: mockLoggerInfo,
+    error: mockLoggerError,
   })),
 }));
 
@@ -88,6 +91,10 @@ vi.mock("./utils/signers", () => ({
   })),
 }));
 
+vi.mock("./utils/utils", () => ({
+  getPrefix: vi.fn(async () => "cosmos"),
+}));
+
 const relayPathsMock = [
   {
     id: 1,
@@ -112,62 +119,72 @@ const relayedHeightsMock = {
   ackHeightB: 0,
 };
 
-vi.mock("./utils/storage", () => ({
-  addRelayPath: vi.fn(async () => relayPathsMock[0]),
-  getRelayPaths: vi.fn(async () => relayPathsMock),
-  getRelayedHeights: vi.fn(async () => relayedHeightsMock),
-  updateRelayedHeights: vi.fn(async () => undefined),
-}));
+vi.mock("./utils/storage", () => (
+  {
+    storage: {
+      addRelayPath: vi.fn(async () => relayPathsMock[0]),
+      getRelayPaths: vi.fn(async () => relayPathsMock),
+      getRelayedHeights: vi.fn(async () => relayedHeightsMock),
+      updateRelayedHeights: vi.fn(async () => undefined),
+      getChainFees: vi.fn(async () => ({
+        chainId: "test",
+        gasPrice: 0.025,
+        gasDenom: "uatom",
+      })),
+    },
+  }
+));
 
 describe("Relayer", () => {
   let logger: winston.Logger;
   let relayer: Relayer;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     logger = winston.createLogger();
     relayer = new Relayer(logger);
   });
 
   it("should initialize with no relay paths", async () => {
-    vi.mocked(getRelayPaths).mockResolvedValueOnce([]);
+    vi.mocked(storage.getRelayPaths).mockResolvedValueOnce([]);
     await relayer.init();
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
       "No relay paths found. Please add a relay path to start relaying messages.",
     );
   });
 
   it("should initialize with relay paths", async () => {
     await relayer.init();
-    expect(logger.info).toHaveBeenCalledWith("Found 1 relay paths.");
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(mockLoggerInfo).toHaveBeenCalledWith("Found 1 relay paths.");
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
       "Relay Path: chainA (cosmos) <-> chainB (cosmos)",
     );
   });
 
   it("should add a new relay path (v1)", async () => {
     await relayer.addNewRelayPath(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 1,
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, 1,
     );
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
       "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
     );
   });
 
   it("should add a new relay path (v2)", async () => {
     await relayer.addNewRelayPath(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, 2,
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, 2,
     );
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
       "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
     );
   });
 
   it("should add an existing relay path", async () => {
     await relayer.addExistingRelayPath(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
     );
-    expect(addRelayPath).toHaveBeenCalledWith(
-      "chainA", "nodeA", "chainB", "nodeB", ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
+    expect(storage.addRelayPath).toHaveBeenCalledWith(
+      "chainA", "nodeA", undefined, "chainB", "nodeB", undefined, ChainType.Cosmos, ChainType.Cosmos, "clientA", "clientB", 1,
     );
   });
 
@@ -175,10 +192,10 @@ describe("Relayer", () => {
     relayer.relayerLoop = vi.fn();
     await relayer.start();
     expect(relayer["running"]).toBe(true);
-    expect(logger.info).toHaveBeenCalledWith("Starting relayer...");
+    expect(mockLoggerInfo).toHaveBeenCalledWith("Starting relayer...");
     await relayer.stop();
     expect(relayer["running"]).toBe(false);
-    expect(logger.info).toHaveBeenCalledWith("Stopping relayer...");
+    expect(mockLoggerInfo).toHaveBeenCalledWith("Stopping relayer...");
   });
 
   it("should emit messageRelayed event", () => {

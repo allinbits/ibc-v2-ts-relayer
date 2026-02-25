@@ -34,11 +34,11 @@ const init = async () => {
     "venus");
   await relayer.addGasPrice("mars", "0.025", "umars");
   await relayer.addGasPrice("venus", "0.025", "uvenus");
-  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:36657", ChainType.Cosmos, ChainType.Cosmos, 2);
+  await relayer.addNewRelayPath("mars", "http://localhost:26657", undefined, "venus", "http://localhost:36657", undefined, ChainType.Cosmos, ChainType.Cosmos, 2);
 };
 
 const addV1 = async () => {
-  await relayer.addNewRelayPath("mars", "http://localhost:26657", "venus", "http://localhost:36657", ChainType.Cosmos, ChainType.Cosmos, 1);
+  await relayer.addNewRelayPath("mars", "http://localhost:26657", undefined, "venus", "http://localhost:36657", undefined, ChainType.Cosmos, ChainType.Cosmos, 1);
 };
 
 test("Start relayer and. run E2E tests", async () => {

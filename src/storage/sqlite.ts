@@ -1,22 +1,19 @@
 import Database from "better-sqlite3";
 
-// this is a top-level await
-export const openDB = async (dbFile: string): Promise<Database.Database> => {
-  // open the database
-  const db = new Database(dbFile);
-
-  const baseSchema = `
+const baseSchema = `
 CREATE TABLE IF NOT EXISTS relayPaths (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chainIdA TEXT NOT NULL,
     nodeA TEXT NOT NULL,
+    queryNodeA TEXT,
     chainIdB TEXT NOT NULL,
     nodeB TEXT NOT NULL,
+    queryNodeB TEXT,
     chainTypeA TEXT NOT NULL,
     chainTypeB TEXT NOT NULL,
     clientA TEXT NOT NULL,
     clientB TEXT NOT NULL,
-    version INTEHER NOT NULL DEFAULT 1
+    version INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS relayedHeights (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +31,25 @@ CREATE TABLE IF NOT EXISTS chainFees (
     gasDenom TEXT NOT NULL,
     UNIQUE (chainId) ON CONFLICT REPLACE
 );`;
+
+let cachedDb: Database.Database | null = null;
+let cachedDbPath: string | null = null;
+
+export const openDB = async (dbFile: string): Promise<Database.Database> => {
+  if (cachedDb && cachedDbPath === dbFile) {
+    return cachedDb;
+  }
+  const db = new Database(dbFile);
   await db.exec(baseSchema);
+  cachedDb = db;
+  cachedDbPath = dbFile;
   return db;
+};
+
+export const closeDB = (): void => {
+  if (cachedDb) {
+    cachedDb.close();
+    cachedDb = null;
+    cachedDbPath = null;
+  }
 };

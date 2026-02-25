@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.10
 
-FROM node:current-alpine3.22
+FROM node:24.11.0-alpine3.22
 
 # Use production node environment by default.
 # ENV NODE_ENV production
