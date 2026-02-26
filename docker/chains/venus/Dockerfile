@@ -9,7 +9,7 @@ RUN ignite scaffold chain \
 
 WORKDIR /apps/venus
 
-RUN ignite chain build --skip=proto
+RUN ignite chain build --skip-proto
 
 FROM ignitehq/cli:v29.7.0
 
