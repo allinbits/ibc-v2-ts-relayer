@@ -1,4 +1,4 @@
-FROM ignitehq/cli:v29.6.2 AS builder
+FROM ignitehq/cli:v29.7.0 AS builder
 
 ENV DO_NOT_TRACK="1"
 
@@ -11,7 +11,7 @@ WORKDIR /apps/mars
 
 RUN ignite chain build --skip=proto
 
-FROM ignitehq/cli:v29.6.2
+FROM ignitehq/cli:v29.7.0
 
 ENV DO_NOT_TRACK="1"
 
