@@ -54,12 +54,12 @@ test("Start relayer and. run E2E tests", async () => {
   const queryB = QueryClient.withExtensions(
     tmClientB, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
   );
-  const counterA = await queryA.ibc.clientV2.counterparty("07-tendermint-1");
+  const counterA = await queryA.ibc.clientV2.counterparty("07-tendermint-0");
   expect(counterA).toBeDefined();
-  expect(counterA.counterpartyInfo?.clientId).toBe("07-tendermint-1");
-  const counterB = await queryB.ibc.clientV2.counterparty("07-tendermint-1");
+  expect(counterA.counterpartyInfo?.clientId).toBe("07-tendermint-0");
+  const counterB = await queryB.ibc.clientV2.counterparty("07-tendermint-0");
   expect(counterB).toBeDefined();
-  expect(counterB.counterpartyInfo?.clientId).toBe("07-tendermint-1");
+  expect(counterB.counterpartyInfo?.clientId).toBe("07-tendermint-0");
   await addV1();
 
   const counterA_v1 = await queryA.ibc.channel.channel("transfer", "channel-0");
