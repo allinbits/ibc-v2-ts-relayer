@@ -1,4 +1,4 @@
-name: Docker Build and Push
+name: Docker Arm64 Build and Push
 on:
   push:
     branches: [ main, master ]
@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -46,13 +46,13 @@ jobs:
         context: .
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
-        platforms: linux/amd64
+        platforms: linux/arm64
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
   build-chains:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       pull-requests: read
@@ -102,7 +102,7 @@ jobs:
         file: docker/chains/${{ matrix.chain }}/Dockerfile
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
-        platforms: linux/amd64
+        platforms: linux/arm64
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
