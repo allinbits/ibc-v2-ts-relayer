@@ -5,6 +5,12 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main, master, "ci/docker", "ops/dev-env"]
+  workflow_dispatch:
+    inputs:
+      force_chains:
+        description: 'Force rebuild chain images (comma-separated: mars,venus,gno,a1gno or "all")'
+        required: false
+        default: ''
 
 jobs:
   # ── Relayer image (multi-arch) ─────────────────────────────
@@ -126,12 +132,22 @@ jobs:
             - 'docker/chains/${{ matrix.chain }}/**'
             - 'docker/chains/serve.sh'
 
+    - name: Check if build is needed
+      id: should
+      run: |
+        FORCE="${{ inputs.force_chains }}"
+        if [ "$FORCE" = "all" ] || echo ",$FORCE," | grep -q ",${{ matrix.chain }},"; then
+          echo "build=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "build=${{ steps.changes.outputs.chain }}" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Set up Docker Buildx
-      if: steps.changes.outputs.chain == 'true'
+      if: steps.should.outputs.build == 'true'
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to Container Registry
-      if: steps.changes.outputs.chain == 'true' && github.event_name != 'pull_request'
+      if: steps.should.outputs.build == 'true' && github.event_name != 'pull_request'
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
@@ -139,7 +155,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Extract metadata
-      if: steps.changes.outputs.chain == 'true'
+      if: steps.should.outputs.build == 'true'
       id: meta
       uses: docker/metadata-action@v5
       with:
@@ -149,7 +165,7 @@ jobs:
           type=raw,value=latest,suffix=-${{ matrix.arch }}
 
     - name: Build and push Docker image
-      if: steps.changes.outputs.chain == 'true'
+      if: steps.should.outputs.build == 'true'
       uses: docker/build-push-action@v5
       with:
         context: docker/chains
