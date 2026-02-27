@@ -28,7 +28,6 @@ jobs:
       gno:
         image: ghcr.io/allinbits/ibc-v2-ts-relayer/gno
         options: --name gno
-        tty: false
         env:
           GNO_RELAYER_ADDRESS: ${{ secrets.GNO_RELAYER_ADDRESS }}
         ports:
