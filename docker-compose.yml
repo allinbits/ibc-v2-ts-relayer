@@ -31,7 +31,8 @@ services:
   mars:
     image: ghcr.io/allinbits/ibc-v2-ts-relayer/mars
     build:
-      context: ./docker/chains/mars
+      context: ./docker/chains
+      dockerfile: mars/Dockerfile
     restart: unless-stopped
     container_name: mars
     working_dir: /apps/mars
@@ -39,24 +40,26 @@ services:
     ports:
       # - "26656:26656"
       - "26657:26657"
-      - "1318:1318"
+      - "1317:1317"
     # volumes:
       # - mars-apps:/apps
       # - mars-data:/home/tendermint
       # - ./docker/chains/mars/config.yml:/config.yaml
     environment:
       DO_NOT_TRACK: "1"
+      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
       interval: 5s
       timeout: 10s
       retries: 3
       start_period: 300s
-  
+
   venus:
     image: ghcr.io/allinbits/ibc-v2-ts-relayer/venus
     build:
-      context: ./docker/chains/venus
+      context: ./docker/chains
+      dockerfile: venus/Dockerfile
     restart: unless-stopped
     container_name: venus
     working_dir: /apps/venus
@@ -64,13 +67,53 @@ services:
     ports:
       # - "26656:26656"
       - "36657:26657"
-      - "2318:1318"
+      - "2317:1317"
     # volumes:
       # - venus-apps:/apps
       # - venus-data:/home/tendermint
       # - ./docker/chains/venus/config.yml:/config.yaml
     environment:
       DO_NOT_TRACK: "1"
+      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+
+  gno:
+    image: ghcr.io/allinbits/ibc-v2-ts-relayer/gno
+    build:
+      context: ./docker/chains/gno
+    restart: unless-stopped
+    container_name: gno
+    tty: false
+    ports:
+      - "46657:26657"
+      - "8888:8888"
+      - "8546:8546"
+    environment:
+      GNO_RELAYER_ADDRESS: ${GNO_RELAYER_ADDRESS}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+
+  a1gno:
+    image: ghcr.io/allinbits/ibc-v2-ts-relayer/a1gno
+    build:
+      context: ./docker/chains/a1gno
+    restart: unless-stopped
+    container_name: a1gno
+    tty: true
+    ports:
+      - "56657:26657"
+      - "3317:1317"
+    environment:
+      ATOMONE_RELAYER_ADDRESS: ${ATOMONE_RELAYER_ADDRESS}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
       interval: 5s

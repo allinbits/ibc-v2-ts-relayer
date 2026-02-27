@@ -1,4 +1,4 @@
-FROM ignitehq/cli AS builder
+FROM ignitehq/cli:v29.7.0 AS builder
 
 ENV DO_NOT_TRACK="1"
 
@@ -9,13 +9,14 @@ RUN ignite scaffold chain \
 
 WORKDIR /apps/mars
 
-RUN ignite chain build
+RUN ignite chain build --skip-proto
 
-FROM ignitehq/cli
+FROM ignitehq/cli:v29.7.0
 
 ENV DO_NOT_TRACK="1"
 
-COPY config.yml /config.yml
+COPY mars/config.yml /config.yml
+COPY serve.sh /serve.sh
 
 COPY --from=builder /apps /apps
 COPY --from=builder /home/tendermint /home/tendermint
@@ -24,4 +25,4 @@ COPY --from=builder /go/bin/marsd /go/bin/marsd
 
 WORKDIR /apps/mars
 
-ENTRYPOINT ["ignite", "chain", "serve", "--config", "/config.yml", "--skip-build", "--skip-proto", "-r", "-o", "/dev/stdout"]
+ENTRYPOINT ["/serve.sh"]

@@ -2,7 +2,7 @@ validation: sovereign
 version: 1
 accounts:
     - name: alice
-      mnemonic: other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy
+      mnemonic: __RELAYER_MNEMONIC__
       coins:
         - 2000000000uvenus
     - name: bob
