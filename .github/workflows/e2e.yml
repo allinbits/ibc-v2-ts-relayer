@@ -28,6 +28,7 @@ jobs:
       gno:
         image: ghcr.io/allinbits/ibc-v2-ts-relayer/gno
         options: --name gno
+        tty: false
         env:
           GNO_RELAYER_ADDRESS: ${{ secrets.GNO_RELAYER_ADDRESS }}
         ports:
@@ -57,7 +58,7 @@ jobs:
 
     - name: Wait for services to be ready
       run: |
-        ./node_modules/.bin/wait-on http://localhost:1317 http://localhost:2317 http://localhost:26657 http://localhost:36657 http://localhost:46657 http://localhost:8546 http://localhost:56657 --timeout 120000
+        ./node_modules/.bin/wait-on http://localhost:1317 http://localhost:2317 http://localhost:26657 http://localhost:36657 http://localhost:46657 http://localhost:8546/graphql http://localhost:56657 --timeout 120000
 
     - name: Run E2E tests
       env:
