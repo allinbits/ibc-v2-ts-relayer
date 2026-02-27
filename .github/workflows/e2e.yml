@@ -62,13 +62,13 @@ jobs:
     - name: Run E2E tests
       env:
           RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
-          DB_FILE: /tmp/relayer.db
+          DB_FILE: relayer.db
       run: pnpm test:e2e
 
     - name: Run GNO E2E tests
       env:
           RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
-          DB_FILE: /tmp/gno-relayer.db
+          DB_FILE: gno-relayer.db
       run: pnpm test:gno:e2e
 
     - name: Dockerize relayer and run commands
