@@ -79,6 +79,11 @@ jobs:
         docker run -d --name ts-relayer --network container:mars --cap-add IPC_LOCK ts-relayer
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c mars --mnemonic "$RELAYER_MNEMONIC"
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c venus --mnemonic "$RELAYER_MNEMONIC"
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c ibctest-1 --mnemonic "$RELAYER_MNEMONIC"
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-mnemonic -c dev --mnemonic "$RELAYER_MNEMONIC"
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c mars 0.025umars
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c venus 0.025uvenus
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c ibctest-1 0.025uphoton
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c dev 0.025ugnot
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-path -s mars -d venus --surl http://mars:26657 --durl http://venus:26657 --ibcv 2
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-path -s ibctest-1 -d dev --surl http://ibctest-1:26657 --durl http://dev:26657 --dquery http://dev:8546/graphql/query --ibcv 2
