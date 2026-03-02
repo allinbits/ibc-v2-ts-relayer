@@ -86,4 +86,4 @@ jobs:
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c ibctest-1 0.025uphoton
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-gas-price -c dev 0.025ugnot
         docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-path -s mars -d venus --surl http://mars:26657 --durl http://venus:26657 --ibcv 2
-        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-path -s ibctest-1 -d dev --surl http://ibctest-1:26657 --durl http://dev:26657 --dquery http://dev:8546/graphql/query --ibcv 2
+        docker exec ts-relayer /bin/with_keyring ibc-v2-ts-relayer add-path -s ibctest-1 -d dev --surl http://a1gno:26657 --durl http://gno:26657 --dquery http://gno:8546/graphql/query --ibcv 2
