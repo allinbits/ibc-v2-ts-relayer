@@ -50,15 +50,17 @@ test("Start relayer and. run E2E tests", async () => {
     data: Buffer.from("gno.land/r/aib/ibc/core:clients/07-tendermint-1", "utf-8"),
   });
   const clientState = JSON.parse(Buffer.from(clientB.responseBase.data).toString("utf-8"));
-  console.log("Client State:", clientState);
-  
+  expect(clientState).toBeDefined();
+  expect(clientState.id).toBe("07-tendermint-1");
+  expect(clientState.counterparty_client_id).toBe("10-gno-0");
+  expect(clientState.client_state.chain_id).toBe("ibctest-1");
   const queryA = QueryClient.withExtensions(
     tmClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
   );
 
-  const counterA = await queryA.ibc.clientV2.counterparty("07-tendermint-1");
+  const counterA = await queryA.ibc.clientV2.counterparty("10-gno-0");
   expect(counterA).toBeDefined();
-  expect(counterA.counterpartyInfo?.clientId).toBe("10-gno-0");
+  expect(counterA.counterpartyInfo?.clientId).toBe("07-tendermint-1");
 
   console.log("Relayer initialized and started successfully.");
 }, 120000);
