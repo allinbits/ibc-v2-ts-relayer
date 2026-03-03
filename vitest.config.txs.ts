@@ -8,5 +8,8 @@ export default defineConfig({
     coverage: {
       provider: "istanbul", // or 'v8'
     },
+    env: {
+      RELAYER_MNEMONIC: process.env.RELAYER_MNEMONIC!,
+    },
   },
 });

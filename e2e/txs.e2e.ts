@@ -78,7 +78,7 @@ export const transferFromTm = async (clientId: string, sender: string, receiver:
     timeoutTimestamp: BigInt(Math.floor(Date.now() / 1000) + 600), // in SECONDS
   });
   const prefixA = prefix;
-  const signerA = await DirectSecp256k1HdWallet.fromMnemonic(process.env.RELAYER_MENMONIC || "", {
+  const signerA = await DirectSecp256k1HdWallet.fromMnemonic(process.env.RELAYER_MNEMONIC || "", {
     prefix: prefixA,
   });
   const feesA = await storage.getChainFees(chain_id);
