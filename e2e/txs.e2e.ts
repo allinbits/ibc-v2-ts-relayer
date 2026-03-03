@@ -16,8 +16,16 @@ import {
 import {
   defaultRegistryTypes,
   GasPrice,
+  QueryClient,
+  setupAuthExtension,
+  setupBankExtension,
+  setupIbcExtension,
+  setupStakingExtension,
   SigningStargateClient,
 } from "@cosmjs/stargate";
+import {
+  connectComet,
+} from "@cosmjs/tendermint-rpc";
 import {
   GnoJSONRPCProvider,
   GnoWallet,
@@ -25,8 +33,12 @@ import {
 import {
   TransactionEndpoint,
 } from "@gnolang/tm2-js-client";
+import {
+  connectTm2,
+} from "@gnolang/tm2-rpc";
 import Long from "long";
 import {
+  expect,
   test,
 } from "vitest";
 
@@ -97,6 +109,16 @@ export const transferFromTm = async (clientId: string, sender: string, receiver:
 };
 
 test("Run mars -> venus test", async () => {
+  const marsClient = await connectComet("http://localhost:26657");
+  const venusClient = await connectComet("http://localhost:36657");
+  const atoneClient = await connectComet("http://localhost:56657");
+  const _devClient = await connectTm2("http://localhost:46657");
+
+  const marsQuery = QueryClient.withExtensions(marsClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension);
+  const venusQuery = QueryClient.withExtensions(venusClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension);
+  const atoneQuery = QueryClient.withExtensions(atoneClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension);
+
+  console.log("Connected to all chains successfully.");
   await transferFromTm("07-tendermint-2", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "10", "umars", "test transfer", "http://localhost:26657", "mars", "mars", {
     chainId: "mars",
     gasDenom: "umars",
@@ -108,5 +130,17 @@ test("Run mars -> venus test", async () => {
     gasDenom: "uphoton",
     gasPrice: 0.025,
     id: 1,
+  });
+  expect.poll(() => marsQuery.bank.balance("mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "umars")).toEqual({
+    denom: "umars",
+    amount: "999999999999990",
+  });
+  expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6")).toEqual({
+    denom: "umars",
+    amount: "10",
+  });
+  expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone")).toEqual({
+    denom: "uatone",
+    amount: "999999999999990",
   });
 }, 120000);
