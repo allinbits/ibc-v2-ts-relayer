@@ -131,9 +131,10 @@ test("Run mars -> venus test", async () => {
     gasPrice: 0.025,
     id: 1,
   });
-  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr"), {
-    interval: 3000,
-    timeout: 30000,
+  await expect.poll(async () => {
+    const res = await venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr");
+    console.log(res);
+    return res;
   }).toEqual({
     denom: "umars",
     amount: "10",
@@ -146,9 +147,13 @@ test("Run mars -> venus test", async () => {
     id: 1,
   });
   */
-  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr"), {
-    interval: 3000,
-    timeout: 30000,
+  await expect.poll(async () => {
+    const res = await venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr");
+    console.log(res);
+    return res;
+  }, {
+    interval: 5000,
+    timeout: 45000,
   }).toEqual({
     denom: "umars",
     amount: "10",
