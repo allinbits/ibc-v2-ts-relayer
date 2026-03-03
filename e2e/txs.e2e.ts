@@ -103,7 +103,7 @@ test("Run mars -> venus test", async () => {
     gasPrice: 0.025,
     id: 1,
   });
-  await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:46657", "atone", "ibctest-1", {
+  await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:56657", "atone", "ibctest-1", {
     chainId: "ibctest-1",
     gasDenom: "uphoton",
     gasPrice: 0.025,
