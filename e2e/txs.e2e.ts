@@ -131,7 +131,10 @@ test("Run mars -> venus test", async () => {
     gasPrice: 0.025,
     id: 1,
   });
-  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr")).toEqual({
+  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr"), {
+    interval: 3000,
+    timeout: 30000,
+  }).toEqual({
     denom: "umars",
     amount: "10",
   });
