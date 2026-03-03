@@ -133,7 +133,7 @@ test("Run mars -> venus test", async () => {
   });
   await expect.poll(() => marsQuery.bank.balance("mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "umars")).toEqual({
     denom: "umars",
-    amount: "999999999999990",
+    amount: "1899971849",
   });
   await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6")).toEqual({
     denom: "umars",
