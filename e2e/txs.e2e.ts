@@ -131,15 +131,15 @@ test("Run mars -> venus test", async () => {
     gasPrice: 0.025,
     id: 1,
   });
-  expect.poll(() => marsQuery.bank.balance("mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "umars")).toEqual({
+  await expect.poll(() => marsQuery.bank.balance("mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "umars")).toEqual({
     denom: "umars",
     amount: "999999999999990",
   });
-  expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6")).toEqual({
+  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6")).toEqual({
     denom: "umars",
     amount: "10",
   });
-  expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone")).toEqual({
+  await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone")).toEqual({
     denom: "uatone",
     amount: "999999999999990",
   });
