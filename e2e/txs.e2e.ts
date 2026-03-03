@@ -122,13 +122,13 @@ test("Run mars -> venus test", async () => {
   await transferFromTm("07-tendermint-2", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "10", "umars", "test transfer", "http://localhost:26657", "mars", "mars", {
     chainId: "mars",
     gasDenom: "umars",
-    gasPrice: 0.025,
+    gasPrice: 0,
     id: 1,
   });
   await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:56657", "atone", "ibctest-1", {
     chainId: "ibctest-1",
     gasDenom: "uphoton",
-    gasPrice: 0.025,
+    gasPrice: 0,
     id: 1,
   });
   await expect.poll(() => marsQuery.bank.balance("mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "umars")).toEqual({
