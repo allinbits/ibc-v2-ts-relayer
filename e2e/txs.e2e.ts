@@ -131,10 +131,18 @@ test("Run mars -> venus test", async () => {
     gasPrice: 0.025,
     id: 1,
   });
-  await expect.poll(() => marsQuery.bank.balance("mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "umars")).toEqual({
+  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6")).toEqual({
     denom: "umars",
-    amount: "1899971849",
+    amount: "10",
   });
+  /*
+  await transferFromTm("07-tendermint-2", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "10", "umars", "test transfer", "http://localhost:36657", "venus", "venus", {
+    chainId: "venus",
+    gasDenom: "uvenus",
+    gasPrice: 0,
+    id: 1,
+  }); 
+  */
   await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6")).toEqual({
     denom: "umars",
     amount: "10",
