@@ -31,8 +31,8 @@ import {
 } from "vitest";
 
 import {
-  storage,
-} from "../src/utils/storage.ts";
+  ChainFees,
+} from "../src/types/index.ts";
 
 function ibcRegistry(): Registry {
   return new Registry([...defaultRegistryTypes, ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType]]);
@@ -54,7 +54,7 @@ export const transferFromGnoGRC = async (clientId: string, sender: string, recei
   console.log("Gno transfer result:", result);
   return result;
 };
-export const transferFromTm = async (clientId: string, sender: string, receiver: string, amount: string, denom: string, memo: string, url: string, prefix: string, chain_id: string) => {
+export const transferFromTm = async (clientId: string, sender: string, receiver: string, amount: string, denom: string, memo: string, url: string, prefix: string, chain_id: string, chainFee: ChainFees) => {
   const packetData = FungibleTokenPacketData.encode(({
     amount,
     denom,
@@ -81,7 +81,7 @@ export const transferFromTm = async (clientId: string, sender: string, receiver:
   const signerA = await DirectSecp256k1HdWallet.fromMnemonic(process.env.RELAYER_MNEMONIC || "", {
     prefix: prefixA,
   });
-  const feesA = await storage.getChainFees(chain_id);
+  const feesA = chainFee;
 
   const clientA = await SigningStargateClient.connectWithSigner(url, signerA as OfflineSigner, {
     gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
@@ -97,6 +97,16 @@ export const transferFromTm = async (clientId: string, sender: string, receiver:
 };
 
 test("Run mars -> venus test", async () => {
-  await transferFromTm("07-tendermint-2", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "10", "umars", "test transfer", "http://localhost:26657", "mars", "mars");
-  await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:46657", "atone", "ibctest-1");
+  await transferFromTm("07-tendermint-2", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "10", "umars", "test transfer", "http://localhost:26657", "mars", "mars", {
+    chainId: "mars",
+    gasDenom: "umars",
+    gasPrice: 0.025,
+    id: 1,
+  });
+  await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:46657", "atone", "ibctest-1", {
+    chainId: "ibctest-1",
+    gasDenom: "uphoton",
+    gasPrice: 0.025,
+    id: 1,
+  });
 }, 120000);
