@@ -184,7 +184,8 @@ describe("IBC Transfer Tests", async () => {
     }
     ).toEqual({
       denom: "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16",
-      amount: "10",
+      balance: "10",
+      address: "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x",
     });
 
     await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone"), {
@@ -213,7 +214,8 @@ describe("IBC Transfer Tests", async () => {
     }
     ).toEqual({
       denom: "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16",
-      amount: "0",
+      balance: 0,
+      address: "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x",
     });
 
     await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone"), {
