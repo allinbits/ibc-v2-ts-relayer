@@ -1670,12 +1670,19 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       `Register Counterparty : ${counterpartyClientId} => ${clientId}`,
     );
     const senderAddress = this.senderAddress;
+    let merklePathPrefix: Uint8Array;
+    if (clientId.startsWith("10-gno-")) {
+      merklePathPrefix = toAscii("/pv/vm:gno.land/r/aib/ibc/core:");
+    }
+    else {
+      merklePathPrefix = new Uint8Array();
+    }
     const msg = {
       typeUrl: "/ibc.core.client.v2.MsgRegisterCounterparty",
       value: MsgRegisterCounterparty.fromPartial({
         clientId,
         counterpartyClientId,
-        counterpartyMerklePrefix: [merklePrefix, toAscii("/pv/vm:gno.land/r/aib/ibc/core:")],
+        counterpartyMerklePrefix: [merklePrefix, merklePathPrefix],
         signer: senderAddress,
       }),
     };

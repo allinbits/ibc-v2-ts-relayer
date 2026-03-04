@@ -217,6 +217,7 @@ export class Relayer extends EventEmitter {
           this.relayedHeights = new Map<number, RelayedHeights>();
           let relayedHeights = await storage.getRelayedHeights(path.id);
           if (!relayedHeights) {
+            this.logger.info(`No relayed heights found for path ${path.id}. Initializing to zero.`);
             await storage.updateRelayedHeights(path.id, 0, 0, 0, 0);
             relayedHeights = {
               id: 0,
@@ -226,7 +227,7 @@ export class Relayer extends EventEmitter {
               ackHeightA: 0,
               ackHeightB: 0,
             };
-            this.logger.info(`No relayed heights found for path ${path.id}. Initializing to zero.`);
+            this.logger.info(`Initialized relayed heights for path ${path.id}:`, relayedHeights);
           }
           this.relayedHeights.set(path.id, relayedHeights);
           const prefixA = await getPrefix(path.chainTypeA, path.nodeA);
@@ -276,6 +277,7 @@ export class Relayer extends EventEmitter {
       }
     }
     catch (error) {
+      console.log(error);
       this.logger.error("Failed to get relay paths:", error);
     }
   }
