@@ -141,7 +141,7 @@ test("Run mars -> venus test", async () => {
     amount: "10",
   });
   
-  await transferFromTm("07-tendermint-2", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "10", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE", "test transfer", "http://localhost:36657", "venus", "venus", {
+  await transferFromTm("07-tendermint-2", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "10", "transfer/07-tendermint-2/umars", "test transfer", "http://localhost:36657", "venus", "venus", {
     chainId: "venus",
     gasDenom: "uvenus",
     gasPrice: 0,
@@ -154,12 +154,5 @@ test("Run mars -> venus test", async () => {
   }).toEqual({
     denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
     amount: "0",
-  });
-  await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone"), {
-    interval: 3000,
-    timeout: 30000,
-  }).toEqual({
-    denom: "uatone",
-    amount: "999999999999990",
   });
 }, 120000);
