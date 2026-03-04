@@ -450,8 +450,11 @@ export function parsePacket({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = {};
-  for (const { key, value } of attributes) {
+  const attributesObj: Record<string, string> = {
+  };
+  for (const {
+    key, value,
+  } of attributes) {
     attributesObj[key] = value;
   }
 
@@ -489,8 +492,11 @@ export function parsePacketV2({
   if (type !== "send_packet") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string> = {};
-  for (const { key, value } of attributes) {
+  const attributesObj: Record<string, string> = {
+  };
+  for (const {
+    key, value,
+  } of attributes) {
     attributesObj[key] = value;
   }
   const data = fromHex(attributesObj.encoded_packet_hex);
@@ -517,8 +523,11 @@ export function parseAck({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = {};
-  for (const { key, value } of attributes) {
+  const attributesObj: Record<string, string | undefined> = {
+  };
+  for (const {
+    key, value,
+  } of attributes) {
     attributesObj[key] = value;
   }
   const originalPacket = Packet.fromPartial({
@@ -560,8 +569,11 @@ export function parseAckV2({
   if (type !== "write_acknowledgement") {
     throw new Error(`Cannot parse event of type ${type}`);
   }
-  const attributesObj: Record<string, string | undefined> = {};
-  for (const { key, value } of attributes) {
+  const attributesObj: Record<string, string | undefined> = {
+  };
+  for (const {
+    key, value,
+  } of attributes) {
     attributesObj[key] = value;
   }
   if (!attributesObj.encoded_packet_hex) {
@@ -654,7 +666,10 @@ export function splitPendingPackets<T extends (PacketWithMetadata | PacketV2With
       toTimeout.push(packet);
     }
   }
-  return { toSubmit, toTimeout };
+  return {
+    toSubmit,
+    toTimeout,
+  };
 }
 
 export function presentPacketData(data: Uint8Array): Record<string, unknown> {

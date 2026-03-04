@@ -64,7 +64,6 @@ export const transferFromGnoGRC = async (clientId: string, _sender: string, rece
       gas_wanted: new Long(60000000),
       gas_fee: "750000ugnot",
     });
-  console.log("Gno transfer result:", result);
   return result;
 };
 export const transferFromGno = async (clientId: string, _sender: string, receiver: string, amount: string, denom: string, memo: string, mnem: string, url: string) => {
@@ -80,7 +79,6 @@ export const transferFromGno = async (clientId: string, _sender: string, receive
       gas_wanted: new Long(60000000),
       gas_fee: "750000ugnot",
     });
-  console.log("Gno transfer result:", result);
   return result;
 };
 export const transferFromTm = async (clientId: string, sender: string, receiver: string, amount: string, denom: string, memo: string, url: string, prefix: string, chain_id: string, chainFee: ChainFees) => {
@@ -125,8 +123,6 @@ export const transferFromTm = async (clientId: string, sender: string, receiver:
   return result;
 };
 describe("IBC Transfer Tests", async () => {
-
-
   const _marsClient = await connectComet("http://localhost:26657");
   const venusClient = await connectComet("http://localhost:36657");
   const atoneClient = await connectComet("http://localhost:56657");
@@ -135,8 +131,6 @@ describe("IBC Transfer Tests", async () => {
   const venusQuery = QueryClient.withExtensions(venusClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension);
   const atoneQuery = QueryClient.withExtensions(atoneClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension);
 
-  console.log("Connected to all chains successfully.");
-
   test("Run mars -> venus", async () => {
     await transferFromTm("07-tendermint-2", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "10", "umars", "test transfer", "http://localhost:26657", "mars", "mars", {
       chainId: "mars",
@@ -144,7 +138,7 @@ describe("IBC Transfer Tests", async () => {
       gasPrice: 0,
       id: 1,
     });
-    
+
     await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
       timeout: 20000,
       interval: 5000,
@@ -153,7 +147,6 @@ describe("IBC Transfer Tests", async () => {
       amount: "10",
     });
   }, 45000);
-
 
   test("Run venus -> mars return", async () => {
     await transferFromTm("07-tendermint-2", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "10", "transfer/07-tendermint-2/umars", "test transfer", "http://localhost:36657", "venus", "venus", {
@@ -184,13 +177,13 @@ describe("IBC Transfer Tests", async () => {
         Buffer.from(
           (await devClient.abciQuery({
             path: "vm/qrender",
-            data: Buffer.from(`gno.land/r/aib/ibc/apps/transfer:grc20/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x`, "utf-8")
+            data: Buffer.from("gno.land/r/aib/ibc/apps/transfer:grc20/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "utf-8"),
           })
-          ).responseBase.data
-        ).toString('utf-8')), {
+          ).responseBase.data,
+        ).toString("utf-8")), {
       timeout: 20000,
       interval: 5000,
-    }
+    },
     ).toEqual({
       denom: "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16",
       balance: 10,
@@ -207,27 +200,20 @@ describe("IBC Transfer Tests", async () => {
   }, 45000);
 
   test("Run gno -> atone return", async () => {
-    try {
-      await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
-    } catch (error) {
-      console.error("Error during Gno transfer:", error);
-      console.log(error);
-      console.trace();
-      throw new Error();
-    }
+    await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
 
     await expect.poll(async () =>
       JSON.parse(
         Buffer.from(
           (await devClient.abciQuery({
             path: "vm/qrender",
-            data: Buffer.from(`gno.land/r/aib/ibc/apps/transfer:grc20/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x`, "utf-8")
+            data: Buffer.from("gno.land/r/aib/ibc/apps/transfer:grc20/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "utf-8"),
           })
-          ).responseBase.data
-        ).toString('utf-8')), {
+          ).responseBase.data,
+        ).toString("utf-8")), {
       timeout: 20000,
       interval: 5000,
-    }
+    },
     ).toEqual({
       denom: "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16",
       balance: 0,
@@ -243,7 +229,6 @@ describe("IBC Transfer Tests", async () => {
     });
   }, 45000);
   test("Run gno -> atone native", async () => {
-
     await transferFromGno("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ugnot", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
 
     await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "ibc/7C78A8F4DBDF58061FE4E43C4D6D9CD87F154A852D830BEFDF390631CFD98D31"), {

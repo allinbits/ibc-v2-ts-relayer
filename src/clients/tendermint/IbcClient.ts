@@ -1673,7 +1673,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     let merklePathPrefix: Uint8Array;
     if (clientId.startsWith("10-gno-")) {
       merklePathPrefix = toAscii("/pv/vm:gno.land/r/aib/ibc/core:");
-    }else {
+    }
+    else {
       merklePathPrefix = new Uint8Array();
     }
     const msg = {

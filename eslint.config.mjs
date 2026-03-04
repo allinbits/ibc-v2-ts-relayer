@@ -50,6 +50,8 @@ export default tseslint.config([
           caughtErrorsIgnorePattern: "^_",
         },
       ],
+      "preserve-caught-error": 0,
+      "no-useless-escape": 0,
       "max-lines": [
         "warn",
         {

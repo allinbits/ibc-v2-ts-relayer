@@ -617,7 +617,8 @@ export class Link {
       };
     }
 
-    const packetsPerDestination: Record<string, number[]> = {};
+    const packetsPerDestination: Record<string, number[]> = {
+    };
     for (const packet of packets) {
       const key = idFunc(packet);
       if (!packetsPerDestination[key]) {
@@ -637,8 +638,11 @@ export class Link {
         },
       ),
     );
-    const unreceived: Record<string, Set<number>> = {};
-    for (const { key, sequences } of unreceivedResponses) {
+    const unreceived: Record<string, Set<number>> = {
+    };
+    for (const {
+      key, sequences,
+    } of unreceivedResponses) {
       unreceived[key] = new Set(sequences);
     }
     return unreceived;
