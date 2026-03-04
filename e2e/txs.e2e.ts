@@ -199,7 +199,7 @@ describe("IBC Transfer Tests", async () => {
 
   test("Run gno -> atone return", async () => {
     try {
-      await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "transfer/10-gno-1/uatone", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
+      await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "transfer/07-tendermint-2/uatone", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
     } catch (error) {
       console.error("Error during Gno transfer:", error);
       console.log(error);
