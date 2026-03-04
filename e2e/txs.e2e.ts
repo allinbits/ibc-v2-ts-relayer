@@ -137,7 +137,7 @@ describe("IBC Transfer Tests", async () => {
     });
     */
     await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
-      timeout: 60000,
+      timeout: 20000,
       interval: 5000,
     }).toEqual({
       denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
@@ -155,7 +155,7 @@ describe("IBC Transfer Tests", async () => {
     });
 
     await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
-      timeout: 60000,
+      timeout: 20000,
       interval: 5000,
     }).toEqual({
       denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
@@ -179,7 +179,7 @@ describe("IBC Transfer Tests", async () => {
           })
           ).responseBase.data
         ).toString('utf-8')), {
-      timeout: 60000,
+      timeout: 20000,
       interval: 5000,
     }
     ).toEqual({
@@ -188,7 +188,7 @@ describe("IBC Transfer Tests", async () => {
     });
 
     await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone"), {
-      timeout: 60000,
+      timeout: 20000,
       interval: 5000,
     }).toEqual({
       denom: "uatone",
@@ -208,7 +208,7 @@ describe("IBC Transfer Tests", async () => {
           })
           ).responseBase.data
         ).toString('utf-8')), {
-      timeout: 60000,
+      timeout: 20000,
       interval: 5000,
     }
     ).toEqual({
@@ -217,7 +217,7 @@ describe("IBC Transfer Tests", async () => {
     });
 
     await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone"), {
-      timeout: 60000,
+      timeout: 20000,
       interval: 5000,
     }).toEqual({
       denom: "uatone",
