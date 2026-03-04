@@ -128,14 +128,7 @@ describe("IBC Transfer Tests", async () => {
       gasPrice: 0,
       id: 1,
     });
-    /*
-    await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:56657", "atone", "ibctest-1", {
-      chainId: "ibctest-1",
-      gasDenom: "uphoton",
-      gasPrice: 0.025,
-      id: 1,
-    });
-    */
+    
     await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
       timeout: 20000,
       interval: 5000,
@@ -199,7 +192,7 @@ describe("IBC Transfer Tests", async () => {
 
   test("Run gno -> atone return", async () => {
     try {
-      await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "transfer/07-tendermint-2/uatone", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
+      await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
     } catch (error) {
       console.error("Error during Gno transfer:", error);
       console.log(error);
