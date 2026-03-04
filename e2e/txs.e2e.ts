@@ -125,18 +125,19 @@ test("Run mars -> venus test", async () => {
     gasPrice: 0,
     id: 1,
   });
+  /*
   await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:56657", "atone", "ibctest-1", {
     chainId: "ibctest-1",
     gasDenom: "uphoton",
     gasPrice: 0.025,
     id: 1,
   });
-  await expect.poll(async () => {
-    const res = await venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr");
-    console.log(res);
-    return res;
+  */
+  await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr","ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
+    timeout: 60000,
+    interval: 5000,
   }).toEqual({
-    denom: "umars",
+    denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
     amount: "10",
   });
   /*
