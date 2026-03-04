@@ -140,20 +140,20 @@ test("Run mars -> venus test", async () => {
     denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
     amount: "10",
   });
-  /*
-  await transferFromTm("07-tendermint-2", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "10", "umars", "test transfer", "http://localhost:36657", "venus", "venus", {
+  
+  await transferFromTm("07-tendermint-2", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "10", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE", "test transfer", "http://localhost:36657", "venus", "venus", {
     chainId: "venus",
     gasDenom: "uvenus",
     gasPrice: 0,
     id: 1,
   });
-  */
-  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr"), {
+  
+  await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr","ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
+    timeout: 60000,
     interval: 5000,
-    timeout: 45000,
   }).toEqual({
-    denom: "umars",
-    amount: "10",
+    denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
+    amount: "0",
   });
   await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "uatone"), {
     interval: 3000,
