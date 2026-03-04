@@ -147,11 +147,7 @@ test("Run mars -> venus test", async () => {
     id: 1,
   });
   */
-  await expect.poll(async () => {
-    const res = await venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr");
-    console.log(res);
-    return res;
-  }, {
+  await expect.poll(() => venusQuery.bank.allBalances("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr"), {
     interval: 5000,
     timeout: 45000,
   }).toEqual({
