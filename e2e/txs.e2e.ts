@@ -198,7 +198,14 @@ describe("IBC Transfer Tests", async () => {
   }, 45000);
 
   test("Run gno -> atone return", async () => {
-    await transferFromGnoGRC("10-gno-1", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
+    try {
+      await transferFromGnoGRC("10-gno-1", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
+    } catch (error) {
+      console.error("Error during Gno transfer:", error);
+      console.log(error);
+      console.trace();
+      throw new Error();
+    }
 
     await expect.poll(async () =>
       JSON.parse(
