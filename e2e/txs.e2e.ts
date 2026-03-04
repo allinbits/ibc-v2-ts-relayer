@@ -67,6 +67,22 @@ export const transferFromGnoGRC = async (clientId: string, _sender: string, rece
   console.log("Gno transfer result:", result);
   return result;
 };
+export const transferFromGno = async (clientId: string, _sender: string, receiver: string, amount: string, denom: string, memo: string, mnem: string, url: string) => {
+  const prefix = "g";
+
+  const provider = new GnoJSONRPCProvider(url);
+  const wallet = await GnoWallet.fromMnemonic(mnem, {
+    addressPrefix: prefix || "g",
+  });
+  wallet.connect(provider);
+  const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, BigInt(Math.floor(Date.now() / 1000) + 600).toString()], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()).set(denom, amount), (new Map()).set("ugnot", 3000000),
+    {
+      gas_wanted: new Long(60000000),
+      gas_fee: "750000ugnot",
+    });
+  console.log("Gno transfer result:", result);
+  return result;
+};
 export const transferFromTm = async (clientId: string, sender: string, receiver: string, amount: string, denom: string, memo: string, url: string, prefix: string, chain_id: string, chainFee: ChainFees) => {
   const packetData = FungibleTokenPacketData.encode(({
     amount,
@@ -224,6 +240,35 @@ describe("IBC Transfer Tests", async () => {
     }).toEqual({
       denom: "uatone",
       amount: "10000000000",
+    });
+  }, 45000);
+  test("Run gno -> atone native", async () => {
+
+    await transferFromGno("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ugnot", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
+
+    await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "ibc/7C78A8F4DBDF58061FE4E43C4D6D9CD87F154A852D830BEFDF390631CFD98D31"), {
+      timeout: 20000,
+      interval: 5000,
+    }).toEqual({
+      denom: "ibc/7C78A8F4DBDF58061FE4E43C4D6D9CD87F154A852D830BEFDF390631CFD98D31",
+      amount: "10",
+    });
+  }, 45000);
+
+  test("Run atone -> gno native return", async () => {
+    await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "transfer/10-gno-1/ugnot", "test transfer", "http://localhost:56657", "atone", "ibctest-1", {
+      chainId: "ibctest-1",
+      gasDenom: "uphoton",
+      gasPrice: 0.025,
+      id: 1,
+    });
+
+    await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "ibc/7C78A8F4DBDF58061FE4E43C4D6D9CD87F154A852D830BEFDF390631CFD98D31"), {
+      timeout: 20000,
+      interval: 5000,
+    }).toEqual({
+      denom: "ibc/7C78A8F4DBDF58061FE4E43C4D6D9CD87F154A852D830BEFDF390631CFD98D31",
+      amount: "0",
     });
   }, 45000);
 });
