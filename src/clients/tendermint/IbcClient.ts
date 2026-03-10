@@ -1690,8 +1690,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const msg = {
       typeUrl: "/ibc.core.client.v2.MsgRegisterCounterparty",
       value: MsgRegisterCounterparty.fromPartial({
-        clientId,
-        counterpartyClientId,
+        clientId: clientId.trim(),
+        counterpartyClientId: counterpartyClientId.trim(),
         counterpartyMerklePrefix: [merklePrefix, merklePathPrefix],
         signer: senderAddress,
       }),
