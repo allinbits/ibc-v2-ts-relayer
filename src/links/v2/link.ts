@@ -877,5 +877,5 @@ async function createClients(
     nodeA.logger.info(`Created client for nodeA: ${clientId}`);
     clientIdA = clientId;
   }
-  return [clientIdA, clientIdB];
+  return [clientIdA.trim(), clientIdB.trim()];
 }
