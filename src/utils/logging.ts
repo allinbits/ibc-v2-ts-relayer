@@ -11,7 +11,7 @@ const eclesiaFormat = printf(({
 }) => {
   return `${timestamp} [${level.toUpperCase()}]:\t${message}`;
 });
-export const log = winston.createLogger({
+export const log: winston.Logger = winston.createLogger({
   level: config.logging.level,
   defaultMeta: {
     service: "IBC V2 Relayer",
@@ -30,4 +30,8 @@ export const log = winston.createLogger({
       })),
     }),
   ],
+});
+
+log.on("error", (err) => {
+  process.stderr.write(`Logger transport error: ${err}\n`);
 });

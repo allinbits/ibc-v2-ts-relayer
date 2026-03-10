@@ -86,9 +86,9 @@ function getLogLevel(envValue: string | undefined, defaultValue: LogLevel): LogL
  */
 function validateFilePath(filePath: string, label: string): string {
   const resolved = path.resolve(filePath);
-  const allowedDir = path.resolve(process.cwd());
+  const allowedDir = path.resolve(process.env.RELAYER_BASE_DIR || process.cwd());
   if (!resolved.startsWith(allowedDir + path.sep) && resolved !== allowedDir) {
-    throw new Error(`Invalid ${label} path: ${filePath}. Path must be within the working directory (${allowedDir}).`);
+    throw new Error(`Invalid ${label} path: ${filePath}. Path must be within the allowed directory (${allowedDir}).`);
   }
   return resolved;
 }
@@ -111,8 +111,8 @@ function getPositiveInt(
     return defaultValue;
   }
 
-  const parsed = parseInt(envValue, 10);
-  if (Number.isNaN(parsed) || parsed < (min ?? 0)) {
+  const parsed = Number(envValue);
+  if (!Number.isInteger(parsed) || parsed < (min ?? 0)) {
     console.warn(`Invalid number "${envValue}". Using default: ${defaultValue}`);
     return defaultValue;
   }
@@ -141,8 +141,8 @@ function loadConfig(): RelayerConfig {
     },
     relay: {
       pollInterval: getPositiveInt(process.env.RELAY_POLL_INTERVAL, 5000, 1000, 60000),
-      maxAgeDest: getPositiveInt(process.env.RELAY_MAX_AGE_DEST, 86400, 60),
-      maxAgeSrc: getPositiveInt(process.env.RELAY_MAX_AGE_SRC, 86400, 60),
+      maxAgeDest: getPositiveInt(process.env.RELAY_MAX_AGE_DEST, 86400, 60, 604800),
+      maxAgeSrc: getPositiveInt(process.env.RELAY_MAX_AGE_SRC, 86400, 60, 604800),
       timeoutBlocks: getPositiveInt(process.env.RELAY_TIMEOUT_BLOCKS, 2, 0, 1000),
       timeoutSeconds: getPositiveInt(process.env.RELAY_TIMEOUT_SECONDS, 6, 0, 3600),
     },

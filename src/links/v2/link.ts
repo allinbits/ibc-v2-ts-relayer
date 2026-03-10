@@ -135,7 +135,7 @@ export class Link {
     if (isTendermintClientState(clientState) && isTendermint(dest.client)) {
       const height = clientState.latestHeight;
       // Check headers match consensus state (at least validators)
-      const [consensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, dest.client.clientType, height), dest.client.header(toIntHeight(height)), 3]);
+      const [consensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, dest.client.clientType, height), dest.client.header(toIntHeight(height))]);
 
       if (isTendermintConsensusState(consensusState)) {
         // ensure consensus and headers match for next validator hashes
@@ -391,7 +391,7 @@ export class Link {
 
     if (!isTendermintClientState(clientState) && !isGnoClientState(clientState)) {
       throw new Error(
-        `Expected TendermintClientState, got ${clientState}`,
+        `Expected TendermintClientState or GnoClientState, got ${clientState}`,
       );
     }
     // TODO: revisit where revision number comes from - this must be the number from the source chain
@@ -877,5 +877,5 @@ async function createClients(
     nodeA.logger.info(`Created client for nodeA: ${clientId}`);
     clientIdA = clientId;
   }
-  return [clientIdA.trim(), clientIdB.trim()];
+  return [clientIdA, clientIdB];
 }

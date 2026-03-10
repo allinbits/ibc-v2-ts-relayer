@@ -59,6 +59,7 @@ export class Relayer extends EventEmitter {
   private relayPaths: RelayPaths[] = [];
   private links = new Map<number, Link | LinkV2>();
   private running: boolean = false;
+  private loopPromise: Promise<void> | null = null;
 
   constructor(logger: winston.Logger) {
     super();
@@ -208,13 +209,13 @@ export class Relayer extends EventEmitter {
       }
       else {
         this.logger.info(`Found ${this.relayPaths.length} relay paths.`);
+        this.relayedHeights = new Map<number, RelayedHeights>();
         for (let i = 0; i < this.relayPaths.length; i++) {
           if (this.links.has(this.relayPaths[i].id)) {
             continue;
           }
           const path = this.relayPaths[i];
           this.logger.info(`Relay Path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
-          this.relayedHeights = new Map<number, RelayedHeights>();
           let relayedHeights = await storage.getRelayedHeights(path.id);
           if (!relayedHeights) {
             this.logger.info(`No relayed heights found for path ${path.id}. Initializing to zero.`);
@@ -274,10 +275,27 @@ export class Relayer extends EventEmitter {
             this.links.set(path.id, await LinkV2.createWithExistingClients(clientA, clientB, path.clientA, path.clientB, this.logger));
           }
         };
+
+        // Clean up links for paths that no longer exist in the database
+        const activePathIds = new Set(this.relayPaths.map(p => p.id));
+        for (const [id, link] of this.links.entries()) {
+          if (!activePathIds.has(id)) {
+            this.logger.info(`Removing stale link for path ${id}`);
+            try {
+              link.endA.client.disconnect();
+            }
+            catch { /* ignore */ }
+            try {
+              link.endB.client.disconnect();
+            }
+            catch { /* ignore */ }
+            this.links.delete(id);
+            this.relayedHeights.delete(id);
+          }
+        }
       }
     }
     catch (error) {
-      console.log(error);
       this.logger.error("Failed to get relay paths:", error);
     }
   }
@@ -285,12 +303,16 @@ export class Relayer extends EventEmitter {
   async start() {
     this.running = true;
     this.logger.info("Starting relayer...");
-    this.relayerLoop();
+    this.loopPromise = this.relayerLoop();
   }
 
   async stop() {
     this.running = false;
     this.logger.info("Stopping relayer...");
+    if (this.loopPromise) {
+      await this.loopPromise;
+      this.loopPromise = null;
+    }
     for (const link of this.links.values()) {
       try {
         link.endA.client.disconnect();
@@ -314,6 +336,7 @@ export class Relayer extends EventEmitter {
     maxAgeDest: config.relay.maxAgeDest,
     maxAgeSrc: config.relay.maxAgeSrc,
   }) {
+    let consecutiveErrors = 0;
     while (this.running) {
       try {
         await this.init();
@@ -348,14 +371,21 @@ export class Relayer extends EventEmitter {
             await storage.updateRelayedHeights(id, relayHeights.packetHeightA, relayHeights.packetHeightB, relayHeights.ackHeightA, relayHeights.ackHeightB);
             this.logger.info(`Updated relay heights for path ${id}:`, relayHeights);
           }
+          // Update client on dest chain (A) if stale — uses dest max age
           await link.updateClientIfStale("A", options.maxAgeDest);
+          // Update client on src chain (B) if stale — uses src max age
           await link.updateClientIfStale("B", options.maxAgeSrc);
         }
+        consecutiveErrors = 0;
       }
       catch (e) {
+        consecutiveErrors++;
         this.logger.error("Error in relayer loop: " + e, {
           error: e,
         });
+        const backoff = Math.min(options.poll * Math.pow(2, consecutiveErrors), 60000);
+        await this.sleep(backoff);
+        continue;
       }
       await this.sleep(options.poll);
     }
