@@ -97,11 +97,14 @@ export function validateIbcIdentifier(value: string, label: string): string {
 export async function getPrefix(chainType: ChainType, node: string): Promise<string> {
   if (chainType === ChainType.Cosmos) {
     const tmClient = await connectComet(node);
-    const client = QueryClient.withExtensions(tmClient);
-    const res = await client.queryAbci("/cosmos.auth.v1beta1.Query/Bech32Prefix", new Uint8Array());
-    const prefix = Bech32PrefixResponse.decode(res.value).bech32Prefix;
-    tmClient.disconnect();
-    return prefix;
+    try {
+      const client = QueryClient.withExtensions(tmClient);
+      const res = await client.queryAbci("/cosmos.auth.v1beta1.Query/Bech32Prefix", new Uint8Array());
+      return Bech32PrefixResponse.decode(res.value).bech32Prefix;
+    }
+    finally {
+      tmClient.disconnect();
+    }
   }
   else {
     return "g";
@@ -203,7 +206,7 @@ export function mapRpcPubKeyToProto(pubkey?: RpcPubKey): ProtoPubKey | undefined
 }
 
 export function timestampFromDateNanos(date: ReadonlyDateWithNanoseconds): Timestamp {
-  const nanos = date.getTime() % 1000 * 1000000 + (date.nanoseconds ?? 0);
+  const nanos = (date.getTime() % 1000) * 1000000 + (date.nanoseconds ?? 0);
   return Timestamp.fromPartial({
     seconds: BigInt(Math.floor(date.getTime() / 1000)),
     nanos,
@@ -595,12 +598,7 @@ export function heightGreater(a: Height | undefined, b: Height): boolean {
     return true;
   }
 
-  /*
-     * comparing longs made some weird issues (maybe signed/unsigned)?
-     * convert to numbers to compare safely
-     */
-  const [numA, heightA, numB, heightB] = [Number(a.revisionNumber), Number(a.revisionHeight), Number(b.revisionNumber), Number(b.revisionHeight)];
-  const valid = numA > numB || (numA === numB && heightA > heightB);
+  const valid = a.revisionNumber > b.revisionNumber || (a.revisionNumber === b.revisionNumber && a.revisionHeight > b.revisionHeight);
   return valid;
 }
 

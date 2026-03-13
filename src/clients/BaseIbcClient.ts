@@ -60,37 +60,17 @@ export function isGno(client: BaseIbcClient): client is GnoIbcClient {
   return client.clientType === ClientType.Gno;
 }
 export function isTendermintClientState(clientState: ReturnType<typeof decodeClientState>): clientState is TendermintClientState {
-  if ((clientState as TendermintClientState).chainId) {
-    return true;
-  }
-  else {
-    return false;
-  }
+  return "chainId" in clientState && "trustLevel" in clientState;
 }
 export function isTendermintConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is TendermintConsensusState {
-  if ((consensusState as TendermintConsensusState).nextValidatorsHash) {
-    return true;
-  }
-  else {
-    return false;
-  }
+  return "nextValidatorsHash" in consensusState && !("lcType" in consensusState);
 }
 
 export function isGnoClientState(clientState: ReturnType<typeof decodeClientState>): clientState is ibc.lightclients.gno.v1.gno.ClientState {
-  if ((clientState as ibc.lightclients.gno.v1.gno.ClientState).lcType === "10-gno") {
-    return true;
-  }
-  else {
-    return false;
-  }
+  return "lcType" in clientState && clientState.lcType === "10-gno";
 }
 export function isGnoConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is ibc.lightclients.gno.v1.gno.ConsensusState {
-  if ((consensusState as ibc.lightclients.gno.v1.gno.ConsensusState).lcType === "10-gno") {
-    return true;
-  }
-  else {
-    return false;
-  }
+  return "lcType" in consensusState && consensusState.lcType === "10-gno";
 }
 
 export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {

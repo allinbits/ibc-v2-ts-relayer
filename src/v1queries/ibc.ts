@@ -471,10 +471,11 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           connectionQueryService.ConnectionClientState({
             connectionId: connectionId,
           }),
-        consensusState: async (connectionId: string, revisionHeight: number) =>
+        consensusState: async (connectionId: string, revisionHeight: number, revisionNumber: number = 0) =>
           connectionQueryService.ConnectionConsensusState(
             QueryConnectionConsensusStateRequest.fromPartial({
               connectionId: connectionId,
+              revisionNumber: BigInt(revisionNumber),
               revisionHeight: BigInt(revisionHeight),
             }),
           ),

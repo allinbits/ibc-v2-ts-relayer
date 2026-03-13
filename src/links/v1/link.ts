@@ -238,7 +238,7 @@ export class Link {
     if (isTendermintClientState(clientState) && isTendermint(dest.client)) {
       const height = clientState.latestHeight;
       // Check headers match consensus state (at least validators)
-      const [consensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, dest.client.clientType, height), dest.client.header(toIntHeight(height)), 3]);
+      const [consensusState, header] = await Promise.all([src.client.getConsensusStateAtHeight(clientId, dest.client.clientType, height), dest.client.header(toIntHeight(height))]);
 
       if (isTendermintConsensusState(consensusState)) {
         // ensure consensus and headers match for next validator hashes
@@ -369,7 +369,7 @@ export class Link {
 
     if (!isTendermint(src.client)) {
       throw new Error(
-        `updateClientIfStale only supported for Tendermint clients, got ${dest.client.clientType}`,
+        `updateClientIfStale only supported for Tendermint source clients, got ${src.client.clientType}`,
       );
     }
     const knownHeader = await dest.client.getConsensusStateAtHeight(
@@ -378,7 +378,7 @@ export class Link {
     );
     if (!isTendermint(dest.client)) {
       throw new Error(
-        `Expected TendermintConsensusState, got ${knownHeader}`,
+        `updateClientIfStale only supported for Tendermint dest clients, got ${dest.client.clientType}`,
       );
     }
     const currentHeader = await src.client.latestHeader();
@@ -680,6 +680,7 @@ export class Link {
           return packet;
         }
         catch {
+          // Commitment not found - packet may have already been timed out or relayed
           return undefined;
         }
       }),

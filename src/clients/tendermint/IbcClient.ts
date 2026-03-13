@@ -379,8 +379,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     // "assert that trustedVals is NextValidators of last trusted header"
     // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
     const validatorHeight = lastHeight + 1;
-    /* eslint @typescript-eslint/no-non-null-assertion: "off" */
-    const curHeight = Number(signedHeader.header!.height);
+    if (!signedHeader.header) {
+      throw new Error("Signed header is missing header field");
+    }
+    const curHeight = Number(signedHeader.header.height);
     return TendermintHeader.fromPartial({
       signedHeader,
       validatorSet: await this.getValidatorSet(curHeight),
@@ -613,7 +615,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     clientId: string,
     src: BaseIbcClient,
   ): Promise<Height> {
-    let height: number = 0;
+    let height: number;
     if (isTendermint(src)) {
       const {
         latestHeight,
@@ -622,13 +624,16 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       await this.updateTendermintClient(clientId, header);
       height = Number(header.signedHeader?.header?.height ?? 0);
     }
-    if (isGno(src)) {
+    else if (isGno(src)) {
       const state = await this.query.ibc.client.state(clientId);
       const clientState = ibc.lightclients.gno.v1.gno.ClientState.decode(state?.clientState?.value ?? new Uint8Array());
       const latestHeight = clientState.latestHeight;
       const header = await src.buildHeader(toIntHeight(latestHeight));
       await this.updateGnoClient(clientId, header);
       height = Number(header.signedHeader?.header?.height ?? 0);
+    }
+    else {
+      throw new Error(`Unsupported client type for updateClient: ${src.clientType}`);
     }
     return src.revisionHeight(height);
   }
@@ -1110,7 +1115,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     }
 
     this.logger.debug(
-      `Channel open try successful: ${channelId} => ${remote.channelId})`,
+      `Channel open try successful: ${channelId} => ${remote.channelId}`,
     );
     return {
       events: result.events,
@@ -1169,7 +1174,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     proof: ChannelHandshakeProof,
   ): Promise<MsgResult> {
     this.logger.verbose(
-      `Chanel open confirm for port ${portId}: ${channelId} => ${proof.id.channelId}`,
+      `Channel open confirm for port ${portId}: ${channelId} => ${proof.id.channelId}`,
     );
     const senderAddress = this.senderAddress;
     const {
@@ -1227,7 +1232,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const senderAddress = this.senderAddress;
     const msgs = [];
-    for (const i in packets) {
+    for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
       this.logger.verbose(
         `Sending packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`, presentPacketData(packet.data),
@@ -1298,7 +1303,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const senderAddress = this.senderAddress;
     const msgs = [];
-    for (const i in packets) {
+    for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
       this.logger.verbose(
         `Sending packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`,
@@ -1365,7 +1370,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const senderAddress = this.senderAddress;
     const msgs = [];
-    for (const i in acks) {
+    for (let i = 0; i < acks.length; i++) {
       const packet = acks[i].originalPacket;
       const acknowledgement = acks[i].acknowledgement;
 
@@ -1444,7 +1449,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
     const senderAddress = this.senderAddress;
     const msgs = [];
-    for (const i in acks) {
+    for (let i = 0; i < acks.length; i++) {
       const packet = acks[i].originalPacket;
       const acknowledgement = Acknowledgement.decode(acks[i].acknowledgement);
       // TODO: construct Ack Message correctly
@@ -1466,9 +1471,14 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       };
       msgs.push(msg);
     }
-    this.logger.debug("MsgAcknowledgement(s)", {
-      msgs: msgs,
-    });
+    if (this.logger.isLevelEnabled("debug")) {
+      this.logger.debug("MsgAcknowledgement(s)", {
+        msgs: msgs.map(msg => ({
+          typeUrl: msg.typeUrl,
+          value: "(binary)",
+        })),
+      });
+    }
     const result = await this.sign.signAndBroadcast(
       senderAddress, msgs, "auto",
     );
@@ -1510,7 +1520,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const senderAddress = this.senderAddress;
 
     const msgs = [];
-    for (const i in packets) {
+    for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
       this.logger.verbose(
         `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceChannel}`, presentPacketData(packet.data),
@@ -1591,7 +1601,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const senderAddress = this.senderAddress;
 
     const msgs = [];
-    for (const i in packets) {
+    for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
       this.logger.verbose(
         `Timeout packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`, packet.payloads,
@@ -1680,8 +1690,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     const msg = {
       typeUrl: "/ibc.core.client.v2.MsgRegisterCounterparty",
       value: MsgRegisterCounterparty.fromPartial({
-        clientId,
-        counterpartyClientId,
+        clientId: clientId.trim(),
+        counterpartyClientId: counterpartyClientId.trim(),
         counterpartyMerklePrefix: [merklePrefix, merklePathPrefix],
         signer: senderAddress,
       }),
@@ -2182,5 +2192,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
   public disconnect(): void {
     this.tm.disconnect();
+    if (this.sign && "disconnect" in this.sign && typeof this.sign.disconnect === "function") {
+      this.sign.disconnect();
+    }
   }
 }
