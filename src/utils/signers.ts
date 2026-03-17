@@ -18,6 +18,7 @@ export const getSigner = async (chainId: string, chainType: ChainType, options?:
   if (chainType === ChainType.Cosmos) {
     if (typeof window !== "undefined") {
       if (window.keplr) {
+        // Keplr handles address prefixes internally based on chain registry
         await window.keplr.enable(chainId);
         return await window.keplr.getOfflineSigner(chainId);
       }

@@ -159,7 +159,7 @@ program.command("dump-paths")
     try {
       const relayer = new Relayer(log);
       const paths = await relayer.getRelayPaths();
-      log.info(JSON.stringify(paths, null, 2));
+      console.log(JSON.stringify(paths, null, 2));
     }
     catch (error) {
       log.error("Failed to dump relay paths", {

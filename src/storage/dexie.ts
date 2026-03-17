@@ -15,7 +15,7 @@ const db = new Dexie("Relayer") as Dexie & {
 
 db.version(2).stores({
   relayPaths: "++id, chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, clientA, clientB, version, [chainIdA+chainIdB+clientA+clientB+version]",
-  relayedHeights: "++id, relayPathId, relayHeightA, relayHeightB, ackHeightA, ackHeightB",
+  relayedHeights: "++id, relayPathId, packetHeightA, packetHeightB, ackHeightA, ackHeightB",
   chainFees: "++id, chainId, gasPrice, gasDenom",
 });
 

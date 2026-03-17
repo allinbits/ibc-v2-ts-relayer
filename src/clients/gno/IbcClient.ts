@@ -87,6 +87,9 @@ export type GnoIbcClientOptions = CreateWalletOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
 };
 
+/** Default deposit amount for Gno MsgRun transactions (in ugnot) */
+const GNO_DEFAULT_DEPOSIT = 3000000;
+
 export interface GnoIbcClientTypes {
   header: ibc.lightclients.gno.v1.gno.GnoHeader
   consensusState: ibc.lightclients.gno.v1.gno.ConsensusState
@@ -414,6 +417,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     try {
       let data = consensusHeight ? JSON.parse(Buffer.from(consensusState.responseBase.data).toString("utf-8")) : JSON.parse(Buffer.from(consensusState.responseBase.data).toString("utf-8")).last_consensus_state;
       if (Array.isArray(data)) {
+        if (data.length === 0) {
+          throw new Error(`Empty consensus state array for client ID ${clientId}`);
+        }
         data = data[data.length - 1];
       }
       return {
@@ -629,7 +635,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 3000000),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: new Long(50000000),
         gas_fee: "750000ugnot",
@@ -724,7 +730,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 3000000),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: new Long(100000000),
         gas_fee: "100000ugnot",
@@ -859,7 +865,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
-    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
@@ -909,7 +915,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: new Long(80000000 * packets.length),
-      gas_fee: 80000000 * packets.length * 0.001 + "ugnot",
+      gas_fee: Math.floor(80000000 * packets.length / 1000) + "ugnot",
     };
 
     const tx: Tx = {
@@ -960,9 +966,17 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     proofAckeds: readonly Uint8Array[],
     proofHeight?: Height,
   ): Promise<MsgResult> {
+    if (acks.length !== proofAckeds.length) {
+      throw new Error(
+        `Have ${acks.length} acks, but ${proofAckeds.length} proofs`,
+      );
+    }
+    if (acks.length === 0) {
+      throw new Error("Must submit at least 1 ack");
+    }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
-    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < acks.length; i++) {
       const ics23 = MerkleProof.decode(proofAckeds[i]);
@@ -978,12 +992,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
           version: validateIbcIdentifier(p.version, "version"),
           value: toHex(p.value),
         })),
-        appAcknowledgement: toHex(acks[i].acknowledgement).substring(4),
+        appAcknowledgement: toHex(acks[i].acknowledgement).length >= 4 ? toHex(acks[i].acknowledgement).substring(4) : toHex(acks[i].acknowledgement),
         commitmentProof: ProofHelper(ics23),
         proofRevision: proofHeight?.revisionNumber.toString() ?? "0",
         proofHeight: proofHeight?.revisionHeight.toString() ?? "0",
       });
-      this.logger.verbose("Send Ackcnowledgement:" + acks[i].originalPacket.sequence.toString());
+      this.logger.verbose("Send Acknowledgement:" + acks[i].originalPacket.sequence.toString());
       const memFile = MemFile.fromPartial({
         name: "run.gno",
         body: rundotgno,
@@ -1008,7 +1022,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: new Long(70000000 * acks.length),
-      gas_fee: 70000000 * acks.length * 0.001 + "ugnot",
+      gas_fee: Math.floor(70000000 * acks.length / 1000) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1065,9 +1079,17 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     proofsUnreceived: Uint8Array[],
     proofHeight: Height,
   ): Promise<MsgResult> {
+    if (packets.length !== proofsUnreceived.length) {
+      throw new Error(
+        `Have ${packets.length} packets, but ${proofsUnreceived.length} proofs`,
+      );
+    }
+    if (packets.length === 0) {
+      throw new Error("Must submit at least 1 packet");
+    }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
-    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", 3000000));
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < packets.length; i++) {
       const ics23 = MerkleProof.decode(proofsUnreceived[i]);
@@ -1112,7 +1134,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: new Long(60000000 * packets.length),
-      gas_fee: 60000000 * packets.length * 0.001 + "ugnot",
+      gas_fee: Math.floor(60000000 * packets.length / 1000) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1126,7 +1148,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const result = await this.sign.sendTransaction(signedTx, TransactionEndpoint.BROADCAST_TX_COMMIT);
 
     if (result.deliver_tx.ResponseBase.Error) {
-      throw new Error(`Failed to create Tendermint client: ${result.deliver_tx.ResponseBase.Error}`);
+      throw new Error(`Failed to timeout packets: ${result.deliver_tx.ResponseBase.Error}`);
     }
 
     return {
@@ -1197,7 +1219,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", 3000000),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: new Long(50000000),
         gas_fee: "75000ugnot",
@@ -1429,13 +1451,13 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
   public async querySentPacketsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketV2WithMetadata[]> {
     if (minHeight && minHeight > 0) {
-      minHeight = minHeight - 2;
+      minHeight = Math.floor(minHeight - 2);
     }
     else {
       minHeight = 0;
     }
     if (maxHeight) {
-      maxHeight = maxHeight + 1;
+      maxHeight = Math.floor(maxHeight + 1);
     }
     const query = maxHeight
       ? `query getEvents {
@@ -1516,13 +1538,13 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
   public async queryWrittenAcksV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckV2WithMetadata[]> {
     if (minHeight && minHeight > 0) {
-      minHeight = minHeight - 2;
+      minHeight = Math.floor(minHeight - 2);
     }
     else {
       minHeight = 0;
     }
     if (maxHeight) {
-      maxHeight = maxHeight + 1;
+      maxHeight = Math.floor(maxHeight + 1);
     }
     const query = maxHeight
       ? `query getEvents {

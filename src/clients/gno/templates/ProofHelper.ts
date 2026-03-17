@@ -11,13 +11,23 @@ import {
   MerkleProof,
 } from "cosmjs-types/ibc/core/commitment/v1/commitment.js";
 
+const HEX_PATTERN = /^[0-9a-fA-F]*$/;
+
+function safeHex(data: Uint8Array): string {
+  const hex = toHex(data);
+  if (!HEX_PATTERN.test(hex)) {
+    throw new Error("Invalid hex data in proof");
+  }
+  return hex;
+}
+
 export const renderInnerOps = (innerOps: InnerOp[]): string => {
   let gnoCode = "[]*ics23.InnerOp{\n";
   for (const op of innerOps) {
     gnoCode += `{
       Hash:   specs.InnerSpec.Hash,
-      Prefix: hexDec("${toHex(op.prefix)}"),
-      Suffix: hexDec("${toHex(op.suffix)}"),
+      Prefix: hexDec("${safeHex(op.prefix)}"),
+      Suffix: hexDec("${safeHex(op.suffix)}"),
     },
     `;
   }
@@ -30,14 +40,14 @@ export const renderLeafOp = (leaf: LeafOp): string => {
     PrehashKey:   specs.LeafSpec.PrehashKey,
     PrehashValue: specs.LeafSpec.PrehashValue,
     Length:       specs.LeafSpec.Length,
-    Prefix:       hexDec("${toHex(leaf.prefix)}"),
+    Prefix:       hexDec("${safeHex(leaf.prefix)}"),
   }`;
   return gnoCode;
 };
 export const renderExistenceProof = (exist: ExistenceProof): string => {
   const gnoCode = `&ics23.ExistenceProof{
-    Key:   hexDec("${toHex(exist.key)}"),
-    Value: hexDec("${toHex(exist.value)}"),
+    Key:   hexDec("${safeHex(exist.key)}"),
+    Value: hexDec("${safeHex(exist.value)}"),
     Leaf: ${renderLeafOp(exist.leaf!)},
     Path: ${renderInnerOps(exist.path)}
   },`;
@@ -45,7 +55,7 @@ export const renderExistenceProof = (exist: ExistenceProof): string => {
 };
 export const renderNonExistenceProof = (nonexist: NonExistenceProof): string => {
   const gnoCode = `&ics23.NonExistenceProof{
-    Key:   hexDec("${toHex(nonexist.key)}"),
+    Key:   hexDec("${safeHex(nonexist.key)}"),
     Left: ${nonexist.left ? renderExistenceProof(nonexist.left) : "nil,"}
     Right: ${nonexist.right ? renderExistenceProof(nonexist.right) : "nil,"}
   },`;

@@ -97,9 +97,12 @@ export class SQLiteStorage implements IStorage {
     }
 
     const db = await openDB(this.dbPath);
-    await db.prepare(
+    const result = db.prepare(
       "UPDATE relayedHeights SET packetHeightA = ?, packetHeightB = ?, ackHeightA = ?, ackHeightB = ? WHERE id = ?",
-    ).run([packetHeightA, packetHeightB, ackHeightA, ackHeightB, height.id]);
+    ).run(packetHeightA, packetHeightB, ackHeightA, ackHeightB, height.id);
+    if (result.changes === 0) {
+      throw new Error(`Failed to update relayed heights for path ID: ${pathId} (no rows affected)`);
+    }
   }
 
   async getRelayedHeights(pathId: number): Promise<RelayedHeights> {
