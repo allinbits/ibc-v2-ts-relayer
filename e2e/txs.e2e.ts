@@ -59,7 +59,7 @@ export const transferFromGnoGRC = async (clientId: string, _sender: string, rece
     addressPrefix: prefix || "g",
   });
   wallet.connect(provider);
-  const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "TransferGRC20", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString()], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()), (new Map()).set("ugnot", 3000000),
+  const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString(), ""], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()), (new Map()).set("ugnot", 3000000),
     {
       gas_wanted: new Long(60000000),
       gas_fee: "750000ugnot",
@@ -74,7 +74,7 @@ export const transferFromGno = async (clientId: string, _sender: string, receive
     addressPrefix: prefix || "g",
   });
   wallet.connect(provider);
-  const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, BigInt(Math.floor(Date.now() / 1000) + 600).toString()], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()).set(denom, amount), (new Map()).set("ugnot", 3000000),
+  const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString(), ""], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()).set(denom, amount), (new Map()).set("ugnot", 3000000),
     {
       gas_wanted: new Long(60000000),
       gas_fee: "750000ugnot",
@@ -177,7 +177,7 @@ describe("IBC Transfer Tests", async () => {
         Buffer.from(
           (await devClient.abciQuery({
             path: "vm/qrender",
-            data: Buffer.from("gno.land/r/aib/ibc/apps/transfer:grc20/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "utf-8"),
+            data: Buffer.from("gno.land/r/aib/ibc/apps/transfer:voucher/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "utf-8"),
           })
           ).responseBase.data,
         ).toString("utf-8")), {
@@ -207,7 +207,7 @@ describe("IBC Transfer Tests", async () => {
         Buffer.from(
           (await devClient.abciQuery({
             path: "vm/qrender",
-            data: Buffer.from("gno.land/r/aib/ibc/apps/transfer:grc20/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "utf-8"),
+            data: Buffer.from("gno.land/r/aib/ibc/apps/transfer:voucher/ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16/balance/g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "utf-8"),
           })
           ).responseBase.data,
         ).toString("utf-8")), {
