@@ -36,7 +36,6 @@ import {
 import {
   connectTm2,
 } from "@gnolang/tm2-rpc";
-import Long from "long";
 import {
   describe,
   expect,
@@ -54,14 +53,14 @@ function ibcRegistry(): Registry {
 export const transferFromGnoGRC = async (clientId: string, _sender: string, receiver: string, amount: string, denom: string, memo: string, mnem: string, url: string) => {
   const prefix = "g";
 
-  const provider = new GnoJSONRPCProvider(url);
+  const provider = await GnoJSONRPCProvider.create(url);
   const wallet = await GnoWallet.fromMnemonic(mnem, {
     addressPrefix: prefix || "g",
   });
   wallet.connect(provider);
   const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString(), ""], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()), (new Map()).set("ugnot", 3000000),
     {
-      gas_wanted: new Long(60000000),
+      gas_wanted: 60000000n,
       gas_fee: "750000ugnot",
     });
   return result;
@@ -69,14 +68,14 @@ export const transferFromGnoGRC = async (clientId: string, _sender: string, rece
 export const transferFromGno = async (clientId: string, _sender: string, receiver: string, amount: string, denom: string, memo: string, mnem: string, url: string) => {
   const prefix = "g";
 
-  const provider = new GnoJSONRPCProvider(url);
+  const provider = await GnoJSONRPCProvider.create(url);
   const wallet = await GnoWallet.fromMnemonic(mnem, {
     addressPrefix: prefix || "g",
   });
   wallet.connect(provider);
   const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString(), ""], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()).set(denom, amount), (new Map()).set("ugnot", 3000000),
     {
-      gas_wanted: new Long(60000000),
+      gas_wanted: 60000000n,
       gas_fee: "750000ugnot",
     });
   return result;

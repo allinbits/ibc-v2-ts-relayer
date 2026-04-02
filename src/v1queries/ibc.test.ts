@@ -1,32 +1,32 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines-per-function */
 import {
+  Any,
+} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+import {
+  QueryClientImpl as TransferQuery,
+} from "@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query.js";
+import {
+  QueryClientImpl as ChannelQuery,
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/query.js";
+import {
+  Height,
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+import {
+  QueryClientImpl as ClientQuery,
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/query.js";
+import {
+  QueryClientImpl as ConnectionQuery,
+} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
+import {
+  ClientState as TendermintClientState,
+  ConsensusState as TendermintConsensusState,
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+import {
   createPagination,
   createProtobufRpcClient,
   QueryClient,
 } from "@cosmjs/stargate";
-import {
-  Any,
-} from "cosmjs-types/google/protobuf/any.js";
-import {
-  QueryClientImpl as TransferQuery,
-} from "cosmjs-types/ibc/applications/transfer/v1/query.js";
-import {
-  QueryClientImpl as ChannelQuery,
-} from "cosmjs-types/ibc/core/channel/v1/query.js";
-import {
-  Height,
-} from "cosmjs-types/ibc/core/client/v1/client.js";
-import {
-  QueryClientImpl as ClientQuery,
-} from "cosmjs-types/ibc/core/client/v1/query.js";
-import {
-  QueryClientImpl as ConnectionQuery,
-} from "cosmjs-types/ibc/core/connection/v1/query.js";
-import {
-  ClientState as TendermintClientState,
-  ConsensusState as TendermintConsensusState,
-} from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   beforeEach,
   describe,
@@ -47,32 +47,32 @@ vi.mock("@cosmjs/stargate", async () => {
   };
 });
 
-vi.mock("cosmjs-types/ibc/applications/transfer/v1/query", async () => {
-  const actual = await vi.importActual("cosmjs-types/ibc/applications/transfer/v1/query");
+vi.mock("@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
   };
 });
 
-vi.mock("cosmjs-types/ibc/core/channel/v1/query", async () => {
-  const actual = await vi.importActual("cosmjs-types/ibc/core/channel/v1/query");
+vi.mock("@atomone/cosmos-ibc-types/ibc/core/channel/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/channel/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
   };
 });
 
-vi.mock("cosmjs-types/ibc/core/client/v1/query", async () => {
-  const actual = await vi.importActual("cosmjs-types/ibc/core/client/v1/query");
+vi.mock("@atomone/cosmos-ibc-types/ibc/core/client/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/client/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
   };
 });
 
-vi.mock("cosmjs-types/ibc/core/connection/v1/query", async () => {
-  const actual = await vi.importActual("cosmjs-types/ibc/core/connection/v1/query");
+vi.mock("@atomone/cosmos-ibc-types/ibc/core/connection/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/connection/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
@@ -131,8 +131,8 @@ describe("v1queries/ibc", () => {
     };
 
     mockTransferQuery = {
-      DenomTrace: vi.fn(),
-      DenomTraces: vi.fn(),
+      Denom: vi.fn(),
+      Denoms: vi.fn(),
       Params: vi.fn(),
     };
 
@@ -645,19 +645,19 @@ describe("v1queries/ibc", () => {
             baseDenom: "uatom",
           },
         };
-        mockTransferQuery.DenomTrace.mockResolvedValue(mockResponse);
+        mockTransferQuery.Denom.mockResolvedValue(mockResponse);
 
         const extension = setupIbcExtension(mockQueryClient);
-        await extension.ibc.transfer.denomTrace("hash123");
+        await extension.ibc.transfer.denom("hash123");
 
-        expect(mockTransferQuery.DenomTrace).toHaveBeenCalledWith({
+        expect(mockTransferQuery.Denom).toHaveBeenCalledWith({
           hash: "hash123",
         });
       });
 
       it("should query all denom traces with pagination", async () => {
         const mockResponse1 = {
-          denomTraces: [
+          denoms: [
             {
               path: "transfer/channel-0",
             },
@@ -667,7 +667,7 @@ describe("v1queries/ibc", () => {
           },
         };
         const mockResponse2 = {
-          denomTraces: [
+          denoms: [
             {
               path: "transfer/channel-1",
             },
@@ -677,15 +677,15 @@ describe("v1queries/ibc", () => {
           },
         };
 
-        mockTransferQuery.DenomTraces
+        mockTransferQuery.Denoms
           .mockResolvedValueOnce(mockResponse1)
           .mockResolvedValueOnce(mockResponse2);
 
         const extension = setupIbcExtension(mockQueryClient);
-        const result = await extension.ibc.transfer.allDenomTraces();
+        const result = await extension.ibc.transfer.allDenoms();
 
-        expect(mockTransferQuery.DenomTraces).toHaveBeenCalledTimes(2);
-        expect(result.denomTraces).toHaveLength(2);
+        expect(mockTransferQuery.Denoms).toHaveBeenCalledTimes(2);
+        expect(result.denoms).toHaveLength(2);
       });
 
       it("should query transfer params", async () => {

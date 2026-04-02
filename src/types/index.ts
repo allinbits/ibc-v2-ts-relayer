@@ -20,7 +20,7 @@ import {
   Event,
 } from "@cosmjs/stargate";
 import {
-  comet38, tendermint34, tendermint37,
+  comet38, tendermint37,
 } from "@cosmjs/tendermint-rpc";
 import {
   ibc,
@@ -117,22 +117,18 @@ export interface ChannelInfo {
   readonly portId: string
   readonly channelId: string
 }
-export type CometHeader = tendermint34.Header | tendermint37.Header | comet38.Header;
+export type CometHeader = tendermint37.Header | comet38.Header;
 export type CometCommitResponse
-  = | tendermint34.CommitResponse
-    | tendermint37.CommitResponse
+  = | tendermint37.CommitResponse
     | comet38.CommitResponse;
 export type BlockSearchResponse
-  = | tendermint34.BlockSearchResponse
-    | tendermint37.BlockSearchResponse
+  = | tendermint37.BlockSearchResponse
     | comet38.BlockSearchResponse;
 export type TxSearchResponse
-  = | tendermint34.TxSearchResponse
-    | tendermint37.TxSearchResponse
+  = | tendermint37.TxSearchResponse
     | comet38.TxSearchResponse;
 export type BlockResultsResponse
-  = | tendermint34.BlockResultsResponse
-    | tendermint37.BlockResultsResponse
+  = | tendermint37.BlockResultsResponse
     | comet38.BlockResultsResponse;
 export interface CreateClientArgs {
   clientState: TendermintClientState | ibc.lightclients.gno.v1.gno.ClientState

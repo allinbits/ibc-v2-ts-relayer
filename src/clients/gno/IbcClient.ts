@@ -15,6 +15,9 @@ import {
   Height,
 } from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
+  MerkleProof,
+} from "@atomone/cosmos-ibc-types/ibc/core/commitment/v1/commitment.js";
+import {
   QueryConnectionResponse,
 } from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
 import {
@@ -59,12 +62,8 @@ import {
   connectTm2, ReadonlyDateWithNanoseconds, Tm2Client,
 } from "@gnolang/tm2-rpc";
 import {
-  MerkleProof,
-} from "cosmjs-types/ibc/core/commitment/v1/commitment.js";
-import {
   GraphQLClient,
 } from "graphql-request";
-import Long from "long";
 
 import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
@@ -139,7 +138,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     options.senderAddress = await signer.getAddress();
     // override any registry setup, use the other options
 
-    const provider = new GnoJSONRPCProvider(endpoint);
+    const provider = await GnoJSONRPCProvider.create(endpoint);
     const tmClient = await connectTm2(endpoint);
     const graphClient = new GraphQLClient(queryEndpoint);
     const chainId = (await tmClient.status()).nodeInfo.network;
@@ -637,7 +636,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
-        gas_wanted: new Long(50000000),
+        gas_wanted: 50000000n,
         gas_fee: "750000ugnot",
       });
 
@@ -732,7 +731,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
-        gas_wanted: new Long(100000000),
+        gas_wanted: 100000000n,
         gas_fee: "100000ugnot",
       });
 
@@ -914,7 +913,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       );
     }
     const txFee: TxFee = {
-      gas_wanted: new Long(80000000 * packets.length),
+      gas_wanted: 80000000n * BigInt(packets.length),
       gas_fee: Math.floor(80000000 * packets.length / 1000) + "ugnot",
     };
 
@@ -1021,7 +1020,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       );
     }
     const txFee: TxFee = {
-      gas_wanted: new Long(70000000 * acks.length),
+      gas_wanted: BigInt(70000000 * acks.length),
       gas_fee: Math.floor(70000000 * acks.length / 1000) + "ugnot",
     };
 
@@ -1133,7 +1132,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       );
     }
     const txFee: TxFee = {
-      gas_wanted: new Long(60000000 * packets.length),
+      gas_wanted: 60000000n * BigInt(packets.length),
       gas_fee: Math.floor(60000000 * packets.length / 1000) + "ugnot",
     };
 
@@ -1221,7 +1220,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
-        gas_wanted: new Long(50000000),
+        gas_wanted: 50000000n,
         gas_fee: "75000ugnot",
       });
 

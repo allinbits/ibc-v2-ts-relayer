@@ -53,7 +53,6 @@ import {
   comet38,
   connectComet,
   ReadonlyDateWithNanoseconds,
-  tendermint34,
   tendermint37,
   ValidatorPubkey as RpcPubKey,
 } from "@cosmjs/tendermint-rpc";
@@ -217,7 +216,7 @@ export function secondsFromDateNanos(date: ReadonlyDateWithNanoseconds): number 
   return Math.floor(date.getTime() / 1000);
 }
 
-export function buildTendermintConsensusState(header: tendermint34.Header | tendermint37.Header): TendermintConsensusState {
+export function buildTendermintConsensusState(header: tendermint37.Header): TendermintConsensusState {
   return TendermintConsensusState.fromPartial({
     timestamp: timestampFromDateNanos(header.time),
     root: {
@@ -370,21 +369,21 @@ export function buildGnoClientState(
     allowUpdateAfterMisbehaviour: false,
   });
 }
-export function parsePacketsFromBlockResult(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): Packet[] {
+export function parsePacketsFromBlockResult(result: tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): Packet[] {
   if ((result as comet38.BlockResultsResponse).finalizeBlockEvents) {
     return parsePacketsFromTendermintEvents([...(result as comet38.BlockResultsResponse).finalizeBlockEvents]);
   }
   else {
-    return parsePacketsFromTendermintEvents([...(result as tendermint34.BlockResultsResponse).beginBlockEvents, ...(result as tendermint34.BlockResultsResponse).endBlockEvents]);
+    return parsePacketsFromTendermintEvents([...(result as tendermint37.BlockResultsResponse).beginBlockEvents, ...(result as tendermint37.BlockResultsResponse).endBlockEvents]);
   }
 }
 
-export function parsePacketsFromBlockResultV2(result: tendermint34.BlockResultsResponse | tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): PacketV2[] {
+export function parsePacketsFromBlockResultV2(result: tendermint37.BlockResultsResponse | comet38.BlockResultsResponse): PacketV2[] {
   if ((result as comet38.BlockResultsResponse).finalizeBlockEvents) {
     return parsePacketsFromTendermintEventsV2([...(result as comet38.BlockResultsResponse).finalizeBlockEvents]);
   }
   else {
-    return parsePacketsFromTendermintEventsV2([...(result as tendermint34.BlockResultsResponse).beginBlockEvents, ...(result as tendermint34.BlockResultsResponse).endBlockEvents]);
+    return parsePacketsFromTendermintEventsV2([...(result as tendermint37.BlockResultsResponse).beginBlockEvents, ...(result as tendermint37.BlockResultsResponse).endBlockEvents]);
   }
 }
 
@@ -405,10 +404,10 @@ export function parsePacketsFromEventsV2(events: readonly Event[]): PacketV2[] {
  * Takes a list of events, finds the send_packet events, stringifies attributes
  * and parsed the events into `Packet`s.
  */
-export function parsePacketsFromTendermintEvents(events: readonly (tendermint34.Event | tendermint37.Event)[]): Packet[] {
+export function parsePacketsFromTendermintEvents(events: readonly (tendermint37.Event)[]): Packet[] {
   return parsePacketsFromEvents(events.map(fromTendermintEvent));
 }
-export function parsePacketsFromTendermintEventsV2(events: readonly (tendermint34.Event | tendermint37.Event)[]): PacketV2[] {
+export function parsePacketsFromTendermintEventsV2(events: readonly (tendermint37.Event)[]): PacketV2[] {
   return parsePacketsFromEventsV2(events.map(fromTendermintEvent));
 }
 export const isV2Packet = (packet: Packet | PacketV2): packet is PacketV2 => {
@@ -724,7 +723,7 @@ export async function prepareChannelHandshake(
   return proof;
 }
 
-export function checkAndParseOp(op: tendermint34.ProofOp, kind: string, key: Uint8Array): CommitmentProof {
+export function checkAndParseOp(op: tendermint37.ProofOp, kind: string, key: Uint8Array): CommitmentProof {
   if (op.type !== kind) {
     throw new Error(`Op expected to be ${kind}, got "${op.type}`);
   }

@@ -26,7 +26,6 @@ import {
 } from "@cosmjs/stargate";
 import {
   ReadonlyDateWithNanoseconds,
-  tendermint34,
   tendermint37,
 } from "@cosmjs/tendermint-rpc";
 import {
@@ -260,7 +259,7 @@ describe("utils", () => {
         } as ReadonlyDateWithNanoseconds,
         appHash: new Uint8Array([1, 2, 3]),
         nextValidatorsHash: new Uint8Array([4, 5, 6]),
-      } as tendermint34.Header;
+      } as tendermint37.Header;
 
       const result = buildTendermintConsensusState(header);
 
