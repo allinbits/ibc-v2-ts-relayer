@@ -2,14 +2,14 @@ import {
   InnerOp,
 } from "@atomone/cosmos-ibc-types/cosmos/ics23/v1/proofs.js";
 import {
-  toHex,
-} from "@cosmjs/encoding";
-import {
   ExistenceProof, LeafOp, NonExistenceProof,
-} from "cosmjs-types/cosmos/ics23/v1/proofs.js";
+} from "@atomone/cosmos-ibc-types/cosmos/ics23/v1/proofs.js";
 import {
   MerkleProof,
-} from "cosmjs-types/ibc/core/commitment/v1/commitment.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/commitment/v1/commitment.js";
+import {
+  toHex,
+} from "@cosmjs/encoding";
 
 const HEX_PATTERN = /^[0-9a-fA-F]*$/;
 

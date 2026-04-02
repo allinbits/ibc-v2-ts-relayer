@@ -1,18 +1,12 @@
 import {
-  createPagination, createProtobufRpcClient, QueryClient,
-} from "@cosmjs/stargate";
-import {
-  longify,
-} from "@cosmjs/stargate/build/queryclient/utils.js";
-import {
   Any,
-} from "cosmjs-types/google/protobuf/any.js";
+} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
 import {
   QueryClientImpl as TransferQuery,
-  QueryDenomTraceResponse,
-  QueryDenomTracesResponse,
+  QueryDenomResponse,
+  QueryDenomsResponse,
   QueryParamsResponse as QueryTransferParamsResponse,
-} from "cosmjs-types/ibc/applications/transfer/v1/query.js";
+} from "@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query.js";
 import {
   QueryChannelClientStateResponse,
   QueryChannelConsensusStateResponse,
@@ -29,10 +23,10 @@ import {
   QueryPacketReceiptResponse,
   QueryUnreceivedAcksResponse,
   QueryUnreceivedPacketsResponse,
-} from "cosmjs-types/ibc/core/channel/v1/query.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/query.js";
 import {
   Height,
-} from "cosmjs-types/ibc/core/client/v1/client.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
 import {
   QueryClientImpl as ClientQuery,
   QueryClientParamsResponse,
@@ -41,7 +35,7 @@ import {
   QueryConsensusStateRequest,
   QueryConsensusStateResponse,
   QueryConsensusStatesResponse,
-} from "cosmjs-types/ibc/core/client/v1/query.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/query.js";
 import {
   QueryClientConnectionsResponse,
   QueryClientImpl as ConnectionQuery,
@@ -50,11 +44,15 @@ import {
   QueryConnectionConsensusStateResponse,
   QueryConnectionResponse,
   QueryConnectionsResponse,
-} from "cosmjs-types/ibc/core/connection/v1/query.js";
+} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "cosmjs-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+import {
+  createPagination, createProtobufRpcClient, QueryClient,
+} from "@cosmjs/stargate";
+
 
 function decodeTendermintClientStateAny(clientState: Any | undefined): TendermintClientState {
   if (clientState?.typeUrl !== "/ibc.lightclients.tendermint.v1.ClientState") {
@@ -165,9 +163,9 @@ export interface IbcExtension {
       ) => Promise<QueryConnectionConsensusStateResponse>
     }
     readonly transfer: {
-      readonly denomTrace: (hash: string) => Promise<QueryDenomTraceResponse>
-      readonly denomTraces: (paginationKey?: Uint8Array) => Promise<QueryDenomTracesResponse>
-      readonly allDenomTraces: () => Promise<QueryDenomTracesResponse>
+      readonly denom: (hash: string) => Promise<QueryDenomResponse>
+      readonly denoms: (paginationKey?: Uint8Array) => Promise<QueryDenomsResponse>
+      readonly allDenoms: () => Promise<QueryDenomsResponse>
       readonly params: () => Promise<QueryTransferParamsResponse>
     }
   }
@@ -253,7 +251,7 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           channelQueryService.PacketCommitment({
             portId: portId,
             channelId: channelId,
-            sequence: longify(sequence),
+            sequence: BigInt(sequence),
           }),
         packetCommitments: async (portId: string, channelId: string, paginationKey?: Uint8Array) =>
           channelQueryService.PacketCommitments({
@@ -283,13 +281,13 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           channelQueryService.PacketReceipt({
             portId: portId,
             channelId: channelId,
-            sequence: longify(sequence),
+            sequence: BigInt(sequence),
           }),
         packetAcknowledgement: async (portId: string, channelId: string, sequence: number) =>
           channelQueryService.PacketAcknowledgement({
             portId: portId,
             channelId: channelId,
-            sequence: longify(sequence),
+            sequence: BigInt(sequence),
           }),
         packetAcknowledgements: async (portId: string, channelId: string, paginationKey?: Uint8Array) => {
           const request = QueryPacketAcknowledgementsRequest.fromPartial({
@@ -481,26 +479,26 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
           ),
       },
       transfer: {
-        denomTrace: async (hash: string) => transferQueryService.DenomTrace({
+        denom: async (hash: string) => transferQueryService.Denom({
           hash: hash,
         }),
-        denomTraces: async (paginationKey?: Uint8Array) =>
-          transferQueryService.DenomTraces({
+        denoms: async (paginationKey?: Uint8Array) =>
+          transferQueryService.Denoms({
             pagination: createPagination(paginationKey),
           }),
-        allDenomTraces: async () => {
-          const denomTraces = [];
-          let response: QueryDenomTracesResponse;
+        allDenoms: async () => {
+          const denoms = [];
+          let response: QueryDenomsResponse;
           let key: Uint8Array | undefined;
           do {
-            response = await transferQueryService.DenomTraces({
+            response = await transferQueryService.Denoms({
               pagination: createPagination(key),
             });
-            denomTraces.push(...response.denomTraces);
+            denoms.push(...response.denoms);
             key = response.pagination?.nextKey;
           } while (key && key.length);
-          return QueryDenomTracesResponse.fromPartial({
-            denomTraces: denomTraces,
+          return QueryDenomsResponse.fromPartial({
+            denoms: denoms,
           });
         },
         params: async () => transferQueryService.Params({

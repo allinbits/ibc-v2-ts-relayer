@@ -79,7 +79,9 @@ import {
   StakingExtension,
 } from "@cosmjs/stargate";
 import {
+  comet38,
   CometClient, connectComet, ReadonlyDateWithNanoseconds,
+  tendermint37,
 } from "@cosmjs/tendermint-rpc";
 import {
   arrayContentEquals, assert, sleep,
@@ -1949,7 +1951,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   public async getTendermintBlockResults(height: number): Promise<BlockResultsResponse> {
-    const result = await this.tm.blockResults(height);
+    const result = await this.tm.blockResults(height) as tendermint37.BlockResultsResponse | comet38.BlockResultsResponse; // comet1 has completely different response type
     return result;
   }
 
