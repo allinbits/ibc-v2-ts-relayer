@@ -55,6 +55,7 @@ function isChainFees(obj: unknown): obj is ChainFees {
     && "chainId" in obj
     && "gasPrice" in obj
     && "gasDenom" in obj
+    && ("gasAdjustment" in obj || true)
   );
 }
 
@@ -69,9 +70,9 @@ export class SQLiteStorage implements IStorage {
     this.dbPath = dbPath ?? config.database.file;
   }
 
-  async addChainFees(chainId: string, gasPrice: number, gasDenom: string): Promise<ChainFees> {
+  async addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment: number = 1.4): Promise<ChainFees> {
     const db = await openDB(this.dbPath);
-    await db.prepare("INSERT INTO chainFees (chainId, gasPrice, gasDenom) VALUES (?, ?, ?)").run([chainId, gasPrice, gasDenom]);
+    await db.prepare("INSERT INTO chainFees (chainId, gasPrice, gasDenom, gasAdjustment) VALUES (?, ?, ?, ?)").run([chainId, gasPrice, gasDenom, gasAdjustment]);
     return this.getChainFees(chainId);
   }
 

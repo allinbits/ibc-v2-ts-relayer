@@ -109,6 +109,7 @@ import {
 const ibcRegistryInstance = new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as GeneratedType]]);
 export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
+  gasAdjustment?: number
 };
 
 const defaultMerklePrefix = {
@@ -129,6 +130,7 @@ export interface TendermintIbcClientTypes {
 }
 export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes> {
   public readonly gasPrice: GasPrice;
+  public readonly gasAdjustment: number;
   public readonly sign: SigningStargateClient;
   public readonly tm: CometClient;
 
@@ -176,6 +178,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.sign = signingClient;
     this.tm = tmClient;
     this.gasPrice = options.gasPrice;
+    this.gasAdjustment = options.gasAdjustment ?? 1.4;
     this.query = QueryClient.withExtensions(
       tmClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
     );
@@ -663,7 +666,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgCreateClient", createMsg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [createMsg], "auto",
+      senderAddress, [createMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -707,7 +710,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgCreateClient", createMsg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [createMsg], "auto",
+      senderAddress, [createMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -755,7 +758,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [updateMsg], "auto",
+      senderAddress, [updateMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -794,7 +797,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [updateMsg], "auto",
+      senderAddress, [updateMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -828,7 +831,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgConnectionOpenInit", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -899,7 +902,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -966,7 +969,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1001,7 +1004,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1043,7 +1046,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgChannelOpenInit", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1103,7 +1106,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1158,7 +1161,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1197,7 +1200,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1268,7 +1271,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1335,7 +1338,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1414,7 +1417,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1482,7 +1485,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1560,7 +1563,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1625,7 +1628,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       msgs: msgs,
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1701,7 +1704,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgRegisterCounterparty", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));

@@ -52,6 +52,7 @@ export interface ChainFees {
   chainId: string
   gasPrice: number
   gasDenom: string
+  gasAdjustment: number
 }
 export interface RelayedHeights {
   id: number
