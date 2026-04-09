@@ -18,7 +18,7 @@ export interface IStorage {
    * @param gasDenom - The gas denomination (e.g., "uatom")
    * @returns The created ChainFees record
    */
-  addChainFees(chainId: string, gasPrice: number, gasDenom: string): Promise<ChainFees>
+  addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment?: number): Promise<ChainFees>
 
   /**
    * Retrieves gas fee configuration for a chain.

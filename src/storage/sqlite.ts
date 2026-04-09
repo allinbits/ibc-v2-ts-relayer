@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS chainFees (
     chainId TEXT NOT NULL,
     gasPrice DOUBLE NOT NULL,
     gasDenom TEXT NOT NULL,
+    gasAdjustment DOUBLE NOT NULL DEFAULT 1.4,
     UNIQUE (chainId) ON CONFLICT REPLACE
 );`;
 

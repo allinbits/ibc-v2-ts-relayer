@@ -130,6 +130,7 @@ vi.mock("./utils/storage", () => (
         chainId: "test",
         gasPrice: 0.025,
         gasDenom: "uatom",
+        gasAdjustment: 1.4,
       })),
     },
   }

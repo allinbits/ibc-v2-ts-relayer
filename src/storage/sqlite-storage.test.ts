@@ -61,6 +61,7 @@ describe("SQLiteStorage", () => {
       expect(result.chainId).toBe("cosmoshub-4");
       expect(result.gasPrice).toBe(0.025);
       expect(result.gasDenom).toBe("uatom");
+      expect(result.gasAdjustment).toBe(1.4);
       expect(result.id).toBeDefined();
     });
   });
@@ -73,6 +74,14 @@ describe("SQLiteStorage", () => {
       expect(result.chainId).toBe("cosmoshub-4");
       expect(result.gasPrice).toBe(0.025);
       expect(result.gasDenom).toBe("uatom");
+      expect(result.gasAdjustment).toBe(1.4);
+    });
+
+    it("should store custom gas adjustment", async () => {
+      await storage.addChainFees("custom-chain", 0.025, "uatom", 2.0);
+      const result = await storage.getChainFees("custom-chain");
+
+      expect(result.gasAdjustment).toBe(2.0);
     });
 
     it("should throw error when chain fees not found", async () => {
