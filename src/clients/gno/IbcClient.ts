@@ -1197,7 +1197,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     };
   }
 
-  public async registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<MsgResult> {
+  public async registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array, _merklePathPrefix?: Uint8Array): Promise<MsgResult> {
     this.logger.verbose(
       `Register Counterparty : ${counterpartyClientId} => ${clientId}`,
     );
