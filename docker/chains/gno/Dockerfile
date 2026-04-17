@@ -2,9 +2,8 @@ FROM        golang:1.25-alpine
 ENV         CGO_ENABLED=0 GOOS=linux
 WORKDIR     /app
 RUN        apk add --no-cache git
-RUN        git clone https://github.com/tbruyelle/gno.git
-WORKDIR     /app/gno
-RUN        git checkout tbruyelle/origin-send-filter
+ADD        https://api.github.com/repos/tbruyelle/gno/git/refs/heads/ibc-fork /dev/null
+RUN        git clone --depth 1 --branch ibc-fork https://github.com/tbruyelle/gno.git
 WORKDIR     /app
 ADD        https://api.github.com/repos/allinbits/gno-realms/git/refs/heads/master /dev/null
 RUN        git clone --depth 1 --branch master https://github.com/allinbits/gno-realms.git
