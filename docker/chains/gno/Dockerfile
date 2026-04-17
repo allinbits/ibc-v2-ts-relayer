@@ -6,9 +6,8 @@ RUN        git clone https://github.com/tbruyelle/gno.git
 WORKDIR     /app/gno
 RUN        git checkout tbruyelle/origin-send-filter
 WORKDIR     /app
-RUN        git clone https://github.com/allinbits/gno-realms.git
-WORKDIR     /app/gno-realms
-RUN        git checkout master
+ADD        https://api.github.com/repos/allinbits/gno-realms/git/refs/heads/master /dev/null
+RUN        git clone --depth 1 --branch master https://github.com/allinbits/gno-realms.git
 WORKDIR     /app/gno-realms
 RUN         cp -R ./gno.land/* /app/gno/examples/gno.land
 WORKDIR     /app/gno/contribs/gnodev
