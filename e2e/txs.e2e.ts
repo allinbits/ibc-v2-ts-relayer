@@ -45,6 +45,9 @@ import {
 import {
   ChainFees,
 } from "../src/types/index.ts";
+import {
+  setupGnoWhitelist,
+} from "./setup.ts";
 
 function ibcRegistry(): Registry {
   return new Registry([...defaultRegistryTypes, ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType]]);
@@ -122,6 +125,8 @@ export const transferFromTm = async (clientId: string, sender: string, receiver:
   return result;
 };
 describe("IBC Transfer Tests", async () => {
+  setupGnoWhitelist();
+
   const _marsClient = await connectComet("http://localhost:26657");
   const venusClient = await connectComet("http://localhost:36657");
   const atoneClient = await connectComet("http://localhost:56657");
