@@ -69,6 +69,7 @@ import {
 import {
   Ack, AckV2, ChainType, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types/index.js";
+import { sha256 } from "@cosmjs/crypto";
 
 /**
  * Safely extracts an error message from an unknown caught value.
@@ -324,11 +325,14 @@ export function buildGnoClientState(
     },
     innerSpec: {
       childOrder: [0, 1],
-      minPrefixLength: 4,
-      maxPrefixLength: 12,
-      childSize: 33,
+      minPrefixLength: 1,
+      maxPrefixLength: 1,
+      childSize: 32,
+      emptyChild: sha256(fromHex("02")),
       hash: HashOp.SHA256,
     },
+    minDepth: 5,
+    maxDepth: 60,
   };
   const tendermintSpec = {
     leafSpec: {
