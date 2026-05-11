@@ -28,7 +28,7 @@ RUN rm -rf node_modules
 # into this layer.
 RUN --mount=type=cache,target=/root/.npm \
     --mount=type=cache,id=pnpm,target=/pnpm/store \
-    npm install -g pnpm@9 typescript && \
+    npm install -g pnpm typescript && \
     pnpm install && \
     pnpm build
 
