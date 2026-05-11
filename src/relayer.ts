@@ -107,6 +107,7 @@ export class Relayer extends EventEmitter {
         senderAddress: (await (signerA as GnoWallet).getAddress()),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+        gasAdjustment: feesA.gasAdjustment,
         addressPrefix: prefixA,
         estimatedBlockTime: 6000,
       });
@@ -122,6 +123,7 @@ export class Relayer extends EventEmitter {
         senderAddress: (await (signerB as GnoWallet).getAddress()),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+        gasAdjustment: feesB.gasAdjustment,
         addressPrefix: prefixB,
         estimatedBlockTime: 6000,
       });
@@ -259,6 +261,7 @@ export class Relayer extends EventEmitter {
               addressPrefix: prefixA,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+              gasAdjustment: feesA.gasAdjustment,
             });
           const clientB = path.chainTypeB === ChainType.Cosmos
             ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
@@ -272,6 +275,7 @@ export class Relayer extends EventEmitter {
               addressPrefix: prefixB,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+              gasAdjustment: feesB.gasAdjustment,
             });
           if (path.version === 1) {
             this.links.set(path.id, await Link.createWithExistingConnections(clientA, clientB, path.clientA, path.clientB, this.logger));
