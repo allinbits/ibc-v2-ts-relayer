@@ -35,6 +35,7 @@ describe("DexieStorage", () => {
       expect(result.chainId).toBe(chainId);
       expect(result.gasPrice).toBe(gasPrice);
       expect(result.gasDenom).toBe(gasDenom);
+      expect(result.gasAdjustment).toBe(1.4);
       expect(result.id).toBeDefined();
     });
   });
@@ -51,6 +52,7 @@ describe("DexieStorage", () => {
       expect(result.chainId).toBe(chainId);
       expect(result.gasPrice).toBe(gasPrice);
       expect(result.gasDenom).toBe(gasDenom);
+      expect(result.gasAdjustment).toBe(1.4);
     });
 
     it("should throw error when chain fees not found", async () => {

@@ -71,12 +71,13 @@ program.command("add-mnemonic")
 program.command("add-gas-price")
   .description("Add gas price for a chain")
   .requiredOption("-c, --chain-id <chainId>", "Chain ID to add gas price for")
+  .option("-g, --gas-adjustment <gasAdjustment>", "Gas adjustment multiplier (default: 1.4)", parseFloat)
   .argument("<string>", "Gas information in string format. e.g. 0.025udenom")
   .action(async (gasPrice, options) => {
     try {
       const relayer = new Relayer(log);
       const gas = GasPrice.fromString(gasPrice);
-      await relayer.addGasPrice(options.chainId, gas.amount.toString(), gas.denom);
+      await relayer.addGasPrice(options.chainId, gas.amount.toString(), gas.denom, options.gasAdjustment);
     }
     catch (error) {
       log.error("Failed to add gas price", {

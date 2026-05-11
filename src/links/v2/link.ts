@@ -180,14 +180,18 @@ export class Link {
     await Promise.all([nodeA.waitOneBlock(), nodeB.waitOneBlock()]);
     let merklePrefixA = Buffer.from("ibc", "utf-8");
     let merklePrefixB = Buffer.from("ibc", "utf-8");
+    let merklePathPrefixA = new Uint8Array();
+    let merklePathPrefixB = new Uint8Array();
     if (isGno(nodeA)) {
       merklePrefixA = Buffer.from("main", "utf-8");
+      merklePathPrefixA = Buffer.from("/pv/vm:gno.land/r/aib/ibc/core:", "utf-8");
     }
     if (isGno(nodeB)) {
       merklePrefixB = Buffer.from("main", "utf-8");
+      merklePathPrefixB = Buffer.from("/pv/vm:gno.land/r/aib/ibc/core:", "utf-8");
     }
-    await nodeB.registerCounterParty(clientIdB, clientIdA, merklePrefixA);
-    await nodeA.registerCounterParty(clientIdA, clientIdB, merklePrefixB);
+    await nodeB.registerCounterParty(clientIdB, clientIdA, merklePrefixA, merklePathPrefixA);
+    await nodeA.registerCounterParty(clientIdA, clientIdB, merklePrefixB, merklePathPrefixB);
     const endA = getEndpoint(nodeA, clientIdA);
     const endB = getEndpoint(nodeB, clientIdB);
     return new Link(endA, endB, logger);

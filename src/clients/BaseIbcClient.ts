@@ -160,7 +160,7 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   abstract updateGnoClient(clientId: string, header: ibc.lightclients.gno.v1.gno.Header): Promise<MsgResult>;
 
   /* Registering counterparty client for IBC v2 handshaking  Tx */
-  abstract registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<MsgResult>;
+  abstract registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array, merklePathPrefix?: Uint8Array): Promise<MsgResult>;
 
   /* Connection and channel handling for IBC v1 handshaking Txs */
   abstract connOpenInit(clientId: string, remoteClientId: string): Promise<CreateConnectionResult>;

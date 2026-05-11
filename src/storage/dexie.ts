@@ -13,10 +13,10 @@ const db = new Dexie("Relayer") as Dexie & {
   chainFees: EntityTable<ChainFees, "id">
 };
 
-db.version(2).stores({
+db.version(3).stores({
   relayPaths: "++id, chainIdA, nodeA, queryNodeA, chainIdB, nodeB, queryNodeB, chainTypeA, chainTypeB, clientA, clientB, version, [chainIdA+chainIdB+clientA+clientB+version]",
   relayedHeights: "++id, relayPathId, packetHeightA, packetHeightB, ackHeightA, ackHeightB",
-  chainFees: "++id, chainId, gasPrice, gasDenom",
+  chainFees: "++id, chainId, gasPrice, gasDenom, gasAdjustment",
 });
 
 export {
