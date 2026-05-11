@@ -63,8 +63,8 @@ export const transferFromGnoGRC = async (clientId: string, _sender: string, rece
   wallet.connect(provider);
   const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString(), ""], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()), (new Map()).set("ugnot", 3000000),
     {
-      gas_wanted: 60000000n,
-      gas_fee: "750000ugnot",
+      gas_wanted: 80000000n,
+      gas_fee: "1000000ugnot",
     });
   return result;
 };
@@ -78,8 +78,8 @@ export const transferFromGno = async (clientId: string, _sender: string, receive
   wallet.connect(provider);
   const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [clientId, receiver, denom, amount, BigInt(Math.floor(Date.now() / 1000) + 600).toString(), ""], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()).set(denom, amount), (new Map()).set("ugnot", 3000000),
     {
-      gas_wanted: 60000000n,
-      gas_fee: "750000ugnot",
+      gas_wanted: 80000000n,
+      gas_fee: "1000000ugnot",
     });
   return result;
 };
