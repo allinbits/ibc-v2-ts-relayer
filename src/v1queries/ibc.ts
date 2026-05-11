@@ -53,7 +53,6 @@ import {
   createPagination, createProtobufRpcClient, QueryClient,
 } from "@cosmjs/stargate";
 
-
 function decodeTendermintClientStateAny(clientState: Any | undefined): TendermintClientState {
   if (clientState?.typeUrl !== "/ibc.lightclients.tendermint.v1.ClientState") {
     throw new Error(`Unexpected client state type: ${clientState?.typeUrl}`);
