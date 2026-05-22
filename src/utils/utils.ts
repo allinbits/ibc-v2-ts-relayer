@@ -134,6 +134,20 @@ export function createDeliverTxFailureMessage(result: DeliverTxResponse): string
   return `Error when broadcasting tx ${result.transactionHash} at height ${result.height}. Code: ${result.code}; Raw log: ${result.rawLog}`;
 }
 
+// Detect MsgUpdateClient failures caused by light-client header verification —
+// typically a trust-level violation due to validator-set churn between the
+// trusted height and the new header. These are recoverable via bisection.
+export function isTrustVerifyError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return msg.includes("trust")
+    || msg.includes("validator set")
+    || msg.includes("val set")
+    || msg.includes("verify header")
+    || msg.includes("verify non adjacent")
+    || msg.includes("verify adjacent")
+    || msg.includes("verify non-adjacent");
+}
+
 export function toIntHeight(height?: Height): number {
   const revisionHeight = height?.revisionHeight;
   if (revisionHeight === undefined) {

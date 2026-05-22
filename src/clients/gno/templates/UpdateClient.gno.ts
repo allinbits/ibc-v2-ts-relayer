@@ -59,7 +59,7 @@ func main() {
 			Header: &tendermint.Header{
 				Version: tendermint.Consensus{
 					Block: tendermint.BlockProtocol,
-					App:   0, //NOTE no idea what to put there, sounds unused
+					App:   {{ appVersion }},
 				},
 				ChainID: chainID,
 				Height:  height.RevisionHeight,
