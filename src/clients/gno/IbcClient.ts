@@ -679,7 +679,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment)),
         gas_fee: Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment / 1000) + "ugnot",
