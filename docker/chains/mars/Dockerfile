@@ -14,7 +14,6 @@ RUN ignite chain build --skip-proto
 FROM ignitehq/cli:v29.7.0
 
 ENV DO_NOT_TRACK="1"
-ENV GOTOOLCHAIN=auto
 
 COPY mars/config.yml /config.yml
 COPY serve.sh /serve.sh
