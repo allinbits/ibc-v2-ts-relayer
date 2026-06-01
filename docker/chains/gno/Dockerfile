@@ -5,8 +5,8 @@ RUN        apk add --no-cache git
 ADD        https://api.github.com/repos/allinbits/gno/git/refs/heads/ibc-fork-allowall-v4 /dev/null
 RUN        git clone --depth 1 --branch ibc-fork-allowall-v4 https://github.com/allinbits/gno.git
 WORKDIR     /app
-ADD        https://api.github.com/repos/allinbits/gno-realms/git/refs/heads/chore/crossing-v2 /dev/null
-RUN        git clone --depth 1 --branch chore/crossing-v2 https://github.com/allinbits/gno-realms.git
+ADD        https://api.github.com/repos/allinbits/gno-realms/git/refs/heads/master /dev/null
+RUN        git clone --depth 1 --branch master https://github.com/allinbits/gno-realms.git
 WORKDIR     /app/gno-realms
 RUN         cp -R ./gno.land/* /app/gno/examples/gno.land
 WORKDIR     /app/gno/contribs/gnodev
