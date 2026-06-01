@@ -25,29 +25,18 @@ jobs:
         ports:
           - 2317:1317
           - 36657:26657
-      gno:
-        image: ghcr.io/allinbits/ibc-v2-ts-relayer/gno
-        options: --name gno
-        env:
-          GNO_RELAYER_ADDRESS: ${{ secrets.GNO_RELAYER_ADDRESS }}
-        ports:
-          - 46657:26657
-          - 8888:8888
-          - 8546:8546
-      a1gno:
-        image: ghcr.io/allinbits/ibc-v2-ts-relayer/a1gno
-        options: --name a1gno
-        env:
-          ATOMONE_RELAYER_ADDRESS: ${{ secrets.ATOMONE_RELAYER_ADDRESS }}
-        ports:
-          - 56657:26657
-          - 3317:1317
+    env:
+      GNO_RELAYER_ADDRESS: ${{ secrets.GNO_RELAYER_ADDRESS }}
+      ATOMONE_RELAYER_ADDRESS: ${{ secrets.ATOMONE_RELAYER_ADDRESS }}
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
         node-version: 20.x
         check-latest: true
+
+    - name: Build and start chain services
+      run: docker compose up -d --build gno a1gno
 
     - name: Install dependencies
       run: npm install -g pnpm && pnpm install
