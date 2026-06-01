@@ -15,11 +15,15 @@ const TEST1_SEED = "source bonus chronic canvas draft south burst lottery vacant
 export function setupGnoWhitelist(gnoUrl = "http://localhost:46657") {
   beforeAll(async () => {
     const mnemonic = process.env.RELAYER_MNEMONIC ?? "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-    const relayerWallet = await GnoWallet.fromMnemonic(mnemonic, { addressPrefix: "g" });
+    const relayerWallet = await GnoWallet.fromMnemonic(mnemonic, {
+      addressPrefix: "g",
+    });
     const relayerAddr = await relayerWallet.getAddress();
 
     const provider = await GnoJSONRPCProvider.create(gnoUrl);
-    const test1Wallet = await GnoWallet.fromMnemonic(TEST1_SEED, { addressPrefix: "g" });
+    const test1Wallet = await GnoWallet.fromMnemonic(TEST1_SEED, {
+      addressPrefix: "g",
+    });
     test1Wallet.connect(provider);
 
     await test1Wallet.callMethod(
