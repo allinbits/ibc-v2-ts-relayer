@@ -13,10 +13,6 @@ import {
 } from "vitest";
 
 import {
-  setupGnoWhitelist,
-} from "./setup.ts";
-
-import {
   Relayer,
 } from "../src/relayer";
 import {
@@ -28,6 +24,9 @@ import {
 import {
   setupIbcV2Extension,
 } from "../src/v2queries/ibc.ts";
+import {
+  setupGnoWhitelist,
+} from "./setup.ts";
 
 const relayer = new Relayer(log);
 
