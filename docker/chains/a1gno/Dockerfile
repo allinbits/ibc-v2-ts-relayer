@@ -14,6 +14,11 @@ RUN         ./atomoned keys add validator --keyring-backend="test"
 RUN         ./atomoned genesis add-genesis-account $(./atomoned keys show validator -a --keyring-backend="test") 10000000000uatone,100000000000uphoton
 RUN         ./atomoned genesis gentx validator 5000000000uatone --keyring-backend="test" --chain-id ibctest-1
 RUN         ./atomoned genesis collect-gentxs
+# atomone main (SDK v0.500) added x/dynamicfee, which resolves min-gas-price
+# on-chain and defaults fee_denom to "stake". The relayer pays fees in uphoton,
+# so an unpatched fee_denom makes GetMinGasPrice("uphoton") fall through to the
+# photon resolver and fail with "error resolving denom". Patch it to uphoton.
+RUN         sed -i 's/"fee_denom": "stake"/"fee_denom": "uphoton"/' ~/.atomone/config/genesis.json
 RUN          echo "Setting rpc listen address"
 RUN         sed -i 's#"tcp://127.0.0.1:26657"#"tcp://0.0.0.0:26657"#g' ~/.atomone/config/config.toml
 RUN         sed -i 's/timeout_commit = "5s"/timeout_commit = "1s"/g' ~/.atomone/config/config.toml
