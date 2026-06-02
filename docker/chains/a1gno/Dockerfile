@@ -5,7 +5,7 @@ RUN        apk add --no-cache git
 RUN        apk add --no-cache automake make
 RUN        git clone https://github.com/atomone-hub/atomone.git
 WORKDIR     /app/atomone
-RUN        git checkout 5799dca2d44d601d26ce305f10d6810a2feb2070
+RUN        git checkout 3063e664eda91d4335bf5f67fd479a9ca18b163c
 RUN        make build
 WORKDIR     /app/atomone/build
 RUN        cp ./atomoned /usr/local/bin/atomoned
