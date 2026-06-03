@@ -139,13 +139,9 @@ export function createDeliverTxFailureMessage(result: DeliverTxResponse): string
 // trusted height and the new header. These are recoverable via bisection.
 export function isTrustVerifyError(err: unknown): boolean {
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-  return msg.includes("trust")
-    || msg.includes("validator set")
-    || msg.includes("val set")
-    || msg.includes("verify header")
-    || msg.includes("verify non adjacent")
-    || msg.includes("verify adjacent")
-    || msg.includes("verify non-adjacent");
+  return msg.includes("check trusted validators")
+    || msg.includes("trust new val set")
+    || msg.includes("new val set cannot be trusted");
 }
 
 export function toIntHeight(height?: Height): number {

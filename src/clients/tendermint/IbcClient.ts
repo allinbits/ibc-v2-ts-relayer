@@ -674,8 +674,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       return attempted;
     }
     catch (err) {
-      if (!isTrustVerifyError(err) || attempted - trustedHeight <= 1) {
+      if (!isTrustVerifyError(err)) {
         throw err;
+      }
+      if (attempted - trustedHeight <= 1) {
+        throw Error(`updateClient bisection exhausted at gap=1, height ${attempted} from trusted ${trustedHeight}: ${err.message}`);
       }
       const midHeight = Math.floor((trustedHeight + attempted) / 2);
       this.logger.info(
