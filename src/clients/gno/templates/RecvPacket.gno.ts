@@ -16,7 +16,7 @@ func hexDec(s string) []byte {
                  if err != nil { panic(err) }
   return b
 }
-func main() {
+func main(cur realm) {
     // Receive the packet
     specs := ics23.IavlSpec()
     recvPacket := types.MsgRecvPacket{
@@ -44,7 +44,7 @@ func main() {
     }
     
 
-    res := core.RecvPacket(cross, recvPacket)
+    res := core.RecvPacket(cross(cur), recvPacket)
 
     println(res)
 }`;

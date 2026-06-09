@@ -15,9 +15,9 @@ func hexDec(s string) []byte {
                  if err != nil { panic(err) }
   return b
 }
-func main() {
+func main(cur realm) {
 	var (
-		clientID      = "{{ clientId }}"                 
+		clientID      = "{{ clientId }}"              
 		chainID       = "{{ chainID }}"          
 		height        = types.Height{{ openBr }}{{ revisionNumber }}, {{ revisionHeight }}{{ closeBr }}                  // TODO update
 		valset        = &tendermint.ValidatorSet{          // TODO update
@@ -107,5 +107,5 @@ func main() {
 			TrustedValidators: trustedValset,
 		}
 	)
-	core.UpdateClient(cross, clientID, msgHeader)
+	core.UpdateClient(cross(cur), clientID, msgHeader)
 }`;
