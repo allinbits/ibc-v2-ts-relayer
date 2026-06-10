@@ -69,7 +69,7 @@ import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
 import {
-  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight, validateIbcIdentifier,
+  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, isTrustVerifyError, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
 import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
@@ -391,8 +391,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   //
   // For the vote sign bytes, it checks (from the commit):
   //   Height, Round, BlockId, TimeStamp, ChainID
-  public async buildHeader(lastHeight: number): Promise<ibc.lightclients.gno.v1.gno.Header> {
-    const signedHeader = await this.getSignedHeader();
+  public async buildHeader(lastHeight: number, targetHeight?: number): Promise<ibc.lightclients.gno.v1.gno.Header> {
+    const signedHeader = await this.getSignedHeader(targetHeight);
     // "assert that trustedVals is NextValidators of last trusted header"
     // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
     const validatorHeight = lastHeight + 1;
@@ -596,6 +596,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
 
   // Updates existing client on this chain with data from src chain.
   // Returns the height that was updated to.
+  //
+  // If the update fails light-client trust-level verification (validator-set
+  // churn between trustedHeight and the new header), this transparently
+  // bisects: it submits an intermediate update at the midpoint, then retries
+  // the original target. Recurses until the target succeeds or the gap
+  // collapses to a single block (in which case the original error is rethrown).
   public async updateClient(
     clientId: string,
     src: BaseIbcClient,
@@ -603,18 +609,47 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const {
       latestHeight,
     } = await this.getLatestClientState(clientId, src.clientType);
-    let height: number = 0;
+    const trustedHeight = toIntHeight(latestHeight);
+    const finalHeight = await this.updateClientBisect(clientId, src, trustedHeight);
+    return src.revisionHeight(finalHeight);
+  }
+
+  private async updateClientBisect(
+    clientId: string,
+    src: BaseIbcClient,
+    trustedHeight: number,
+    targetHeight?: number,
+  ): Promise<number> {
+    let attempted: number;
+    let submit: () => Promise<unknown>;
     if (isTendermint(src)) {
-      const header = await src.buildHeader(toIntHeight(latestHeight));
-      await this.updateTendermintClient(clientId, header);
-      height = Number(header.signedHeader?.header?.height ?? 0);
+      const header = await src.buildHeader(trustedHeight, targetHeight);
+      attempted = Number(header.signedHeader?.header?.height ?? 0);
+      submit = () => this.updateTendermintClient(clientId, header);
     }
-    if (isGno(src)) {
-      const header = await src.buildHeader(toIntHeight(latestHeight));
-      await this.updateGnoClient(clientId, header);
-      height = Number(header.signedHeader?.header?.height ?? 0);
+    else if (isGno(src)) {
+      const header = await src.buildHeader(trustedHeight, targetHeight);
+      attempted = Number(header.signedHeader?.header?.height ?? 0);
+      submit = () => this.updateGnoClient(clientId, header);
     }
-    return src.revisionHeight(height);
+    else {
+      throw new Error(`Unsupported client type for updateClient: ${src.clientType}`);
+    }
+    try {
+      await submit();
+      return attempted;
+    }
+    catch (err) {
+      if (!isTrustVerifyError(err) || attempted - trustedHeight <= 1) {
+        throw err;
+      }
+      const midHeight = Math.floor((trustedHeight + attempted) / 2);
+      this.logger.info(
+        `updateClient ${clientId}: trust verification failed at height ${attempted} from trusted ${trustedHeight}; bisecting at ${midHeight}`,
+      );
+      const intermediate = await this.updateClientBisect(clientId, src, trustedHeight, midHeight);
+      return this.updateClientBisect(clientId, src, intermediate, attempted);
+    }
   }
 
   public async createTendermintClient(
@@ -680,6 +715,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       openBr: "{",
       closeBr: "}",
       chainID: validateIbcIdentifier(header.signedHeader.header.chainId, "chainId"),
+      appVersion: header.signedHeader.header.version.app.toString(),
       appHash: toHex(header.signedHeader.header.appHash ?? new Uint8Array()),
       revisionNumber: header.signedHeader.header.height.toString(),
       revisionHeight: header.signedHeader.header.height.toString(),
@@ -738,7 +774,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       name: "main",
       path: "",
     });
-
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment)),
