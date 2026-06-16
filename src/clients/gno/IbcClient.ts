@@ -292,8 +292,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       seconds,
     });
     */
-    // hardcode to 24h for now, see: https://github.com/gnolang/gno/issues/4829
-    const seconds = 60 * 60 * 24;
+    // hardcode to 21 days for now, see: https://github.com/gnolang/gno/issues/4829
+    const seconds = 60 * 60 * 24 * 21;
     return seconds;
   }
 
