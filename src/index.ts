@@ -146,7 +146,6 @@ program.command("add-path")
       );
     }
     catch (error) {
-      console.log(error);
       log.error("Failed to add relay path", {
         error,
         source: options.source,
