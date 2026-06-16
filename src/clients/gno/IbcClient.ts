@@ -720,7 +720,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       chainID: validateIbcIdentifier(header.signedHeader.header.chainId, "chainId"),
       appVersion: header.signedHeader.header.version.app.toString(),
       appHash: toHex(header.signedHeader.header.appHash ?? new Uint8Array()),
-      revisionNumber: header.trustedHeight.revisionNumber.toString(),
+      revisionNumber: this.revisionNumber.toString(),
       revisionHeight: header.signedHeader.header.height.toString(),
       timeSec: header.signedHeader.header.time.seconds.toString(),
       timeNanos: header.signedHeader.header.time.nanos.toString(),
