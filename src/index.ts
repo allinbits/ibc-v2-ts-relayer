@@ -122,7 +122,7 @@ const ibcVersionTypeOption = new Option(
 program.command("add-path")
   .description("Add a new relay path")
   .requiredOption("-s, --source <sourceChain>", "Source chain id")
-  .requiredOption("-d, --destination <sourceChain>", "Source chain id")
+  .requiredOption("-d, --destination <sourceChain>", "Destination chain id")
   .requiredOption("--surl, --source-url <sourceUrl>", "Source chain URL")
   .requiredOption("--durl, --destination-url <destinationUrl>", "Destination chain URL")
   .option("--squery, --source-query-url <sourceQueryUrl>", "Source chain query URL")
@@ -146,7 +146,47 @@ program.command("add-path")
       );
     }
     catch (error) {
+      console.log(error);
       log.error("Failed to add relay path", {
+        error,
+        source: options.source,
+        destination: options.destination,
+      });
+      process.exit(1);
+    }
+  });
+program.command("add-existing-path")
+  .description("Add a relay path using existing clients/connections on both chains")
+  .requiredOption("-s, --source <sourceChain>", "Source chain id")
+  .requiredOption("-d, --destination <destinationChain>", "Destination chain id")
+  .requiredOption("--surl, --source-url <sourceUrl>", "Source chain URL")
+  .requiredOption("--durl, --destination-url <destinationUrl>", "Destination chain URL")
+  .requiredOption("--sclient, --source-client-id <sourceClientId>", "Existing client/connection ID on the source chain")
+  .requiredOption("--dclient, --destination-client-id <destinationClientId>", "Existing client/connection ID on the destination chain")
+  .option("--squery, --source-query-url <sourceQueryUrl>", "Source chain query URL")
+  .option("--dquery, --destination-query-url <destinationQueryUrl>", "Destination chain query URL")
+  .addOption(sourceTypeOption)
+  .addOption(destinationTypeOption)
+  .addOption(ibcVersionTypeOption)
+  .action(async (options) => {
+    try {
+      const relayer = new Relayer(log);
+      await relayer.addExistingRelayPath(
+        options.source,
+        options.sourceUrl,
+        options.sourceQueryUrl,
+        options.destination,
+        options.destinationUrl,
+        options.destinationQueryUrl,
+        options.sourceType as ChainType,
+        options.destinationType as ChainType,
+        options.sourceClientId,
+        options.destinationClientId,
+        parseInt(options.ibcVersion, 10),
+      );
+    }
+    catch (error) {
+      log.error("Failed to add existing relay path", {
         error,
         source: options.source,
         destination: options.destination,
