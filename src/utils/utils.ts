@@ -140,7 +140,7 @@ export function createDeliverTxFailureMessage(result: DeliverTxResponse): string
 // Detect MsgUpdateClient failures caused by light-client header verification —
 // typically a trust-level violation due to validator-set churn between the
 // trusted height and the new header. These are recoverable via bisection.
-export function isTrustVerifyError(err: TM2Error): boolean {
+export function isTrustVerifyError(err: unknown): boolean {
   const msg = (err instanceof TM2Error ? err.log : String(err)).toLowerCase();
   return msg.includes("check trusted validators")
     || msg.includes("trust new val set")
