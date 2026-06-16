@@ -717,7 +717,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       chainID: validateIbcIdentifier(header.signedHeader.header.chainId, "chainId"),
       appVersion: header.signedHeader.header.version.app.toString(),
       appHash: toHex(header.signedHeader.header.appHash ?? new Uint8Array()),
-      revisionNumber: header.signedHeader.header.height.toString(),
+      revisionNumber: header.trustedHeight.revisionNumber.toString(),
       revisionHeight: header.signedHeader.header.height.toString(),
       timeSec: header.signedHeader.header.time.seconds.toString(),
       timeNanos: header.signedHeader.header.time.nanos.toString(),
@@ -781,7 +781,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
-      throw new Error(`Failed to update Tendermint client: ${result.deliver_tx.ResponseBase.Error}`);
+      throw new Error(`Failed to update Tendermint client: ${result.deliver_tx.ResponseBase.Error.value}`);
     }
     return {
       events: [],
