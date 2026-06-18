@@ -62,6 +62,9 @@ import {
 import {
   ibc,
 } from "@gnolang/gno-types";
+import {
+  TM2Error,
+} from "@gnolang/tm2-js-client";
 
 import {
   BaseIbcClient,
@@ -132,6 +135,16 @@ export function toBase64AsAny(...input: Parameters<typeof toBase64>): any {
 }
 export function createDeliverTxFailureMessage(result: DeliverTxResponse): string {
   return `Error when broadcasting tx ${result.transactionHash} at height ${result.height}. Code: ${result.code}; Raw log: ${result.rawLog}`;
+}
+
+// Detect MsgUpdateClient failures caused by light-client header verification —
+// typically a trust-level violation due to validator-set churn between the
+// trusted height and the new header. These are recoverable via bisection.
+export function isTrustVerifyError(err: unknown): boolean {
+  const msg = (err instanceof TM2Error ? err.log : String(err)).toLowerCase();
+  return msg.includes("check trusted validators")
+    || msg.includes("trust new val set")
+    || msg.includes("new val set cannot be trusted");
 }
 
 export function toIntHeight(height?: Height): number {
