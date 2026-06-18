@@ -11,7 +11,7 @@ func hexDec(s string) []byte {
                  if err != nil { panic(err) }
   return b
 }
-func main() {
+func main(cur realm) {
 	var (
 		clientID                 = "{{ clientId }}"
 		counterpartyMerklePrefix = [][]byte{
@@ -20,5 +20,5 @@ func main() {
 		}
 		counterpartyClientID = "{{ counterpartyClientId }}"
 	)
-	core.RegisterCounterparty(cross, clientID, counterpartyMerklePrefix, counterpartyClientID)
+	core.RegisterCounterparty(cross(cur), clientID, counterpartyMerklePrefix, counterpartyClientID)
 }`;

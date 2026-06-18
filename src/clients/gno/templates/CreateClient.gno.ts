@@ -15,7 +15,7 @@ func hexDec(s string) []byte {
                  if err != nil { panic(err) }
   return b
 }
-func main() {
+func main(cur realm) {
 	// CreateClient
 	var (
 		chainID      = "{{ chainID }}"
@@ -41,6 +41,6 @@ func main() {
 			NextValidatorsHash: valhash[:],
 		}
 	)
-	id := core.CreateClient(cross, clientState, consensusState)
+	id := core.CreateClient(cross(cur), clientState, consensusState)
 	println(id)
 }`;

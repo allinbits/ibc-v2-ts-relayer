@@ -16,7 +16,7 @@ func hexDec(s string) []byte {
                  if err != nil { panic(err) }
   return b
 }
-func main() {
+func main(cur realm) {
   // Acknowledge the packet
   specs := ics23.IavlSpec()
   ackPacket := types.MsgAcknowledgement{
@@ -49,7 +49,7 @@ func main() {
     ProofHeight: types.NewHeight({{ proofRevision }}, {{ proofHeight }}), // XXX update
   }
 
-  res := core.Acknowledgement(cross, ackPacket)
+  res := core.Acknowledgement(cross(cur), ackPacket)
 
   println(res)
 }

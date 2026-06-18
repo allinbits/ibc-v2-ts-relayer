@@ -94,7 +94,7 @@ import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
 import {
-  buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight, validateIbcIdentifier,
+  buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, isTrustVerifyError, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
 import {
   IbcExtension, setupIbcExtension,
@@ -109,6 +109,7 @@ import {
 const ibcRegistryInstance = new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as GeneratedType]]);
 export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
+  gasAdjustment?: number
 };
 
 const defaultMerklePrefix = {
@@ -129,6 +130,7 @@ export interface TendermintIbcClientTypes {
 }
 export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes> {
   public readonly gasPrice: GasPrice;
+  public readonly gasAdjustment: number;
   public readonly sign: SigningStargateClient;
   public readonly tm: CometClient;
 
@@ -176,6 +178,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.sign = signingClient;
     this.tm = tmClient;
     this.gasPrice = options.gasPrice;
+    this.gasAdjustment = options.gasAdjustment ?? 1.4;
     this.query = QueryClient.withExtensions(
       tmClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension, setupIbcV2Extension,
     );
@@ -364,7 +367,10 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
   // this builds a header to update a remote client.
   // you must pass the last known height on the remote side so we can properly generate it.
-  // it will update to the latest state of this chain.
+  // If targetHeight is provided, the header is built at that height; otherwise
+  // it updates to the latest state of this chain. A specific targetHeight is
+  // used by bisection to insert an intermediate update when validator-set
+  // churn between lastHeight and the latest header breaks the trust level.
   //
   // This is the logic that validates the returned struct:
   // ibc check: https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L87-L167
@@ -376,8 +382,8 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   //
   // For the vote sign bytes, it checks (from the commit):
   //   Height, Round, BlockId, TimeStamp, ChainID
-  public async buildHeader(lastHeight: number): Promise<TendermintHeader> {
-    const signedHeader = await this.getSignedHeader();
+  public async buildHeader(lastHeight: number, targetHeight?: number): Promise<TendermintHeader> {
+    const signedHeader = await this.getSignedHeader(targetHeight);
     // "assert that trustedVals is NextValidators of last trusted header"
     // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
     const validatorHeight = lastHeight + 1;
@@ -613,31 +619,74 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
   // Updates existing client on this chain with data from src chain.
   // Returns the height that was updated to.
+  //
+  // If the update fails light-client trust-level verification (validator-set
+  // churn between trustedHeight and the new header), this transparently
+  // bisects: it submits an intermediate update at the midpoint, then retries
+  // the original target. Recurses until the target succeeds or the gap
+  // collapses to a single block (in which case the original error is rethrown).
   public async updateClient(
     clientId: string,
     src: BaseIbcClient,
   ): Promise<Height> {
-    let height: number;
+    let trustedHeight: number;
     if (isTendermint(src)) {
       const {
         latestHeight,
       } = await this.query.ibc.client.stateTm(clientId);
-      const header = await src.buildHeader(toIntHeight(latestHeight));
-      await this.updateTendermintClient(clientId, header);
-      height = Number(header.signedHeader?.header?.height ?? 0);
+      trustedHeight = toIntHeight(latestHeight);
     }
     else if (isGno(src)) {
       const state = await this.query.ibc.client.state(clientId);
       const clientState = ibc.lightclients.gno.v1.gno.ClientState.decode(state?.clientState?.value ?? new Uint8Array());
-      const latestHeight = clientState.latestHeight;
-      const header = await src.buildHeader(toIntHeight(latestHeight));
-      await this.updateGnoClient(clientId, header);
-      height = Number(header.signedHeader?.header?.height ?? 0);
+      trustedHeight = toIntHeight(clientState.latestHeight);
     }
     else {
       throw new Error(`Unsupported client type for updateClient: ${src.clientType}`);
     }
-    return src.revisionHeight(height);
+    const finalHeight = await this.updateClientBisect(clientId, src, trustedHeight);
+    return src.revisionHeight(finalHeight);
+  }
+
+  private async updateClientBisect(
+    clientId: string,
+    src: BaseIbcClient,
+    trustedHeight: number,
+    targetHeight?: number,
+  ): Promise<number> {
+    let attempted: number;
+    let submit: () => Promise<unknown>;
+    if (isTendermint(src)) {
+      const header = await src.buildHeader(trustedHeight, targetHeight);
+      attempted = Number(header.signedHeader?.header?.height ?? 0);
+      submit = () => this.updateTendermintClient(clientId, header);
+    }
+    else if (isGno(src)) {
+      const header = await src.buildHeader(trustedHeight, targetHeight);
+      attempted = Number(header.signedHeader?.header?.height ?? 0);
+      submit = () => this.updateGnoClient(clientId, header);
+    }
+    else {
+      throw new Error(`Unsupported client type for updateClient: ${src.clientType}`);
+    }
+    try {
+      await submit();
+      return attempted;
+    }
+    catch (err) {
+      if (!isTrustVerifyError(err)) {
+        throw err;
+      }
+      if (attempted - trustedHeight <= 1) {
+        throw Error(`updateClient bisection exhausted at gap=1, height ${attempted} from trusted ${trustedHeight}: ${err.message}`);
+      }
+      const midHeight = Math.floor((trustedHeight + attempted) / 2);
+      this.logger.info(
+        `updateClient ${clientId}: trust verification failed at height ${attempted} from trusted ${trustedHeight}; bisecting at ${midHeight}`,
+      );
+      const intermediate = await this.updateClientBisect(clientId, src, trustedHeight, midHeight);
+      return this.updateClientBisect(clientId, src, intermediate, attempted);
+    }
   }
 
   public async createTendermintClient(
@@ -663,7 +712,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgCreateClient", createMsg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [createMsg], "auto",
+      senderAddress, [createMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -707,7 +756,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgCreateClient", createMsg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [createMsg], "auto",
+      senderAddress, [createMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -755,7 +804,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [updateMsg], "auto",
+      senderAddress, [updateMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -794,7 +843,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [updateMsg], "auto",
+      senderAddress, [updateMsg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -828,7 +877,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgConnectionOpenInit", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -899,7 +948,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -966,7 +1015,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1001,7 +1050,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1043,7 +1092,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgChannelOpenInit", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1103,7 +1152,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1158,7 +1207,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1197,7 +1246,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     });
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1268,7 +1317,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1335,7 +1384,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1414,7 +1463,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1482,7 +1531,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1560,7 +1609,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       });
     }
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1625,7 +1674,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       msgs: msgs,
     });
     const result = await this.sign.signAndBroadcast(
-      senderAddress, msgs, "auto",
+      senderAddress, msgs, this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));
@@ -1677,18 +1726,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     };
   }
 
-  public async registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array): Promise<MsgResult> {
+  public async registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array, merklePathPrefix: Uint8Array = new Uint8Array()): Promise<MsgResult> {
     this.logger.verbose(
       `Register Counterparty : ${counterpartyClientId} => ${clientId}`,
     );
     const senderAddress = this.senderAddress;
-    let merklePathPrefix: Uint8Array;
-    if (clientId.startsWith("10-gno-")) {
-      merklePathPrefix = toAscii("/pv/vm:gno.land/r/aib/ibc/core:");
-    }
-    else {
-      merklePathPrefix = new Uint8Array();
-    }
     const msg = {
       typeUrl: "/ibc.core.client.v2.MsgRegisterCounterparty",
       value: MsgRegisterCounterparty.fromPartial({
@@ -1701,7 +1743,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     this.logger.debug("MsgRegisterCounterparty", msg);
 
     const result = await this.sign.signAndBroadcast(
-      senderAddress, [msg], "auto",
+      senderAddress, [msg], this.gasAdjustment,
     );
     if (isDeliverTxFailure(result)) {
       throw new Error(createDeliverTxFailureMessage(result));

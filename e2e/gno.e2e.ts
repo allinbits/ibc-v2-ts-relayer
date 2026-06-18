@@ -24,6 +24,9 @@ import {
 import {
   setupIbcV2Extension,
 } from "../src/v2queries/ibc.ts";
+import {
+  setupGnoWhitelist,
+} from "./setup.ts";
 
 const relayer = new Relayer(log);
 
@@ -39,6 +42,8 @@ const init = async () => {
   await relayer.addGasPrice("dev", "0.025", "ugnot");
   await relayer.addNewRelayPath("ibctest-1", "http://localhost:56657", undefined, "dev", "http://localhost:46657", "http://localhost:8546/graphql/query", ChainType.Cosmos, ChainType.Gno, 2);
 };
+
+setupGnoWhitelist();
 
 test("Start relayer and. run E2E tests", async () => {
   await init();

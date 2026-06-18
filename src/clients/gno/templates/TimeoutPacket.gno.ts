@@ -17,7 +17,7 @@ func hexDec(s string) []byte {
   return b
 }
 
-func main() {
+func main(cur realm) {
   // Timeout the packet
   specs := ics23.IavlSpec()
   timeoutPacket := types.MsgTimeout{
@@ -45,7 +45,7 @@ func main() {
     ProofHeight: types.NewHeight({{ proofRevision }}, {{ proofHeight }}), // XXX update
   }
 
-  res := core.Timeout(cross, timeoutPacket)
+  res := core.Timeout(cross(cur), timeoutPacket)
 
   println(res)
 }

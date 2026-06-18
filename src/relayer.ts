@@ -100,12 +100,14 @@ export class Relayer extends EventEmitter {
         senderAddress: await getSenderAddress(signerA as OfflineSigner, chainIdA),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+        gasAdjustment: feesA.gasAdjustment,
         estimatedBlockTime: 6000,
       })
       : await GnoIbcClient.connectWithSigner(nodeA, queryNodeA, signerA as GnoWallet, {
         senderAddress: (await (signerA as GnoWallet).getAddress()),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+        gasAdjustment: feesA.gasAdjustment,
         addressPrefix: prefixA,
         estimatedBlockTime: 6000,
       });
@@ -114,12 +116,14 @@ export class Relayer extends EventEmitter {
         senderAddress: await getSenderAddress(signerB as OfflineSigner, chainIdB),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+        gasAdjustment: feesB.gasAdjustment,
         estimatedBlockTime: 6000,
       })
       : await GnoIbcClient.connectWithSigner(nodeB, queryNodeB, signerB as GnoWallet, {
         senderAddress: (await (signerB as GnoWallet).getAddress()),
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+        gasAdjustment: feesB.gasAdjustment,
         addressPrefix: prefixB,
         estimatedBlockTime: 6000,
       });
@@ -169,13 +173,14 @@ export class Relayer extends EventEmitter {
     chainId: string,
     gasPrice: string,
     gasDenom: string,
+    gasAdjustment?: number,
   ) {
     const price = parseFloat(gasPrice);
     if (Number.isNaN(price)) {
       throw new Error(`Invalid gas price: ${gasPrice}`);
     }
-    await storage.addChainFees(chainId, price, gasDenom);
-    this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}`);
+    await storage.addChainFees(chainId, price, gasDenom, gasAdjustment);
+    this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}, Adjustment: ${gasAdjustment ?? 1.4}`);
   }
 
   async addExistingRelayPath(
@@ -249,24 +254,28 @@ export class Relayer extends EventEmitter {
               senderAddress: await getSenderAddress(signerA as OfflineSigner, path.chainIdA),
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+              gasAdjustment: feesA.gasAdjustment,
             })
             : await GnoIbcClient.connectWithSigner(path.nodeA, path.queryNodeA, signerA as GnoWallet, {
               senderAddress: (await (signerA as GnoWallet).getAddress()),
               addressPrefix: prefixA,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+              gasAdjustment: feesA.gasAdjustment,
             });
           const clientB = path.chainTypeB === ChainType.Cosmos
             ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
               senderAddress: await getSenderAddress(signerB as OfflineSigner, path.chainIdB),
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+              gasAdjustment: feesB.gasAdjustment,
             })
             : await GnoIbcClient.connectWithSigner(path.nodeB, path.queryNodeB, signerB as GnoWallet, {
               senderAddress: (await (signerB as GnoWallet).getAddress()),
               addressPrefix: prefixB,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+              gasAdjustment: feesB.gasAdjustment,
             });
           if (path.version === 1) {
             this.links.set(path.id, await Link.createWithExistingConnections(clientA, clientB, path.clientA, path.clientB, this.logger));
