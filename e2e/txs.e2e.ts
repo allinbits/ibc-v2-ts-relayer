@@ -45,9 +45,6 @@ import {
 import {
   ChainFees,
 } from "../src/types/index.ts";
-import {
-  setupGnoWhitelist,
-} from "./setup.ts";
 
 function ibcRegistry(): Registry {
   return new Registry([...defaultRegistryTypes, ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType]]);
@@ -125,56 +122,18 @@ export const transferFromTm = async (clientId: string, sender: string, receiver:
   return result;
 };
 describe("IBC Transfer Tests", async () => {
-  setupGnoWhitelist();
+  const atoneClient = await connectComet("https://atomone-testnet-1-rpc.allinbits.services");
+  const devClient = await connectTm2("https://rpc.test-13-aeddi-1.gnoland.network");
 
-  const _marsClient = await connectComet("http://localhost:26657");
-  const venusClient = await connectComet("http://localhost:36657");
-  const atoneClient = await connectComet("http://localhost:56657");
-  const devClient = await connectTm2("http://localhost:46657");
-
-  const venusQuery = QueryClient.withExtensions(venusClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension);
   const atoneQuery = QueryClient.withExtensions(atoneClient, setupAuthExtension, setupBankExtension, setupIbcExtension, setupStakingExtension);
 
-  test("Run mars -> venus", async () => {
-    await transferFromTm("07-tendermint-2", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "10", "umars", "test transfer", "http://localhost:26657", "mars", "mars", {
-      chainId: "mars",
-      gasDenom: "umars",
-      gasPrice: 0,
-      id: 1,
-    });
-
-    await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
-      timeout: 20000,
-      interval: 5000,
-    }).toEqual({
-      denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
-      amount: "10",
-    });
-  }, 45000);
-
-  test("Run venus -> mars return", async () => {
-    await transferFromTm("07-tendermint-2", "venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "mars1z437dpuh5s4p64vtq09dulg6jzxpr2hdmpzeqe", "10", "transfer/07-tendermint-2/umars", "test transfer", "http://localhost:36657", "venus", "venus", {
-      chainId: "venus",
-      gasDenom: "uvenus",
-      gasPrice: 0,
-      id: 1,
-    });
-
-    await expect.poll(() => venusQuery.bank.balance("venus1z437dpuh5s4p64vtq09dulg6jzxpr2hdkj7exr", "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE"), {
-      timeout: 20000,
-      interval: 5000,
-    }).toEqual({
-      denom: "ibc/6A1C01F79DAE527D8ACF970FE0BE370CB6F7988E7BFA736291710B5EACD5DCCE",
-      amount: "0",
-    });
-  }, 45000);
-
   test("Run atone -> gno", async () => {
-    await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "http://localhost:56657", "atone", "ibctest-1", {
-      chainId: "ibctest-1",
+    await transferFromTm("10-gno-8", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "uatone", "test transfer", "https://atomone-testnet-1-rpc.allinbits.services", "atone", "atomone-testnet-1", {
+      chainId: "atomone-testnet-1",
       gasDenom: "uphoton",
       gasPrice: 0.025,
       id: 1,
+      gasAdjustment: 1.4,
     });
     await expect.poll(async () =>
       JSON.parse(
@@ -204,7 +163,7 @@ describe("IBC Transfer Tests", async () => {
   }, 60000);
 
   test("Run gno -> atone return", async () => {
-    await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
+    await transferFromGnoGRC("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ibc/542B346608DE032752AF0B21D165190090CD3194F6D177CF35025E39596ABC16", "test transfer", process.env.RELAYER_MNEMONIC!, "https://rpc.test-13-aeddi-1.gnoland.network");
 
     await expect.poll(async () =>
       JSON.parse(
@@ -233,7 +192,7 @@ describe("IBC Transfer Tests", async () => {
     });
   }, 60000);
   test("Run gno -> atone native", async () => {
-    await transferFromGno("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ugnot", "test transfer", process.env.RELAYER_MNEMONIC!, "http://localhost:46657");
+    await transferFromGno("07-tendermint-2", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "10", "ugnot", "test transfer", process.env.RELAYER_MNEMONIC!, "https://rpc.test-13-aeddi-1.gnoland.network");
 
     await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "ibc/7C78A8F4DBDF58061FE4E43C4D6D9CD87F154A852D830BEFDF390631CFD98D31"), {
       timeout: 30000,
@@ -245,11 +204,12 @@ describe("IBC Transfer Tests", async () => {
   }, 60000);
 
   test("Run atone -> gno native return", async () => {
-    await transferFromTm("10-gno-1", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "transfer/10-gno-1/ugnot", "test transfer", "http://localhost:56657", "atone", "ibctest-1", {
-      chainId: "ibctest-1",
+    await transferFromTm("10-gno-8", "atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x", "10", "transfer/10-gno-1/ugnot", "test transfer", "https://atomone-testnet-1-rpc.allinbits.services", "atone", "atomone-testnet-1", {
+      chainId: "atomone-testnet-1",
       gasDenom: "uphoton",
       gasPrice: 0.025,
       id: 1,
+      gasAdjustment: 1.4,
     });
 
     await expect.poll(() => atoneQuery.bank.balance("atone1z437dpuh5s4p64vtq09dulg6jzxpr2hdgu88r6", "ibc/7C78A8F4DBDF58061FE4E43C4D6D9CD87F154A852D830BEFDF390631CFD98D31"), {

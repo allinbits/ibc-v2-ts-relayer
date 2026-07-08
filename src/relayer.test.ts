@@ -34,6 +34,7 @@ vi.mock("./clients/tendermint/IbcClient", () => ({
   TendermintIbcClient: {
     connectWithSigner: vi.fn(async () => ({
       // mock client
+      currentHeight: vi.fn(async () => 100),
     })),
   },
 }));
@@ -169,6 +170,9 @@ describe("Relayer", () => {
     expect(mockLoggerInfo).toHaveBeenCalledWith(
       "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
     );
+    // Initial relayed heights are seeded to the chains' current height (100)
+    // so the first relay query is bounded rather than a genesis scan.
+    expect(storage.updateRelayedHeights).toHaveBeenCalledWith(1, 100, 100, 100, 100);
   });
 
   it("should add a new relay path (v2)", async () => {
@@ -178,6 +182,9 @@ describe("Relayer", () => {
     expect(mockLoggerInfo).toHaveBeenCalledWith(
       "Added new relay path: chainA (cosmos) <-> chainB (cosmos)",
     );
+    // Initial relayed heights are seeded to the chains' current height (100)
+    // so the first relay query is bounded rather than a genesis scan.
+    expect(storage.updateRelayedHeights).toHaveBeenCalledWith(1, 100, 100, 100, 100);
   });
 
   it("should add an existing relay path", async () => {

@@ -6,16 +6,20 @@ sleep 1
 
 # Run commands with keyring
 /bin/with_keyring bash -c "
-    ibc-v2-ts-relayer add-mnemonic -c marsibc --mnemonic \"other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy\"
-    ibc-v2-ts-relayer add-mnemonic -c venusibc --mnemonic \"other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy\"
+    ibc-v2-ts-relayer add-mnemonic -c atomone-testnet-1 --mnemonic \"other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy\"
+    ibc-v2-ts-relayer add-mnemonic -c test-13 --mnemonic \"other razor era scene permit morning lend scrub habit beyond mixed icon alcohol fuel news glory alien actual bachelor spell album fitness squeeze energy\"
 
-    ibc-v2-ts-relayer add-gas-price -c marsibc 0.025umars
-    ibc-v2-ts-relayer add-gas-price -c venusibc 0.025uvenus
+    ibc-v2-ts-relayer add-gas-price -c atomone-testnet-1 0.025uphoton
+    ibc-v2-ts-relayer add-gas-price -c test-13 0.025ugnot
 
     ibc-v2-ts-relayer add-path \
-        -s marsibc -d venusibc \
-        --surl http://mars:26657 \
-        --durl http://venus:26657
+        -s atomone-testnet-1 \
+        -d test-13 \
+        --surl https://atomone-testnet-1-rpc.allinbits.services \
+        --durl https://rpc.test13.testnets.gno.land \
+        --dquery https://test13.indexer.onbloc.xyz/graphql/query \
+        --dt gno \
+        --ibcv 2
 
     exec \"\$@\"
 " -- "$@"

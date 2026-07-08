@@ -685,7 +685,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment)),
-        gas_fee: Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment / 1000) + "ugnot",
+        gas_fee: Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment * 4 / 100) + "ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
@@ -780,7 +780,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment)),
-        gas_fee: Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment / 1000) + "ugnot",
+        gas_fee: Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment * 4 / 100) + "ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
@@ -962,7 +962,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: BigInt(Math.floor(GNO_GAS_PER_RECV_PACKET * this.gasAdjustment)) * BigInt(packets.length),
-      gas_fee: Math.floor(GNO_GAS_PER_RECV_PACKET * this.gasAdjustment * packets.length / 1000) + "ugnot",
+      gas_fee: Math.floor(GNO_GAS_PER_RECV_PACKET * this.gasAdjustment * packets.length * 4 / 100) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1069,7 +1069,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: BigInt(Math.floor(GNO_GAS_PER_ACK * this.gasAdjustment)) * BigInt(acks.length),
-      gas_fee: Math.floor(GNO_GAS_PER_ACK * this.gasAdjustment * acks.length / 1000) + "ugnot",
+      gas_fee: Math.floor(GNO_GAS_PER_ACK * this.gasAdjustment * acks.length * 4 / 100) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1181,7 +1181,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: BigInt(Math.floor(GNO_GAS_PER_TIMEOUT * this.gasAdjustment)) * BigInt(packets.length),
-      gas_fee: Math.floor(GNO_GAS_PER_TIMEOUT * this.gasAdjustment * packets.length / 1000) + "ugnot",
+      gas_fee: Math.floor(GNO_GAS_PER_TIMEOUT * this.gasAdjustment * packets.length * 4 / 100) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1269,7 +1269,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment)),
-        gas_fee: Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment / 1000) + "ugnot",
+        gas_fee: Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment * 4 / 100) + "ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
