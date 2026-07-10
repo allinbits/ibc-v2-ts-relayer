@@ -356,7 +356,17 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       height,
     });
 
-    const mappedValidators = validators.validators.map(val => ({
+    // gno computes header.ValidatorsHash as an order-dependent merkle root over
+    // its validator set sorted by raw address, and verifies commits via a binary
+    // search (GetByAddress) that also assumes that order. AtomOne's
+    // ConvertToGnoValidatorSet does NOT re-sort, so we must submit the set in
+    // gno's canonical order. Sort by raw address bytes (NOT bech32, which
+    // reorders bytes) to match tm2 crypto.Address.Compare.
+    const sortedValidators = [...validators.validators].sort((a, b) =>
+      Buffer.compare(Buffer.from(a.address), Buffer.from(b.address)),
+    );
+
+    const mappedValidators = sortedValidators.map(val => ({
       address: toBech32(this.addressPrefix, val.address),
       pubKey: tendermint.crypto.keys.PublicKey.fromPartial({
         ed25519: val.pubkey.data,
