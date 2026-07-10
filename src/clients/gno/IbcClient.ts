@@ -319,7 +319,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       },
     });
 
-    const signatures = rpcCommit.precommits.map(sig => ({
+    const signatures = rpcCommit.precommits.filter(sig => sig !== null && sig !== undefined).map(sig => ({
       ...sig,
       height: BigInt(sig.height),
       round: BigInt(sig.round),
