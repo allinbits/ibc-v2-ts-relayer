@@ -1230,8 +1230,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       throw new Error(`Expected 2 proof ops, got ${proof?.ops.length ?? 0}. Are you using stargate?`);
     }
 
-    // we don't need the results, but we can ensure the data is the proper format
-    checkAndParseOp(proof.ops[0], "ics23:iavl", key);
+    // we don't need the results, but we can ensure the data is the proper format.
+    // The gno chain's commitment store is a B+tree (ics23:bptree), not IAVL.
+    checkAndParseOp(proof.ops[0], "ics23:bptree", key);
     checkAndParseOp(proof.ops[1], "ics23:simple", toAscii(store));
 
     return {
