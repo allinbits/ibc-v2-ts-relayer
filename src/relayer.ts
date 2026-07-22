@@ -127,6 +127,12 @@ export class Relayer extends EventEmitter {
         addressPrefix: prefixB,
         estimatedBlockTime: 6000,
       });
+    // Capture each chain's current height *before* the client/channel is
+    // created. No IBC events for this path can exist below this height, so we
+    // use it as the initial relay floor to avoid a "since genesis" event scan
+    // on the first relay loop. Captured here (pre-creation) so it is provably
+    // never above the client/channel creation height for either v1 or v2.
+    const [initHeightA, initHeightB] = await Promise.all([clientA.currentHeight(), clientB.currentHeight()]);
     if (version === 1) {
       const link = await Link.createWithNewConnections(
         clientA, clientB, this.logger);
@@ -137,6 +143,9 @@ export class Relayer extends EventEmitter {
       this.relayPaths = await storage.getRelayPaths();
 
       if (path) {
+        // Seed heights before the link is visible to the relay loop so the
+        // first query for this path is bounded, not a genesis scan.
+        await this.seedInitialHeights(path.id, initHeightA, initHeightB);
         this.links.set(path.id, link);
         this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
       }
@@ -154,9 +163,41 @@ export class Relayer extends EventEmitter {
       this.relayPaths = await storage.getRelayPaths();
 
       if (path) {
+        // Seed heights before the link is visible to the relay loop so the
+        // first query for this path is bounded, not a genesis scan.
+        await this.seedInitialHeights(path.id, initHeightA, initHeightB);
         this.links.set(path.id, link);
         this.logger.info(`Added new relay path: ${path.chainIdA} (${path.chainTypeA}) <-> ${path.chainIdB} (${path.chainTypeB})`);
       }
+    }
+  }
+
+  /**
+   * Seed the initial relayed heights for a freshly created path.
+   *
+   * The client (v2) / channel (v1) has just been created, so no packets or
+   * acks for this path can exist below the given heights. Persisting them as
+   * the starting floor means the first relay loop queries `send_packet` /
+   * `write_acknowledgement` events from the creation height rather than from
+   * genesis, which is far cheaper on the RPC nodes / indexers. From the second
+   * loop onward the heights advance to `currentHeight()` on their own, so this
+   * only matters for the very first query.
+   *
+   * Only called for paths the relayer itself creates. Paths adopted via
+   * `addExistingRelayPath` are intentionally left at 0 so any in-flight backlog
+   * predating relayer startup is still picked up.
+   */
+  private async seedInitialHeights(
+    pathId: number,
+    heightA: number,
+    heightB: number,
+  ): Promise<void> {
+    try {
+      await storage.updateRelayedHeights(pathId, heightA, heightB, heightA, heightB);
+      this.logger.info(`Seeded initial relayed heights for path ${pathId} to creation heights: A=${heightA}, B=${heightB}`);
+    }
+    catch (e) {
+      this.logger.warn(`Failed to seed initial relayed heights for path ${pathId}; first relay loop will scan from genesis: ${e}`);
     }
   }
 
