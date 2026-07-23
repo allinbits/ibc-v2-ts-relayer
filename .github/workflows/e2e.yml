@@ -92,3 +92,9 @@ jobs:
         docker logs ts-relayer
         export RELAYER_MNEMONIC
         pnpm test:txs:e2e
+
+    # The test step exits on failure before the in-step `docker logs` can run,
+    # so dump the relayer logs unconditionally to see relay-loop errors.
+    - name: Relayer logs
+      if: always()
+      run: docker logs ts-relayer 2>&1 || true

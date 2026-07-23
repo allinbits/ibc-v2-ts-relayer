@@ -319,7 +319,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       },
     });
 
-    const signatures = rpcCommit.precommits.map(sig => ({
+    const signatures = rpcCommit.precommits.filter(sig => sig !== null && sig !== undefined).map(sig => ({
       ...sig,
       height: BigInt(sig.height),
       round: BigInt(sig.round),
@@ -356,7 +356,17 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       height,
     });
 
-    const mappedValidators = validators.validators.map(val => ({
+    // gno computes header.ValidatorsHash as an order-dependent merkle root over
+    // its validator set sorted by raw address, and verifies commits via a binary
+    // search (GetByAddress) that also assumes that order. AtomOne's
+    // ConvertToGnoValidatorSet does NOT re-sort, so we must submit the set in
+    // gno's canonical order. Sort by raw address bytes (NOT bech32, which
+    // reorders bytes) to match tm2 crypto.Address.Compare.
+    const sortedValidators = [...validators.validators].sort((a, b) =>
+      Buffer.compare(Buffer.from(a.address), Buffer.from(b.address)),
+    );
+
+    const mappedValidators = sortedValidators.map(val => ({
       address: toBech32(this.addressPrefix, val.address),
       pubKey: tendermint.crypto.keys.PublicKey.fromPartial({
         ed25519: val.pubkey.data,
@@ -685,7 +695,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment)),
-        gas_fee: Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment / 1000) + "ugnot",
+        gas_fee: Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment * 4 / 100) + "ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
@@ -780,7 +790,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment)),
-        gas_fee: Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment / 1000) + "ugnot",
+        gas_fee: Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment * 4 / 100) + "ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
@@ -962,7 +972,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: BigInt(Math.floor(GNO_GAS_PER_RECV_PACKET * this.gasAdjustment)) * BigInt(packets.length),
-      gas_fee: Math.floor(GNO_GAS_PER_RECV_PACKET * this.gasAdjustment * packets.length / 1000) + "ugnot",
+      gas_fee: Math.floor(GNO_GAS_PER_RECV_PACKET * this.gasAdjustment * packets.length * 4 / 100) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1069,7 +1079,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: BigInt(Math.floor(GNO_GAS_PER_ACK * this.gasAdjustment)) * BigInt(acks.length),
-      gas_fee: Math.floor(GNO_GAS_PER_ACK * this.gasAdjustment * acks.length / 1000) + "ugnot",
+      gas_fee: Math.floor(GNO_GAS_PER_ACK * this.gasAdjustment * acks.length * 4 / 100) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1181,7 +1191,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const txFee: TxFee = {
       gas_wanted: BigInt(Math.floor(GNO_GAS_PER_TIMEOUT * this.gasAdjustment)) * BigInt(packets.length),
-      gas_fee: Math.floor(GNO_GAS_PER_TIMEOUT * this.gasAdjustment * packets.length / 1000) + "ugnot",
+      gas_fee: Math.floor(GNO_GAS_PER_TIMEOUT * this.gasAdjustment * packets.length * 4 / 100) + "ugnot",
     };
 
     const tx: Tx = {
@@ -1230,8 +1240,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       throw new Error(`Expected 2 proof ops, got ${proof?.ops.length ?? 0}. Are you using stargate?`);
     }
 
-    // we don't need the results, but we can ensure the data is the proper format
-    checkAndParseOp(proof.ops[0], "ics23:iavl", key);
+    // we don't need the results, but we can ensure the data is the proper format.
+    // The gno chain's commitment store is a B+tree (ics23:bptree), not IAVL (ics23:iavl).
+    checkAndParseOp(proof.ops[0], "ics23:bptree", key);
     checkAndParseOp(proof.ops[1], "ics23:simple", toAscii(store));
 
     return {
@@ -1269,7 +1280,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment)),
-        gas_fee: Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment / 1000) + "ugnot",
+        gas_fee: Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment * 4 / 100) + "ugnot",
       });
 
     if (result.deliver_tx.ResponseBase.Error) {
