@@ -319,18 +319,32 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       },
     });
 
-    const signatures = rpcCommit.precommits.filter(sig => sig !== null && sig !== undefined).map(sig => ({
-      ...sig,
-      height: BigInt(sig.height),
-      round: BigInt(sig.round),
-      blockId: {
-        hash: sig.blockId?.hash,
-        partsHeader: sig.blockId?.parts,
-      },
-      validatorAddress: sig.validatorAddress,
-      validatorIndex: BigInt(sig.validatorIndex),
-      timestamp: sig.timestamp && timestampFromDateNanos(sig.timestamp),
-    }));
+    const signatures = rpcCommit.precommits.map((sig) => {
+      if (sig) {
+        return {
+          ...sig,
+          height: BigInt(sig.height),
+          round: BigInt(sig.round),
+          blockId: {
+            hash: sig.blockId?.hash,
+            partsHeader: sig.blockId?.parts,
+          },
+          validatorAddress: sig.validatorAddress,
+          validatorIndex: BigInt(sig.validatorIndex),
+          timestamp: sig.timestamp && timestampFromDateNanos(sig.timestamp),
+        };
+      }
+      else {
+        // Validator did not sign (absent). The precommit slot MUST be kept so
+        // positions stay 1:1 with the validator set — the gno light client
+        // verifies each signature by index and derives the vote sign-bytes from
+        // that index. A `null` element can't be proto-encoded (it also crashes
+        // Commit.fromPartial), so emit a zero-value CommitSig instead: the Go
+        // consumer detects absent validators via an empty signature and skips
+        // them (atomone modules/10-gno ConvertToGnoCommit).
+        return ibc.lightclients.gno.v1.gno.CommitSig.fromPartial({});
+      }
+    });
     const commit = ibc.lightclients.gno.v1.gno.Commit.fromPartial({
       blockId: {
         hash: rpcCommit.blockId.hash,
@@ -402,6 +416,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   // For the vote sign bytes, it checks (from the commit):
   //   Height, Round, BlockId, TimeStamp, ChainID
   public async buildHeader(lastHeight: number, targetHeight?: number): Promise<ibc.lightclients.gno.v1.gno.Header> {
+    try {
     const signedHeader = await this.getSignedHeader(targetHeight);
     // "assert that trustedVals is NextValidators of last trusted header"
     // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
@@ -414,6 +429,10 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       trustedHeight: this.revisionHeight(lastHeight),
       trustedValidators: await this.getValidatorSet(validatorHeight),
     });
+    }catch(e) {
+      console.trace();
+      console.log(e);
+    }
   }
 
   public async getGnoConsensusStateAtHeight(_clientId: string, _consensusHeight?: Height): Promise<AnyConsensusState> {

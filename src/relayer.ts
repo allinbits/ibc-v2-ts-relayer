@@ -295,28 +295,28 @@ export class Relayer extends EventEmitter {
               senderAddress: await getSenderAddress(signerA as OfflineSigner, path.chainIdA),
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-              gasAdjustment: feesA.gasAdjustment,
+              gasAdjustment: feesA.gasAdjustment > 1 ? feesA.gasAdjustment : 1.4,
             })
             : await GnoIbcClient.connectWithSigner(path.nodeA, path.queryNodeA, signerA as GnoWallet, {
               senderAddress: (await (signerA as GnoWallet).getAddress()),
               addressPrefix: prefixA,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-              gasAdjustment: feesA.gasAdjustment,
+              gasAdjustment: feesA.gasAdjustment > 1.4 ? feesA.gasAdjustment : 2,
             });
           const clientB = path.chainTypeB === ChainType.Cosmos
             ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
               senderAddress: await getSenderAddress(signerB as OfflineSigner, path.chainIdB),
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-              gasAdjustment: feesB.gasAdjustment,
+              gasAdjustment: feesB.gasAdjustment > 1 ? feesB.gasAdjustment : 1.4,
             })
             : await GnoIbcClient.connectWithSigner(path.nodeB, path.queryNodeB, signerB as GnoWallet, {
               senderAddress: (await (signerB as GnoWallet).getAddress()),
               addressPrefix: prefixB,
               logger: this.logger,
               gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-              gasAdjustment: feesB.gasAdjustment,
+              gasAdjustment: feesB.gasAdjustment > 1.4 ? feesB.gasAdjustment : 2,
             });
           if (path.version === 1) {
             this.links.set(path.id, await Link.createWithExistingConnections(clientA, clientB, path.clientA, path.clientB, this.logger));
@@ -430,6 +430,7 @@ export class Relayer extends EventEmitter {
       }
       catch (e) {
         consecutiveErrors++;
+        console.trace();
         this.logger.error("Error in relayer loop: " + e, {
           error: e,
         });
