@@ -8,3 +8,7 @@ onlyBuiltDependencies:
   - esbuild
   - protobufjs
   - sqlite3
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@atomone/*'
+  - '@gnolang/*'
