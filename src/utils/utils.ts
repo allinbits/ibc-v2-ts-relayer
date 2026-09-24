@@ -41,6 +41,9 @@ import {
   ProofOps,
 } from "@atomone/cosmos-ibc-types/tendermint/crypto/proof.js";
 import {
+  sha256,
+} from "@cosmjs/crypto";
+import {
   fromHex, fromUtf8, toBase64, toHex,
 } from "@cosmjs/encoding";
 import {
@@ -72,7 +75,6 @@ import {
 import {
   Ack, AckV2, ChainType, ChannelHandshakeProof, ConnectionHandshakeProof, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types/index.js";
-import { sha256 } from "@cosmjs/crypto";
 
 /**
  * Safely extracts an error message from an unknown caught value.
