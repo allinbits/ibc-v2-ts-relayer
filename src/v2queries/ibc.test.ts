@@ -4,14 +4,14 @@ import {
   QueryPacketCommitmentResponse,
   QueryUnreceivedAcksResponse,
   QueryUnreceivedPacketsResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/query.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/query.js";
 import {
   QueryClientImpl as ChannelV2Query,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/query.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/query.js";
 import {
   QueryClientImpl as ClientV2Query,
   QueryCounterpartyInfoResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v2/query.js";
+} from "@atomone/atomone-types/ibc/core/client/v2/query.js";
 import {
   createProtobufRpcClient,
   QueryClient,
@@ -36,16 +36,16 @@ vi.mock("@cosmjs/stargate", async () => {
   };
 });
 
-vi.mock("@atomone/cosmos-ibc-types/ibc/core/channel/v2/query.js", async () => {
-  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/channel/v2/query.js");
+vi.mock("@atomone/atomone-types/ibc/core/channel/v2/query.js", async () => {
+  const actual = await vi.importActual("@atomone/atomone-types/ibc/core/channel/v2/query.js");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
   };
 });
 
-vi.mock("@atomone/cosmos-ibc-types/ibc/core/client/v2/query.js", async () => {
-  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/client/v2/query.js");
+vi.mock("@atomone/atomone-types/ibc/core/client/v2/query.js", async () => {
+  const actual = await vi.importActual("@atomone/atomone-types/ibc/core/client/v2/query.js");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),

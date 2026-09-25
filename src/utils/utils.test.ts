@@ -1,19 +1,19 @@
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+} from "@atomone/atomone-types/google/protobuf/any.js";
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   fromHex,
   toUtf8,

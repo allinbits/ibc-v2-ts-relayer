@@ -1,30 +1,30 @@
 /* eslint-disable max-lines */
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+} from "@atomone/atomone-types/google/protobuf/any.js";
 import {
   fromTimestamp,
-} from "@atomone/cosmos-ibc-types/helpers.js";
+} from "@atomone/atomone-types/helpers.js";
 import {
   Order, Packet,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   MerkleProof,
-} from "@atomone/cosmos-ibc-types/ibc/core/commitment/v1/commitment.js";
+} from "@atomone/atomone-types/ibc/core/commitment/v1/commitment.js";
 import {
   QueryConnectionResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/query.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
   Header as TendermintHeader,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   fromBase64,
   fromHex, toAscii, toBech32, toHex,
@@ -342,7 +342,8 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         // Commit.fromPartial), so emit a zero-value CommitSig instead: the Go
         // consumer detects absent validators via an empty signature and skips
         // them (atomone modules/10-gno ConvertToGnoCommit).
-        return ibc.lightclients.gno.v1.gno.CommitSig.fromPartial({});
+        return ibc.lightclients.gno.v1.gno.CommitSig.fromPartial({
+        });
       }
     });
     const commit = ibc.lightclients.gno.v1.gno.Commit.fromPartial({
@@ -417,19 +418,20 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   //   Height, Round, BlockId, TimeStamp, ChainID
   public async buildHeader(lastHeight: number, targetHeight?: number): Promise<ibc.lightclients.gno.v1.gno.Header> {
     try {
-    const signedHeader = await this.getSignedHeader(targetHeight);
-    // "assert that trustedVals is NextValidators of last trusted header"
-    // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
-    const validatorHeight = lastHeight + 1;
-    /* eslint @typescript-eslint/no-non-null-assertion: "off" */
-    const curHeight = Number(signedHeader.header!.height);
-    return ibc.lightclients.gno.v1.gno.Header.fromPartial({
-      signedHeader,
-      validatorSet: await this.getValidatorSet(curHeight),
-      trustedHeight: this.revisionHeight(lastHeight),
-      trustedValidators: await this.getValidatorSet(validatorHeight),
-    });
-    }catch(e) {
+      const signedHeader = await this.getSignedHeader(targetHeight);
+      // "assert that trustedVals is NextValidators of last trusted header"
+      // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
+      const validatorHeight = lastHeight + 1;
+      /* eslint @typescript-eslint/no-non-null-assertion: "off" */
+      const curHeight = Number(signedHeader.header!.height);
+      return ibc.lightclients.gno.v1.gno.Header.fromPartial({
+        signedHeader,
+        validatorSet: await this.getValidatorSet(curHeight),
+        trustedHeight: this.revisionHeight(lastHeight),
+        trustedValidators: await this.getValidatorSet(validatorHeight),
+      });
+    }
+    catch (e) {
       console.trace();
       console.log(e);
     }

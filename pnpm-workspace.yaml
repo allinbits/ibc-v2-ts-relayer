@@ -1,10 +1,13 @@
 allowBuilds:
-  better-sqlite3: true
+  better-sqlite3: false
   esbuild: true
   protobufjs: true
   sqlite3: true
 onlyBuiltDependencies:
-  - better-sqlite3
   - esbuild
   - protobufjs
   - sqlite3
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@atomone/*'
+  - '@gnolang/*'

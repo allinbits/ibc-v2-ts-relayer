@@ -3,14 +3,14 @@ import {
 } from "node:crypto";
 
 import {
+  FungibleTokenPacketData,
+} from "@atomone/atomone-types/ibc/applications/transfer/v1/packet.js";
+import {
   Payload,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   MsgSendPacket,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/tx.js";
-import {
-  FungibleTokenPacketData,
-} from "@clockworkgr/ibc-v2-client-ts/lib/ibc.applications.transfer.v1/types/ibc/applications/transfer/v1/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/tx.js";
 import {
   DirectSecp256k1HdWallet,
   GeneratedType,

@@ -1,13 +1,13 @@
 /* eslint-disable max-lines */
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+} from "@atomone/atomone-types/google/protobuf/any.js";
 import {
   MsgTransfer,
-} from "@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/tx.js";
+} from "@atomone/atomone-types/ibc/applications/transfer/v1/tx.js";
 import {
   Order, Packet, State,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/channel.js";
 import {
   MsgAcknowledgement,
   MsgChannelOpenAck,
@@ -16,46 +16,46 @@ import {
   MsgChannelOpenTry,
   MsgRecvPacket,
   MsgTimeout,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/tx.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/tx.js";
 import {
   Acknowledgement, Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/tx.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/tx.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   MsgCreateClient,
   MsgUpdateClient,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/tx.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/tx.js";
 import {
   MsgRegisterCounterparty,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v2/tx.js";
+} from "@atomone/atomone-types/ibc/core/client/v2/tx.js";
 import {
   Version,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/connection.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/connection.js";
 import {
   QueryConnectionResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/query.js";
 import {
   MsgConnectionOpenAck,
   MsgConnectionOpenConfirm,
   MsgConnectionOpenInit,
   MsgConnectionOpenTry,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/tx.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/tx.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
   Header as TendermintHeader,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   Commit, Header, SignedHeader,
-} from "@atomone/cosmos-ibc-types/tendermint/types/types.js";
+} from "@atomone/atomone-types/tendermint/types/types.js";
 import {
   blockIDFlagFromJSON, ValidatorSet,
-} from "@atomone/cosmos-ibc-types/tendermint/types/validator.js";
+} from "@atomone/atomone-types/tendermint/types/validator.js";
 import {
   fromHex, toAscii, toHex,
 } from "@cosmjs/encoding";
@@ -106,7 +106,7 @@ import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
 } from "../BaseIbcClient.js";
 
-const ibcRegistryInstance = new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as GeneratedType]]);
+const ibcRegistryInstance = new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as unknown as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as unknown as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as unknown as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as unknown as GeneratedType]]);
 export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
   gasAdjustment?: number
@@ -867,6 +867,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         clientId,
         counterparty: {
           clientId: remoteClientId,
+          connectionId: "",
           prefix: defaultMerklePrefix,
         },
         version: defaultConnectionVersion,
@@ -1082,6 +1083,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
           ordering,
           counterparty: {
             portId: remotePortId,
+            channelId: "",
           },
           connectionHops: [connectionId],
           version,
