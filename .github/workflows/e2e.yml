@@ -44,13 +44,15 @@ jobs:
           - 3317:1317
     steps:
     - uses: actions/checkout@v7
+    # Installs the pnpm version pinned in package.json's packageManager field.
+    - uses: pnpm/action-setup@v6
     - uses: actions/setup-node@v7
       with:
         node-version: 24.x
         check-latest: true
 
     - name: Install dependencies
-      run: npm install -g pnpm && pnpm install
+      run: pnpm install
 
     - name: Build the project
       run: pnpm build
