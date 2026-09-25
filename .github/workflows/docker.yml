@@ -138,6 +138,10 @@ jobs:
         FORCE="${{ inputs.force_chains }}"
         if [ "$FORCE" = "all" ] || echo ",$FORCE," | grep -q ",${{ matrix.chain }},"; then
           echo "build=true" >> "$GITHUB_OUTPUT"
+        elif [ -n "$FORCE" ]; then
+          # An explicit list selects only those chains; the paths filter has no
+          # base to diff against on workflow_dispatch and would match them all.
+          echo "build=false" >> "$GITHUB_OUTPUT"
         else
           echo "build=${{ steps.changes.outputs.chain }}" >> "$GITHUB_OUTPUT"
         fi
