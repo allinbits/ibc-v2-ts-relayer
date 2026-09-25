@@ -1,19 +1,19 @@
 /* istanbul ignore file -- @preserve */
 import {
   Order, Packet,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   QueryConnectionResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/query.js";
 import {
   ClientState as TendermintClientState, ConsensusState as TendermintConsensusState, Header as TendermintHeader,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ReadonlyDateWithNanoseconds,
 } from "@cosmjs/tendermint-rpc";

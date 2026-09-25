@@ -1,12 +1,12 @@
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+} from "@atomone/atomone-types/google/protobuf/any.js";
 import {
   QueryClientImpl as TransferQuery,
   QueryDenomResponse,
   QueryDenomsResponse,
   QueryParamsResponse as QueryTransferParamsResponse,
-} from "@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query.js";
+} from "@atomone/atomone-types/ibc/applications/transfer/v1/query.js";
 import {
   QueryChannelClientStateResponse,
   QueryChannelConsensusStateResponse,
@@ -23,10 +23,10 @@ import {
   QueryPacketReceiptResponse,
   QueryUnreceivedAcksResponse,
   QueryUnreceivedPacketsResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/query.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   QueryClientImpl as ClientQuery,
   QueryClientParamsResponse,
@@ -35,7 +35,7 @@ import {
   QueryConsensusStateRequest,
   QueryConsensusStateResponse,
   QueryConsensusStatesResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/query.js";
 import {
   QueryClientConnectionsResponse,
   QueryClientImpl as ConnectionQuery,
@@ -44,11 +44,11 @@ import {
   QueryConnectionConsensusStateResponse,
   QueryConnectionResponse,
   QueryConnectionsResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/query.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   createPagination, createProtobufRpcClient, QueryClient,
 } from "@cosmjs/stargate";

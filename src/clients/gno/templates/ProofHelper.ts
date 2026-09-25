@@ -1,12 +1,12 @@
 import {
   InnerOp,
-} from "@atomone/cosmos-ibc-types/cosmos/ics23/v1/proofs.js";
+} from "@atomone/atomone-types/cosmos/ics23/v1/proofs.js";
 import {
   ExistenceProof, LeafOp, NonExistenceProof,
-} from "@atomone/cosmos-ibc-types/cosmos/ics23/v1/proofs.js";
+} from "@atomone/atomone-types/cosmos/ics23/v1/proofs.js";
 import {
   MerkleProof,
-} from "@atomone/cosmos-ibc-types/ibc/core/commitment/v1/commitment.js";
+} from "@atomone/atomone-types/ibc/core/commitment/v1/commitment.js";
 import {
   toHex,
 } from "@cosmjs/encoding";

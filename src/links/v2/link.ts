@@ -1,9 +1,9 @@
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   arrayContentEquals, isDefined,
 } from "@cosmjs/utils";

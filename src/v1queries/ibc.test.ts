@@ -2,26 +2,26 @@
 /* eslint-disable max-lines-per-function */
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+} from "@atomone/atomone-types/google/protobuf/any.js";
 import {
   QueryClientImpl as TransferQuery,
-} from "@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query.js";
+} from "@atomone/atomone-types/ibc/applications/transfer/v1/query.js";
 import {
   QueryClientImpl as ChannelQuery,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/query.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   QueryClientImpl as ClientQuery,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/query.js";
 import {
   QueryClientImpl as ConnectionQuery,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/query.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   createPagination,
   createProtobufRpcClient,
@@ -47,32 +47,32 @@ vi.mock("@cosmjs/stargate", async () => {
   };
 });
 
-vi.mock("@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query", async () => {
-  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/query");
+vi.mock("@atomone/atomone-types/ibc/applications/transfer/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/atomone-types/ibc/applications/transfer/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
   };
 });
 
-vi.mock("@atomone/cosmos-ibc-types/ibc/core/channel/v1/query", async () => {
-  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/channel/v1/query");
+vi.mock("@atomone/atomone-types/ibc/core/channel/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/atomone-types/ibc/core/channel/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
   };
 });
 
-vi.mock("@atomone/cosmos-ibc-types/ibc/core/client/v1/query", async () => {
-  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/client/v1/query");
+vi.mock("@atomone/atomone-types/ibc/core/client/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/atomone-types/ibc/core/client/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),
   };
 });
 
-vi.mock("@atomone/cosmos-ibc-types/ibc/core/connection/v1/query", async () => {
-  const actual = await vi.importActual("@atomone/cosmos-ibc-types/ibc/core/connection/v1/query");
+vi.mock("@atomone/atomone-types/ibc/core/connection/v1/query", async () => {
+  const actual = await vi.importActual("@atomone/atomone-types/ibc/core/connection/v1/query");
   return {
     ...actual,
     QueryClientImpl: vi.fn(),

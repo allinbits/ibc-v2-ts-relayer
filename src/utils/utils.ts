@@ -1,45 +1,45 @@
 import {
   Bech32PrefixResponse,
-} from "@atomone/cosmos-ibc-types/cosmos/auth/v1beta1/query.js";
+} from "@atomone/atomone-types/cosmos/auth/v1beta1/query.js";
 import {
   CommitmentProof, HashOp, LengthOp,
-} from "@atomone/cosmos-ibc-types/cosmos/ics23/v1/proofs.js";
+} from "@atomone/atomone-types/cosmos/ics23/v1/proofs.js";
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+} from "@atomone/atomone-types/google/protobuf/any.js";
 import {
   Timestamp,
-} from "@atomone/cosmos-ibc-types/google/protobuf/timestamp.js";
+} from "@atomone/atomone-types/google/protobuf/timestamp.js";
 import {
   Packet,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/channel.js";
 import {
   Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   MerkleProof,
-} from "@atomone/cosmos-ibc-types/ibc/core/commitment/v1/commitment.js";
+} from "@atomone/atomone-types/ibc/core/commitment/v1/commitment.js";
 import {
   ClientState as SolomachineV3ClientState,
   ConsensusState as SolomachineV3ConsensusState,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/solomachine/v3/solomachine.js";
+} from "@atomone/atomone-types/ibc/lightclients/solomachine/v3/solomachine.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   ClientState as WasmClientState,
   ConsensusState as WasmConsensusState,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/wasm/v1/wasm.js";
+} from "@atomone/atomone-types/ibc/lightclients/wasm/v1/wasm.js";
 import {
   PublicKey as ProtoPubKey,
-} from "@atomone/cosmos-ibc-types/tendermint/crypto/keys.js";
+} from "@atomone/atomone-types/tendermint/crypto/keys.js";
 import {
   ProofOps,
-} from "@atomone/cosmos-ibc-types/tendermint/crypto/proof.js";
+} from "@atomone/atomone-types/tendermint/crypto/proof.js";
 import {
   sha256,
 } from "@cosmjs/crypto";
@@ -63,7 +63,7 @@ import {
   arrayContentEquals,
 } from "@cosmjs/utils";
 import {
-  ibc,
+  cosmos, ibc,
 } from "@gnolang/gno-types";
 import {
   TM2Error,
@@ -276,8 +276,12 @@ export function buildTendermintClientState(
       minPrefixLength: 4,
       maxPrefixLength: 12,
       childSize: 33,
+      emptyChild: new Uint8Array(),
       hash: HashOp.SHA256,
     },
+    minDepth: 0,
+    maxDepth: 0,
+    prehashKeyBeforeComparison: false,
   };
   const tendermintSpec = {
     leafSpec: {
@@ -292,8 +296,12 @@ export function buildTendermintClientState(
       minPrefixLength: 1,
       maxPrefixLength: 1,
       childSize: 32,
+      emptyChild: new Uint8Array(),
       hash: HashOp.SHA256,
     },
+    minDepth: 0,
+    maxDepth: 0,
+    prehashKeyBeforeComparison: false,
   };
 
   return TendermintClientState.fromPartial({
@@ -304,12 +312,15 @@ export function buildTendermintClientState(
     },
     unbondingPeriod: {
       seconds: BigInt(unbondingPeriodSec),
+      nanos: 0,
     },
     trustingPeriod: {
       seconds: BigInt(trustPeriodSec),
+      nanos: 0,
     },
     maxClockDrift: {
       seconds: 20n,
+      nanos: 0,
     },
     latestHeight: height,
     proofSpecs: [iavlSpec, tendermintSpec],
@@ -326,6 +337,9 @@ export function buildGnoClientState(
   trustPeriodSec: number,
   height: Height,
 ): ibc.lightclients.gno.v1.gno.ClientState {
+  const {
+    HashOp: GnoHashOp, LengthOp: GnoLengthOp,
+  } = cosmos.ics23.v1.proofs;
   /*
      * Copied here until https://github.com/confio/ics23/issues/36 is resolved
      * https://github.com/confio/ics23/blob/master/js/src/proofs.ts#L11-L26
@@ -333,10 +347,10 @@ export function buildGnoClientState(
   const iavlSpec = {
     leafSpec: {
       prefix: Uint8Array.from([0]),
-      hash: HashOp.SHA256,
-      prehashValue: HashOp.SHA256,
-      prehashKey: HashOp.NO_HASH,
-      length: LengthOp.VAR_PROTO,
+      hash: GnoHashOp.SHA256,
+      prehashValue: GnoHashOp.SHA256,
+      prehashKey: GnoHashOp.NO_HASH,
+      length: GnoLengthOp.VAR_PROTO,
     },
     innerSpec: {
       childOrder: [0, 1],
@@ -344,7 +358,7 @@ export function buildGnoClientState(
       maxPrefixLength: 1,
       childSize: 32,
       emptyChild: sha256(fromHex("02")),
-      hash: HashOp.SHA256,
+      hash: GnoHashOp.SHA256,
     },
     minDepth: 5,
     maxDepth: 60,
@@ -352,17 +366,17 @@ export function buildGnoClientState(
   const tendermintSpec = {
     leafSpec: {
       prefix: Uint8Array.from([0]),
-      hash: HashOp.SHA256,
-      prehashValue: HashOp.SHA256,
-      prehashKey: HashOp.NO_HASH,
-      length: LengthOp.VAR_PROTO,
+      hash: GnoHashOp.SHA256,
+      prehashValue: GnoHashOp.SHA256,
+      prehashKey: GnoHashOp.NO_HASH,
+      length: GnoLengthOp.VAR_PROTO,
     },
     innerSpec: {
       childOrder: [0, 1],
       minPrefixLength: 1,
       maxPrefixLength: 1,
       childSize: 32,
-      hash: HashOp.SHA256,
+      hash: GnoHashOp.SHA256,
     },
   };
 

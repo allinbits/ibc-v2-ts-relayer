@@ -1,13 +1,13 @@
 /* eslint-disable max-lines */
 import {
   Any,
-} from "@atomone/cosmos-ibc-types/google/protobuf/any.js";
+} from "@atomone/atomone-types/google/protobuf/any.js";
 import {
   MsgTransfer,
-} from "@atomone/cosmos-ibc-types/ibc/applications/transfer/v1/tx.js";
+} from "@atomone/atomone-types/ibc/applications/transfer/v1/tx.js";
 import {
   Order, Packet, State,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/channel.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/channel.js";
 import {
   MsgAcknowledgement,
   MsgChannelOpenAck,
@@ -16,46 +16,46 @@ import {
   MsgChannelOpenTry,
   MsgRecvPacket,
   MsgTimeout,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v1/tx.js";
+} from "@atomone/atomone-types/ibc/core/channel/v1/tx.js";
 import {
   Acknowledgement, Packet as PacketV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/packet.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
 import {
   MsgAcknowledgement as MsgAcknowledgementV2, MsgRecvPacket as MsgRecvPacketV2, MsgSendPacket, MsgTimeout as MsgTimeoutV2,
-} from "@atomone/cosmos-ibc-types/ibc/core/channel/v2/tx.js";
+} from "@atomone/atomone-types/ibc/core/channel/v2/tx.js";
 import {
   Height,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/client.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
   MsgCreateClient,
   MsgUpdateClient,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v1/tx.js";
+} from "@atomone/atomone-types/ibc/core/client/v1/tx.js";
 import {
   MsgRegisterCounterparty,
-} from "@atomone/cosmos-ibc-types/ibc/core/client/v2/tx.js";
+} from "@atomone/atomone-types/ibc/core/client/v2/tx.js";
 import {
   Version,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/connection.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/connection.js";
 import {
   QueryConnectionResponse,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/query.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/query.js";
 import {
   MsgConnectionOpenAck,
   MsgConnectionOpenConfirm,
   MsgConnectionOpenInit,
   MsgConnectionOpenTry,
-} from "@atomone/cosmos-ibc-types/ibc/core/connection/v1/tx.js";
+} from "@atomone/atomone-types/ibc/core/connection/v1/tx.js";
 import {
   ClientState as TendermintClientState,
   ConsensusState as TendermintConsensusState,
   Header as TendermintHeader,
-} from "@atomone/cosmos-ibc-types/ibc/lightclients/tendermint/v1/tendermint.js";
+} from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   Commit, Header, SignedHeader,
-} from "@atomone/cosmos-ibc-types/tendermint/types/types.js";
+} from "@atomone/atomone-types/tendermint/types/types.js";
 import {
   blockIDFlagFromJSON, ValidatorSet,
-} from "@atomone/cosmos-ibc-types/tendermint/types/validator.js";
+} from "@atomone/atomone-types/tendermint/types/validator.js";
 import {
   fromHex, toAscii, toHex,
 } from "@cosmjs/encoding";
@@ -867,6 +867,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         clientId,
         counterparty: {
           clientId: remoteClientId,
+          connectionId: "",
           prefix: defaultMerklePrefix,
         },
         version: defaultConnectionVersion,
@@ -1082,6 +1083,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
           ordering,
           counterparty: {
             portId: remotePortId,
+            channelId: "",
           },
           connectionHops: [connectionId],
           version,
