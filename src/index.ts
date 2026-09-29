@@ -3,19 +3,27 @@ import {
 } from "@cosmjs/stargate";
 import {
   Command,
+  InvalidArgumentError,
   Option,
 } from "commander";
 
 import * as pkgJson from "../package.json";
 import {
+  MisbehaviourMonitor,
+} from "./misbehaviour/monitor.js";
+import {
   Relayer,
 } from "./relayer.js";
 import {
   ChainType,
+  MisbehaviourStatus,
 } from "./types/index.js";
 import {
   log,
 } from "./utils/logging.js";
+import {
+  storage,
+} from "./utils/storage.js";
 
 // Global error handlers for uncaught exceptions and unhandled rejections
 process.on("uncaughtException", (error) => {
@@ -32,6 +40,39 @@ process.on("unhandledRejection", (reason) => {
   });
   process.exit(1);
 });
+
+// Stops a long-running command cleanly (finishing the current iteration and
+// closing the database) on SIGINT/SIGTERM.
+function stopOnSignal(name: string, stop: () => Promise<void>) {
+  let stopping = false;
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.once(signal, async () => {
+      if (stopping) {
+        return;
+      }
+      stopping = true;
+      log.info(`Received ${signal}, stopping ${name}...`);
+      try {
+        await stop();
+        process.exit(0);
+      }
+      catch (error) {
+        log.error(`Failed to stop ${name}`, {
+          error,
+        });
+        process.exit(1);
+      }
+    });
+  }
+}
+
+function parsePathIds(value: string): number[] {
+  const ids = value.split(",").map(id => Number(id.trim()));
+  if (ids.some(id => !Number.isInteger(id) || id <= 0)) {
+    throw new InvalidArgumentError("Expected comma-separated relay path IDs.");
+  }
+  return ids;
+}
 
 const program = new Command();
 program.name(pkgJson.name).description(pkgJson.description).version(pkgJson.version);
@@ -92,10 +133,37 @@ program.command("relay")
   .action(async () => {
     try {
       const relayer = new Relayer(log);
+      stopOnSignal("relayer", () => relayer.stop());
       await relayer.start();
     }
     catch (error) {
       log.error("Failed to start relayer", {
+        error,
+      });
+      process.exit(1);
+    }
+  });
+
+program.command("monitor")
+  .description("Watch the relay paths' light clients for misbehaviour and record it for the relayer to submit")
+  .option("--dry-run", "Record detected misbehaviour without having the relayer submit it", false)
+  .option("-p, --paths <ids>", "Only monitor these relay path IDs (comma-separated)", parsePathIds)
+  .action(async (options: {
+    dryRun: boolean
+    paths?: number[]
+  }) => {
+    try {
+      const monitor = new MisbehaviourMonitor(log.child({
+        service: "Misbehaviour Monitor",
+      }), {
+        dryRun: options.dryRun,
+        pathIds: options.paths,
+      });
+      stopOnSignal("misbehaviour monitor", () => monitor.stop());
+      await monitor.start();
+    }
+    catch (error) {
+      log.error("Failed to start misbehaviour monitor", {
         error,
       });
       process.exit(1);
@@ -203,6 +271,23 @@ program.command("dump-paths")
     }
     catch (error) {
       log.error("Failed to dump relay paths", {
+        error,
+      });
+      process.exit(1);
+    }
+  });
+program.command("dump-misbehaviour")
+  .description("Dump detected misbehaviour and its submission status")
+  .addOption(new Option("--status <status>", "Only show records with this status").choices(Object.values(MisbehaviourStatus)))
+  .action(async (options: {
+    status?: MisbehaviourStatus
+  }) => {
+    try {
+      const evidence = await storage.getMisbehaviourEvidence(options.status);
+      console.log(JSON.stringify(evidence, null, 2));
+    }
+    catch (error) {
+      log.error("Failed to dump misbehaviour evidence", {
         error,
       });
       process.exit(1);

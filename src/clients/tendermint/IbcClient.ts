@@ -91,8 +91,11 @@ import {
 } from "@gnolang/gno-types";
 
 import {
-  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
+  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientStatus, ClientType, CometCommitResponse, CometHeader, ConnectionHandshakeProof, ConsensusStateSummary, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, HeaderSummary, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
+import {
+  findUpdateClientHeader, parseClientStatus, summarizeConsensusState, timestampToNanos,
+} from "../../utils/misbehaviour.js";
 import {
   buildTendermintClientState, buildTendermintConsensusState, checkAndParseOp, convertProofsToIcs23, createDeliverTxFailureMessage, deepCloneAndMutate, heightQueryString, isTrustVerifyError, mapRpcPubKeyToProto, mergeUint8Arrays, parseAcksFromTxEvents, parseAcksFromTxEventsV2, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, presentPacketData, subtractBlock, timestampFromDateNanos, toBase64AsAny, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
@@ -451,6 +454,97 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       return this.getLatestGnoClientState(clientId);
     }
     throw new Error(`Unsupported chain type ${type} for getting latest client state.`);
+  }
+
+  public async getClientStatus(clientId: string): Promise<ClientStatus> {
+    const {
+      status,
+    } = await this.query.ibc.client.status(clientId);
+    return parseClientStatus(status);
+  }
+
+  public async getConsensusStatesAfter(clientId: string, type: ClientType, afterRevisionHeight: bigint, limit: number): Promise<ConsensusStateSummary[]> {
+    const heights = (await this.query.ibc.client.allConsensusStateHeights(clientId))
+      .filter(height => height.revisionHeight > afterRevisionHeight)
+      .sort((a, b) => (a.revisionNumber === b.revisionNumber
+        ? Number(a.revisionHeight - b.revisionHeight)
+        : Number(a.revisionNumber - b.revisionNumber)))
+      .slice(0, limit);
+    const summaries: ConsensusStateSummary[] = [];
+    for (const height of heights) {
+      summaries.push(summarizeConsensusState(height, await this.getConsensusStateAtHeight(clientId, type, height)));
+    }
+    return summaries;
+  }
+
+  public async getHeaderSummary(height: number): Promise<HeaderSummary> {
+    const header = await this.header(height);
+    return {
+      height,
+      timestampNanos: timestampToNanos(timestampFromDateNanos(header.time)),
+      appHash: header.appHash,
+      nextValidatorsHash: header.nextValidatorsHash,
+    };
+  }
+
+  public async findConflictingHeader(clientId: string, height: Height): Promise<Any | undefined> {
+    const client = validateIbcIdentifier(clientId, "clientId");
+    const updates = `update_client.client_id='${client}'`;
+    // ibc-go still emits the deprecated single-height attribute; fall back to
+    // the client's most recent updates when a node does not index it.
+    const searches = [
+      () => this.searchTendermintTxs(`${updates} AND update_client.consensus_height='${height.revisionNumber}-${height.revisionHeight}'`),
+      () => this.tm.txSearch({
+        query: updates,
+        order_by: "desc",
+        per_page: 100,
+      }),
+    ];
+    for (const search of searches) {
+      const {
+        txs,
+      } = await search();
+      for (const {
+        tx,
+      } of txs) {
+        const header = findUpdateClientHeader(tx, clientId, height.revisionHeight);
+        if (header) {
+          return header;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  public async submitMisbehaviour(clientId: string, misbehaviour: Any): Promise<MsgResult> {
+    this.logger.info(`Submit misbehaviour for client ${clientId}`);
+    const senderAddress = this.senderAddress;
+    const updateMsg = {
+      typeUrl: "/ibc.core.client.v1.MsgUpdateClient",
+      value: MsgUpdateClient.fromPartial({
+        signer: senderAddress,
+        clientId,
+        clientMessage: misbehaviour,
+      }),
+    };
+    this.debugMsg("MsgUpdateClient (misbehaviour)", updateMsg, (mutableMsg) => {
+      if (mutableMsg.value.clientMessage?.value) {
+        mutableMsg.value.clientMessage.value = toBase64AsAny(mutableMsg.value.clientMessage.value);
+      }
+    });
+    const result = await this.sign.signAndBroadcast(senderAddress, [updateMsg], this.gasAdjustment);
+    if (isDeliverTxFailure(result)) {
+      throw new Error(createDeliverTxFailureMessage(result));
+    }
+    return {
+      events: result.events,
+      transactionHash: result.transactionHash,
+      height: result.height,
+    };
+  }
+
+  public async submitConflictingHeader(clientId: string, src: BaseIbcClient, trustedHeight: number, targetHeight: number): Promise<number> {
+    return this.updateClientBisect(clientId, src, trustedHeight, targetHeight);
   }
 
   // trustedHeight must be proven by the client on the destination chain

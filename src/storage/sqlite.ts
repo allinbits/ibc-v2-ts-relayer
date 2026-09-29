@@ -31,7 +31,41 @@ CREATE TABLE IF NOT EXISTS chainFees (
     gasDenom TEXT NOT NULL,
     gasAdjustment DOUBLE NOT NULL DEFAULT 1.4,
     UNIQUE (chainId) ON CONFLICT REPLACE
+);
+CREATE TABLE IF NOT EXISTS misbehaviourEvidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    relayPathId INTEGER NOT NULL,
+    side TEXT NOT NULL,
+    hostChainId TEXT NOT NULL,
+    clientId TEXT NOT NULL,
+    revisionNumber INTEGER NOT NULL,
+    revisionHeight INTEGER NOT NULL,
+    trustedRevisionHeight INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    conflictingHeader TEXT,
+    conflictingHeaderTypeUrl TEXT,
+    status TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    txHash TEXT,
+    error TEXT,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL,
+    FOREIGN KEY (relayPathId) REFERENCES relayPaths(id),
+    UNIQUE (hostChainId, clientId, revisionNumber, revisionHeight)
+);
+CREATE TABLE IF NOT EXISTS monitorCursors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    relayPathId INTEGER NOT NULL,
+    side TEXT NOT NULL,
+    lastCheckedRevisionHeight INTEGER NOT NULL,
+    FOREIGN KEY (relayPathId) REFERENCES relayPaths(id),
+    UNIQUE (relayPathId, side)
 );`;
+
+// The relayer and the misbehaviour monitor run as separate processes sharing
+// this database: WAL lets the monitor write while the relayer reads, and the
+// busy timeout makes a writer wait for the other's lock instead of failing.
+const BUSY_TIMEOUT_MS = 10_000;
 
 let cachedDb: Database.Database | null = null;
 let cachedDbPath: string | null = null;
@@ -41,6 +75,8 @@ export const openDB = async (dbFile: string): Promise<Database.Database> => {
     return cachedDb;
   }
   const db = new Database(dbFile);
+  db.pragma("journal_mode = WAL");
+  db.pragma(`busy_timeout = ${BUSY_TIMEOUT_MS}`);
   await db.exec(baseSchema);
   cachedDb = db;
   cachedDbPath = dbFile;

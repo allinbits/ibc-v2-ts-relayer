@@ -1,6 +1,11 @@
 import {
   ChainFees,
   ChainType,
+  MisbehaviourEvidence,
+  MisbehaviourEvidenceUpdate,
+  MisbehaviourStatus,
+  NewMisbehaviourEvidence,
+  PathSide,
   RelayedHeights,
   RelayPaths,
 } from "../types/index.js";
@@ -108,4 +113,47 @@ export interface IStorage {
    * @returns Array of all RelayPaths records
    */
   getRelayPaths(): Promise<RelayPaths[]>
+
+  /**
+   * Records detected misbehaviour. A record for the same host chain, client
+   * and height is only stored once.
+   *
+   * @param evidence - The detected misbehaviour
+   * @returns The stored record (the existing one if it was already recorded)
+   */
+  addMisbehaviourEvidence(evidence: NewMisbehaviourEvidence): Promise<MisbehaviourEvidence>
+
+  /**
+   * Retrieves misbehaviour records, oldest first.
+   *
+   * @param status - Only return records with this status
+   * @returns Array of MisbehaviourEvidence records
+   */
+  getMisbehaviourEvidence(status?: MisbehaviourStatus): Promise<MisbehaviourEvidence[]>
+
+  /**
+   * Updates the submission state of a misbehaviour record.
+   *
+   * @param id - The record ID
+   * @param update - Fields to change
+   */
+  updateMisbehaviourEvidence(id: number, update: MisbehaviourEvidenceUpdate): Promise<void>
+
+  /**
+   * Retrieves the highest consensus height the monitor has checked.
+   *
+   * @param pathId - The relay path ID
+   * @param side - The path end whose client is monitored
+   * @returns The height, or 0 if nothing has been checked yet
+   */
+  getMonitorCursor(pathId: number, side: PathSide): Promise<number>
+
+  /**
+   * Stores the highest consensus height the monitor has checked.
+   *
+   * @param pathId - The relay path ID
+   * @param side - The path end whose client is monitored
+   * @param revisionHeight - The checked height
+   */
+  setMonitorCursor(pathId: number, side: PathSide, revisionHeight: number): Promise<void>
 }
