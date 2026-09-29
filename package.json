@@ -11,6 +11,7 @@
     "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "test:gno:e2e": "vitest run --config vitest.config.gno.ts",
     "test:txs:e2e": "vitest run --config vitest.config.txs.ts",
+    "test:misbehaviour:e2e": "vitest run --config vitest.config.misbehaviour.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },

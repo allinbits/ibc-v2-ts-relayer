@@ -73,6 +73,12 @@ jobs:
           DB_FILE: gno-relayer.db
       run: pnpm test:gno:e2e
 
+    - name: Run misbehaviour E2E tests
+      env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
+          DB_FILE: misbehaviour-relayer.db
+      run: pnpm test:misbehaviour:e2e
+
     - name: Dockerize relayer and run commands
       env:
         RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
