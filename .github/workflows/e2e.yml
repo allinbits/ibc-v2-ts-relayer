@@ -73,12 +73,6 @@ jobs:
           DB_FILE: gno-relayer.db
       run: pnpm test:gno:e2e
 
-    - name: Run misbehaviour E2E tests
-      env:
-          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
-          DB_FILE: misbehaviour-relayer.db
-      run: pnpm test:misbehaviour:e2e
-
     - name: Dockerize relayer and run commands
       env:
         RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
@@ -100,6 +94,14 @@ jobs:
         docker logs ts-relayer
         export RELAYER_MNEMONIC
         pnpm test:txs:e2e
+
+    # Runs last: it creates its own mars<->venus clients, and txs.e2e expects
+    # the client IDs that the earlier steps create.
+    - name: Run misbehaviour E2E tests
+      env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
+          DB_FILE: misbehaviour-relayer.db
+      run: pnpm test:misbehaviour:e2e
 
     # The test step exits on failure before the in-step `docker logs` can run,
     # so dump the relayer logs unconditionally to see relay-loop errors.
