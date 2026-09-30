@@ -125,10 +125,16 @@ beforeAll(async () => {
   await relayer.init();
   const link = relayer["links"].get(path.id) as LinkV2;
   // Two honest updates of the Gno realm's Tendermint client from AtomOne.
+  // Update both directions: the Gno client from AtomOne, and AtomOne's 10-gno
+  // client from Gno. Both need update-created consensus states — the Gno client
+  // for the freeze test, the 10-gno client so its update tx (and the Gno header
+  // in it) can be recovered.
   for (let i = 1; i <= 2; i++) {
     await sleep(2000);
-    const height = await link.updateClient("A");
-    narrate(`Honest update ${i}/2: updated Gno client ${path.clientB} with AtomOne's own header at height ${height.revisionHeight}`);
+    const gnoHeight = await link.updateClient("A");
+    narrate(`Honest update ${i}/2: updated Gno client ${path.clientB} with AtomOne's header at height ${gnoHeight.revisionHeight}`);
+    const atoneHeight = await link.updateClient("B");
+    narrate(`Honest update ${i}/2: updated AtomOne client ${path.clientA} with Gno's header at height ${atoneHeight.revisionHeight}`);
   }
 
   atone = await connectQueryClient(ChainType.Cosmos, ATONE, undefined, log);
