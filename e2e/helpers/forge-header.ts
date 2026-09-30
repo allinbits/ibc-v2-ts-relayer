@@ -85,6 +85,9 @@ function bytesValue(value: Uint8Array): Uint8Array {
 /** Tendermint >= 0.34 header hash, NOT SHA256(Header.encode(header)). */
 export function tendermintHeaderHash(header: BlockHeader): Uint8Array {
   if (!header.validatorsHash.length) throw new Error("Missing validatorsHash");
+  if (!header.version || !header.time || !header.lastBlockId) {
+    throw new Error("Missing header version, time, or lastBlockId");
+  }
   const chainId = BinaryWriter.create();
   if (header.chainId) chainId.uint32(10).string(header.chainId);
   const height = BinaryWriter.create();
@@ -100,6 +103,9 @@ export function precommitSignBytes(
 ): Uint8Array {
   if (commitSig.blockIdFlag !== BlockIDFlag.BLOCK_ID_FLAG_COMMIT) {
     throw new Error("Expected a non-nil precommit");
+  }
+  if (!commit.blockId || !commitSig.timestamp) {
+    throw new Error("Missing commit block id or precommit timestamp");
   }
   const writer = BinaryWriter.create();
   writer.uint32(8).int32(SignedMsgType.SIGNED_MSG_TYPE_PRECOMMIT);
@@ -145,12 +151,13 @@ export default async function forgeConflictingHeader(input: TendermintHeader): P
     }).finish(),
   ]);
 
-  const parts = commit.blockId?.partSetHeader;
+  const blockId = commit.blockId;
+  const parts = blockId?.partSetHeader;
   if (header.height <= 0n || commit.height !== header.height
     || !Number.isInteger(commit.round) || commit.round < 0 || commit.round > 0x7fffffff
-    || !parts || parts.total <= 0 || parts.hash.length !== 32
+    || !blockId || !parts || parts.total <= 0 || parts.hash.length !== 32
     || !sameBytes(validatorSetHash, header.validatorsHash)
-    || !sameBytes(tendermintHeaderHash(header), commit.blockId?.hash)) {
+    || !sameBytes(tendermintHeaderHash(header), blockId.hash)) {
     throw new Error("Malformed original signed header");
   }
   // node:crypto rejects raw Ed25519 key bytes, so use @cosmjs/crypto, which
@@ -164,7 +171,7 @@ export default async function forgeConflictingHeader(input: TendermintHeader): P
     throw new Error("appHash must differ from the original");
   }
   header.appHash = changedAppHash;
-  commit.blockId.hash = tendermintHeaderHash(header);
+  blockId.hash = tendermintHeaderHash(header);
   commitSig.signature = await Ed25519.createSignature(precommitSignBytes(header.chainId, commit, commitSig), keypair);
   return output;
 }
