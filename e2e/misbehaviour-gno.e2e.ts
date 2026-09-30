@@ -49,7 +49,11 @@ import {
   storage,
 } from "../src/utils/storage";
 import {
+  getErrorMessage,
+} from "../src/utils/utils";
+import {
   atomoneValidatorKeypair,
+  gnoValidatorKeypair,
 } from "./helpers/forge-header";
 import {
   setupGnoWhitelist,
@@ -62,8 +66,8 @@ const mnemonic = process.env.RELAYER_MNEMONIC || "abandon abandon abandon abando
 
 // Forge a Tendermint header for AtomOne (its validator key is readable).
 type ForgeTendermintHeader = (honest: TendermintHeader, keypair: Awaited<ReturnType<typeof atomoneValidatorKeypair>>) => Promise<TendermintHeader>;
-// Forge a Gno header (blocked: gnodev's validator key is not exposed).
-type ForgeGnoHeader = (honest: ibc.lightclients.gno.v1.gno.Header) => Promise<ibc.lightclients.gno.v1.gno.Header>;
+// Forge a Gno header, signed with the gno chain's validator key.
+type ForgeGnoHeader = (honest: ibc.lightclients.gno.v1.gno.Header, keypair: Awaited<ReturnType<typeof gnoValidatorKeypair>>) => Promise<ibc.lightclients.gno.v1.gno.Header>;
 
 async function loadTendermintForge(): Promise<ForgeTendermintHeader | undefined> {
   try {
@@ -315,9 +319,20 @@ describe("misbehaviour monitor against AtomOne and Gno", () => {
     const targetHeight = Number(honest.signedHeader!.header!.height);
     narrate(`Building a conflicting Gno header for height ${targetHeight}, trusted from the 10-gno client's stored height ${trusted}`);
 
+    // Needs the gno image to pin a known validator key (gnolang/gno#6259); an
+    // older image generates an unreadable in-memory key, so skip then.
+    let gnoKeypair;
+    try {
+      gnoKeypair = await gnoValidatorKeypair();
+    }
+    catch (e) {
+      narrate(`Skipping: gno validator key unavailable (needs the gnolang/gno#6259 image): ${getErrorMessage(e)}`);
+      return ctx.skip();
+    }
+
     let forged: ibc.lightclients.gno.v1.gno.Header;
     try {
-      forged = await forgeConflictingGnoHeader(honest);
+      forged = await forgeConflictingGnoHeader(honest, gnoKeypair);
     }
     catch (e) {
       if (e instanceof Error && e.name === "HeaderForgeNotImplemented") {
