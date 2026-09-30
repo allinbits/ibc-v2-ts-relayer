@@ -11,6 +11,12 @@ WORKDIR     /app/gno-realms
 RUN         cp -R ./gno.land/* /app/gno/examples/gno.land
 WORKDIR     /app/gno/contribs/gnodev
 RUN        go build -o /usr/local/bin/gnodev .
+# Build gnoland only to generate a validator key, and pin it with gnodev's
+# -validator-key-file (gnolang/gno#6259) so the chain signs with a key the
+# misbehaviour e2e can read back and forge conflicting headers with.
+WORKDIR     /app/gno/gno.land/cmd/gnoland
+RUN        go build -o /usr/local/bin/gnoland .
+RUN        gnoland secrets init -data-dir /app/gnosecrets
 WORKDIR    /app
 RUN        git clone https://github.com/gnolang/tx-indexer.git
 WORKDIR    /app/tx-indexer
@@ -22,7 +28,7 @@ WORKDIR    /app
 RUN        echo '#!/bin/sh' > /app/entrypoint.sh && \
            echo 'set -e' >> /app/entrypoint.sh && \
            echo 'if [ -z "$GNO_RELAYER_ADDRESS" ]; then echo "ERROR: GNO_RELAYER_ADDRESS environment variable is not set" >&2; exit 1; fi' >> /app/entrypoint.sh && \
-           echo '/usr/local/bin/gnodev local -root /app/gno -paths gno.land/r/aib/ibc/core,gno.land/r/aib/ibc/apps/transfer -empty-blocks -no-watch -v -add-account $GNO_RELAYER_ADDRESS=1000000000000ugnot -node-rpc-listener 0.0.0.0:26657 -web-listener 0.0.0.0:8888 &' >> /app/entrypoint.sh && \
+           echo '/usr/local/bin/gnodev local -root /app/gno -validator-key-file /app/gnosecrets/priv_validator_key.json -paths gno.land/r/aib/ibc/core,gno.land/r/aib/ibc/apps/transfer -empty-blocks -no-watch -v -add-account $GNO_RELAYER_ADDRESS=1000000000000ugnot -node-rpc-listener 0.0.0.0:26657 -web-listener 0.0.0.0:8888 &' >> /app/entrypoint.sh && \
            echo "/app/tx-indexer/build/tx-indexer start --remote http://127.0.0.1:26657 --listen-address 0.0.0.0:8546 --db-path /app/tx-indexer/indexer-db" >> /app/entrypoint.sh && \
            chmod +x /app/entrypoint.sh
 EXPOSE 8888

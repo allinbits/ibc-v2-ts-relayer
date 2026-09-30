@@ -2,6 +2,11 @@ import config from "../config/index.js";
 import {
   ChainFees,
   ChainType,
+  MisbehaviourEvidence,
+  MisbehaviourEvidenceUpdate,
+  MisbehaviourStatus,
+  NewMisbehaviourEvidence,
+  PathSide,
   RelayedHeights,
   RelayPaths,
 } from "../types/index.js";
@@ -56,6 +61,24 @@ function isChainFees(obj: unknown): obj is ChainFees {
     && "gasPrice" in obj
     && "gasDenom" in obj
     && ("gasAdjustment" in obj || true)
+  );
+}
+
+const UPDATABLE_EVIDENCE_FIELDS = ["status", "attempts", "txHash", "error"] as const satisfies readonly (keyof MisbehaviourEvidenceUpdate)[];
+
+/**
+ * Type guard for MisbehaviourEvidence database result.
+ */
+function isMisbehaviourEvidence(obj: unknown): obj is MisbehaviourEvidence {
+  return (
+    obj !== null
+    && typeof obj === "object"
+    && "id" in obj
+    && "relayPathId" in obj
+    && "side" in obj
+    && "clientId" in obj
+    && "revisionHeight" in obj
+    && "status" in obj
   );
 }
 
@@ -167,5 +190,62 @@ export class SQLiteStorage implements IStorage {
     const db = await openDB(this.dbPath);
     const results = await db.prepare("SELECT * FROM relayPaths ORDER BY id ASC").all();
     return results.filter(isRelayPaths);
+  }
+
+  async addMisbehaviourEvidence(evidence: NewMisbehaviourEvidence): Promise<MisbehaviourEvidence> {
+    const db = await openDB(this.dbPath);
+    const now = Date.now();
+    db.prepare(
+      `INSERT OR IGNORE INTO misbehaviourEvidence (relayPathId, side, hostChainId, clientId, revisionNumber, revisionHeight, trustedRevisionHeight, kind, conflictingHeader, conflictingHeaderTypeUrl, status, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      evidence.relayPathId, evidence.side, evidence.hostChainId, evidence.clientId, evidence.revisionNumber, evidence.revisionHeight,
+      evidence.trustedRevisionHeight, evidence.kind, evidence.conflictingHeader, evidence.conflictingHeaderTypeUrl, evidence.status, now, now,
+    );
+    const res = db.prepare(
+      "SELECT * FROM misbehaviourEvidence WHERE hostChainId = ? AND clientId = ? AND revisionNumber = ? AND revisionHeight = ?",
+    ).get(evidence.hostChainId, evidence.clientId, evidence.revisionNumber, evidence.revisionHeight);
+    if (!isMisbehaviourEvidence(res)) {
+      throw new Error(`Failed to store misbehaviour evidence for client ${evidence.clientId} on ${evidence.hostChainId}`);
+    }
+    return res;
+  }
+
+  async getMisbehaviourEvidence(status?: MisbehaviourStatus): Promise<MisbehaviourEvidence[]> {
+    const db = await openDB(this.dbPath);
+    const results = status === undefined
+      ? db.prepare("SELECT * FROM misbehaviourEvidence ORDER BY id ASC").all()
+      : db.prepare("SELECT * FROM misbehaviourEvidence WHERE status = ? ORDER BY id ASC").all(status);
+    return results.filter(isMisbehaviourEvidence);
+  }
+
+  async updateMisbehaviourEvidence(id: number, update: MisbehaviourEvidenceUpdate): Promise<void> {
+    const db = await openDB(this.dbPath);
+    const fields = UPDATABLE_EVIDENCE_FIELDS
+      .filter(key => update[key] !== undefined)
+      .map(key => [key, update[key]] as const);
+    const assignments = [...fields.map(([key]) => `${key} = ?`), "updatedAt = ?"].join(", ");
+    const result = db.prepare(`UPDATE misbehaviourEvidence SET ${assignments} WHERE id = ?`)
+      .run(...fields.map(([, value]) => value), Date.now(), id);
+    if (result.changes === 0) {
+      throw new Error(`Misbehaviour evidence not found: ${id}`);
+    }
+  }
+
+  async getMonitorCursor(pathId: number, side: PathSide): Promise<number> {
+    const db = await openDB(this.dbPath);
+    const res = db.prepare("SELECT lastCheckedRevisionHeight FROM monitorCursors WHERE relayPathId = ? AND side = ?")
+      .get(pathId, side) as {
+        lastCheckedRevisionHeight: number
+      } | undefined;
+    return res?.lastCheckedRevisionHeight ?? 0;
+  }
+
+  async setMonitorCursor(pathId: number, side: PathSide, revisionHeight: number): Promise<void> {
+    const db = await openDB(this.dbPath);
+    db.prepare(
+      `INSERT INTO monitorCursors (relayPathId, side, lastCheckedRevisionHeight) VALUES (?, ?, ?)
+       ON CONFLICT (relayPathId, side) DO UPDATE SET lastCheckedRevisionHeight = excluded.lastCheckedRevisionHeight`,
+    ).run(pathId, side, revisionHeight);
   }
 }

@@ -13,8 +13,25 @@ import {
   ChainType,
 } from "../types/index.js";
 import {
+  describeMisbehaviourStorage,
+} from "./misbehaviour-storage.shared.js";
+import {
   SQLiteStorage,
 } from "./sqlite-storage.js";
+
+// WAL mode keeps -wal and -shm files next to the database.
+function removeDbFiles(dbPath: string) {
+  for (const file of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+    try {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+      }
+    }
+    catch (_err) {
+      // Ignore cleanup errors
+    }
+  }
+}
 
 describe("SQLiteStorage", () => {
   let storage: SQLiteStorage;
@@ -31,15 +48,7 @@ describe("SQLiteStorage", () => {
   });
 
   afterAll(() => {
-    // Clean up temp database file
-    try {
-      if (fs.existsSync(testDbPath)) {
-        fs.unlinkSync(testDbPath);
-      }
-    }
-    catch (_err) {
-      // Ignore cleanup errors
-    }
+    removeDbFiles(testDbPath);
   });
 
   describe("constructor", () => {
@@ -322,16 +331,26 @@ describe("SQLiteStorage", () => {
         expect(result.chainId).toBe("isolated-test-chain");
       }
       finally {
-        // Clean up isolated test file
-        try {
-          if (fs.existsSync(isolatedDbPath)) {
-            fs.unlinkSync(isolatedDbPath);
-          }
-        }
-        catch (_err) {
-          // Ignore cleanup errors
-        }
+        removeDbFiles(isolatedDbPath);
       }
     });
   });
+
+  describe("multi-process access", () => {
+    it("uses WAL journaling with a busy timeout", async () => {
+      const {
+        openDB,
+      } = await import("./sqlite.js");
+      const db = await openDB(testDbPath);
+
+      expect(db.pragma("journal_mode", {
+        simple: true,
+      })).toBe("wal");
+      expect(db.pragma("busy_timeout", {
+        simple: true,
+      })).toBeGreaterThanOrEqual(10_000);
+    });
+  });
+
+  describeMisbehaviourStorage(() => storage);
 });

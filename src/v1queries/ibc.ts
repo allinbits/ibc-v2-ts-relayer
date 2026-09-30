@@ -32,6 +32,7 @@ import {
   QueryClientParamsResponse,
   QueryClientStateResponse,
   QueryClientStatesResponse,
+  QueryClientStatusResponse,
   QueryConsensusStateRequest,
   QueryConsensusStateResponse,
   QueryConsensusStatesResponse,
@@ -143,6 +144,8 @@ export interface IbcExtension {
         paginationKey?: Uint8Array,
       ) => Promise<QueryConsensusStatesResponse>
       readonly allConsensusStates: (clientId: string) => Promise<QueryConsensusStatesResponse>
+      readonly allConsensusStateHeights: (clientId: string) => Promise<Height[]>
+      readonly status: (clientId: string) => Promise<QueryClientStatusResponse>
       readonly params: () => Promise<QueryClientParamsResponse>
       readonly stateTm: (clientId: string) => Promise<TendermintClientState>
       readonly statesTm: (paginationKey?: Uint8Array) => Promise<TendermintClientState[]>
@@ -390,6 +393,22 @@ export function setupIbcExtension(base: QueryClient): IbcExtension {
             consensusStates: consensusStates,
           });
         },
+        allConsensusStateHeights: async (clientId: string) => {
+          const heights: Height[] = [];
+          let key: Uint8Array | undefined;
+          do {
+            const response = await clientQueryService.ConsensusStateHeights({
+              clientId: clientId,
+              pagination: createPagination(key),
+            });
+            heights.push(...response.consensusStateHeights);
+            key = response.pagination?.nextKey;
+          } while (key && key.length);
+          return heights;
+        },
+        status: async (clientId: string) => clientQueryService.ClientStatus({
+          clientId,
+        }),
         params: async () => clientQueryService.ClientParams({
         }),
         stateTm: async (clientId: string) => {

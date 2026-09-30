@@ -190,6 +190,9 @@ importers:
       '@cosmjs/utils':
         specifier: ^0.39.0
         version: 0.39.0
+      '@gnolang/amino-ts':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@gnolang/gno-js-client':
         specifier: ^3.1.0
         version: 3.1.0(debug@4.4.3)
@@ -522,6 +525,10 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
+
+  '@gnolang/amino-ts@0.1.0':
+    resolution: {integrity: sha512-V4meIrZtJsYeQcRtsn0nYE2P7OsT1J4bVjIpdxJVy1pQgWO5R8jb7656/+eTA1cDt/DAVAJiKi2b1bJOD+y6Jw==}
+    engines: {node: '>=22'}
 
   '@gnolang/gno-js-client@3.1.0':
     resolution: {integrity: sha512-pubefMyjQsEJ970E/RSf/eX8d5p5w99PDR0v913qVIMPxeouihkUc3Rvq33bvbPThn3c+GQXLW1F0Cy57pCkSA==}
@@ -3030,6 +3037,8 @@ snapshots:
   '@exodus/bytes@1.16.0(@noble/hashes@2.4.0)':
     optionalDependencies:
       '@noble/hashes': 2.4.0
+
+  '@gnolang/amino-ts@0.1.0': {}
 
   '@gnolang/gno-js-client@3.1.0(debug@4.4.3)':
     dependencies:

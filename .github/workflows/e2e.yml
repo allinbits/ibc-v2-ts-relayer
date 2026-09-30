@@ -95,6 +95,22 @@ jobs:
         export RELAYER_MNEMONIC
         pnpm test:txs:e2e
 
+    # Runs last: it creates its own mars<->venus clients, and txs.e2e expects
+    # the client IDs that the earlier steps create.
+    - name: Run misbehaviour E2E tests
+      env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
+          DB_FILE: misbehaviour-relayer.db
+      run: pnpm test:misbehaviour:e2e
+
+    # Runs last with the AtomOne <-> Gno chains: it creates its own clients on
+    # the shared realm, so it must not run before the suites with fixed IDs.
+    - name: Run misbehaviour GNO E2E tests
+      env:
+          RELAYER_MNEMONIC: ${{ secrets.RELAYER_MNEMONIC }}
+          DB_FILE: misbehaviour-gno-relayer.db
+      run: pnpm test:misbehaviour:gno:e2e
+
     # The test step exits on failure before the in-step `docker logs` can run,
     # so dump the relayer logs unconditionally to see relay-loop errors.
     - name: Relayer logs

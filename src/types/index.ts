@@ -63,6 +63,102 @@ export interface RelayedHeights {
   ackHeightB: number
 }
 
+/** Which end of a relay path a record refers to. */
+export type PathSide = "A" | "B";
+
+export enum MisbehaviourStatus {
+  /** Detected by the monitor, waiting for the relayer to submit it. */
+  Pending = "pending",
+  /** Recorded by a monitor running in dry-run mode; never submitted. */
+  DryRun = "dry_run",
+  /** The relayer submitted evidence and the client is now frozen. */
+  Confirmed = "confirmed",
+  /** Submission failed permanently (see `error`). */
+  Failed = "failed",
+}
+
+export enum MisbehaviourKind {
+  /** A stored consensus state disagrees with the source chain's own header. */
+  Fork = "fork",
+  /** A stored consensus state matches the header except for its timestamp. */
+  Time = "time",
+}
+
+/**
+ * Misbehaviour detected by the monitor on the client that `side`'s chain uses
+ * to track its counterparty. The relayer picks up pending records and submits
+ * the evidence.
+ */
+export interface MisbehaviourEvidence {
+  id: number
+  relayPathId: number
+  side: PathSide
+  hostChainId: string
+  clientId: string
+  revisionNumber: number
+  /** Height of the consensus state that conflicts with the source chain. */
+  revisionHeight: number
+  /** Highest consensus height below the conflict that the monitor verified. */
+  trustedRevisionHeight: number
+  kind: MisbehaviourKind
+  /** Base64 protobuf of the offending header, when it could be recovered. */
+  conflictingHeader: string | null
+  conflictingHeaderTypeUrl: string | null
+  status: MisbehaviourStatus
+  attempts: number
+  txHash: string | null
+  error: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type NewMisbehaviourEvidence = Omit<MisbehaviourEvidence, "id" | "status" | "attempts" | "txHash" | "error" | "createdAt" | "updatedAt"> & {
+  status: MisbehaviourStatus.Pending | MisbehaviourStatus.DryRun
+};
+
+export type MisbehaviourEvidenceUpdate = Partial<Pick<MisbehaviourEvidence, "status" | "attempts" | "txHash" | "error">>;
+
+/** Light client status, as reported by ibc-go and the Gno IBC core realm. */
+export enum ClientStatus {
+  Active = "Active",
+  Frozen = "Frozen",
+  Expired = "Expired",
+  Unknown = "Unknown",
+  Unauthorized = "Unauthorized",
+}
+
+/**
+ * The fields of a stored consensus state that the monitor compares with the
+ * source chain's header at the same height.
+ */
+export interface ConsensusStateSummary {
+  revisionNumber: bigint
+  revisionHeight: bigint
+  /** Nanoseconds since the Unix epoch. */
+  timestampNanos: bigint
+  /** The Gno realm renders timestamps in whole seconds only. */
+  timestampPrecision: "nanoseconds" | "seconds"
+  root: Uint8Array
+  nextValidatorsHash: Uint8Array
+}
+
+/** The header fields a light client derives its consensus state from. */
+export interface HeaderSummary {
+  height: number
+  /** Nanoseconds since the Unix epoch. */
+  timestampNanos: bigint
+  appHash: Uint8Array
+  nextValidatorsHash: Uint8Array
+}
+
+/** Highest consensus height the monitor has checked on one side of a path. */
+export interface MonitorCursor {
+  id: number
+  relayPathId: number
+  side: PathSide
+  lastCheckedRevisionHeight: number
+}
+
 export interface ConnectionHandshakeProof {
   clientId: string
   connectionId: string

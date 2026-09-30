@@ -15,6 +15,9 @@ import {
 import {
   DexieStorage,
 } from "./dexie-storage.js";
+import {
+  describeMisbehaviourStorage,
+} from "./misbehaviour-storage.shared.js";
 
 describe("DexieStorage", () => {
   let storage: DexieStorage;
@@ -281,4 +284,6 @@ describe("DexieStorage", () => {
       expect(Array.isArray(result)).toBe(true);
     });
   });
+
+  describeMisbehaviourStorage(() => storage);
 });

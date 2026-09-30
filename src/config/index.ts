@@ -35,6 +35,16 @@ export interface RelayerConfig {
     timeoutBlocks: number
     /** Timeout threshold in seconds (default: 6) */
     timeoutSeconds: number
+    /** Submission attempts before misbehaviour evidence is marked failed (default: 5) */
+    misbehaviourMaxAttempts: number
+  }
+
+  /** Misbehaviour monitor configuration */
+  monitor: {
+    /** Poll interval in milliseconds (default: 10000) */
+    pollInterval: number
+    /** Maximum consensus states checked per client per poll (default: 100) */
+    maxHeightsPerCheck: number
   }
 
   /** Network retry configuration */
@@ -145,6 +155,11 @@ function loadConfig(): RelayerConfig {
       maxAgeSrc: getPositiveInt(process.env.RELAY_MAX_AGE_SRC, 86400, 60, 604800),
       timeoutBlocks: getPositiveInt(process.env.RELAY_TIMEOUT_BLOCKS, 2, 0, 1000),
       timeoutSeconds: getPositiveInt(process.env.RELAY_TIMEOUT_SECONDS, 6, 0, 3600),
+      misbehaviourMaxAttempts: getPositiveInt(process.env.MISBEHAVIOUR_MAX_ATTEMPTS, 5, 1, 100),
+    },
+    monitor: {
+      pollInterval: getPositiveInt(process.env.MONITOR_POLL_INTERVAL, 10000, 1000, 600000),
+      maxHeightsPerCheck: getPositiveInt(process.env.MONITOR_MAX_HEIGHTS_PER_CHECK, 100, 1, 10000),
     },
     network: {
       maxRetries: getPositiveInt(process.env.NETWORK_MAX_RETRIES, 3, 0, 10),

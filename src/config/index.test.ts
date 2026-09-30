@@ -44,6 +44,9 @@ describe("config", () => {
       expect(config.relay.maxAgeSrc).toBe(86400);
       expect(config.relay.timeoutBlocks).toBe(2);
       expect(config.relay.timeoutSeconds).toBe(6);
+      expect(config.relay.misbehaviourMaxAttempts).toBe(5);
+      expect(config.monitor.pollInterval).toBe(10000);
+      expect(config.monitor.maxHeightsPerCheck).toBe(100);
       expect(config.network.maxRetries).toBe(3);
       expect(config.network.retryBackoff).toBe(1000);
       expect(config.network.maxRetryBackoff).toBe(30000);
@@ -241,6 +244,34 @@ describe("config", () => {
       } = await import("./index.js");
 
       expect(config.relay.timeoutSeconds).toBe(3600); // max
+    });
+  });
+
+  describe("misbehaviour configuration", () => {
+    it("should accept valid monitor settings", async () => {
+      process.env.MONITOR_POLL_INTERVAL = "30000";
+      process.env.MONITOR_MAX_HEIGHTS_PER_CHECK = "25";
+      process.env.MISBEHAVIOUR_MAX_ATTEMPTS = "3";
+      const {
+        config,
+      } = await import("./index.js");
+
+      expect(config.monitor.pollInterval).toBe(30000);
+      expect(config.monitor.maxHeightsPerCheck).toBe(25);
+      expect(config.relay.misbehaviourMaxAttempts).toBe(3);
+    });
+
+    it("should enforce monitor limits", async () => {
+      process.env.MONITOR_POLL_INTERVAL = "100";
+      process.env.MONITOR_MAX_HEIGHTS_PER_CHECK = "50000";
+      process.env.MISBEHAVIOUR_MAX_ATTEMPTS = "0";
+      const {
+        config,
+      } = await import("./index.js");
+
+      expect(config.monitor.pollInterval).toBe(10000); // below min: default
+      expect(config.monitor.maxHeightsPerCheck).toBe(10000); // max
+      expect(config.relay.misbehaviourMaxAttempts).toBe(5); // below min: default
     });
   });
 

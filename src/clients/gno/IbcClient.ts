@@ -66,8 +66,11 @@ import {
 } from "graphql-request";
 
 import {
-  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
+  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientStatus, ClientType, ConnectionHandshakeProof, ConsensusStateSummary, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, HeaderSummary, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
+import {
+  parseClientStatus, timestampToNanos,
+} from "../../utils/misbehaviour.js";
 import {
   buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, isTrustVerifyError, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
@@ -89,6 +92,8 @@ export type GnoIbcClientOptions = CreateWalletOptions & BaseIbcClientOptions & {
 
 /** Default deposit amount for Gno MsgRun transactions (in ugnot) */
 const GNO_DEFAULT_DEPOSIT = 3000000;
+/** Maximum page size of the IBC core realm's paginated render views */
+const GNO_RENDER_PAGE_LIMIT = 100;
 
 const GNO_GAS_CREATE_CLIENT = 100_000_000;
 const GNO_GAS_UPDATE_CLIENT = 200_000_000;
@@ -417,24 +422,18 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   // For the vote sign bytes, it checks (from the commit):
   //   Height, Round, BlockId, TimeStamp, ChainID
   public async buildHeader(lastHeight: number, targetHeight?: number): Promise<ibc.lightclients.gno.v1.gno.Header> {
-    try {
-      const signedHeader = await this.getSignedHeader(targetHeight);
-      // "assert that trustedVals is NextValidators of last trusted header"
-      // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
-      const validatorHeight = lastHeight + 1;
-      /* eslint @typescript-eslint/no-non-null-assertion: "off" */
-      const curHeight = Number(signedHeader.header!.height);
-      return ibc.lightclients.gno.v1.gno.Header.fromPartial({
-        signedHeader,
-        validatorSet: await this.getValidatorSet(curHeight),
-        trustedHeight: this.revisionHeight(lastHeight),
-        trustedValidators: await this.getValidatorSet(validatorHeight),
-      });
-    }
-    catch (e) {
-      console.trace();
-      console.log(e);
-    }
+    const signedHeader = await this.getSignedHeader(targetHeight);
+    // "assert that trustedVals is NextValidators of last trusted header"
+    // https://github.com/cosmos/cosmos-sdk/blob/v0.41.0/x/ibc/light-clients/07-tendermint/types/update.go#L74
+    const validatorHeight = lastHeight + 1;
+    /* eslint @typescript-eslint/no-non-null-assertion: "off" */
+    const curHeight = Number(signedHeader.header!.height);
+    return ibc.lightclients.gno.v1.gno.Header.fromPartial({
+      signedHeader,
+      validatorSet: await this.getValidatorSet(curHeight),
+      trustedHeight: this.revisionHeight(lastHeight),
+      trustedValidators: await this.getValidatorSet(validatorHeight),
+    });
   }
 
   public async getGnoConsensusStateAtHeight(_clientId: string, _consensusHeight?: Height): Promise<AnyConsensusState> {
@@ -486,6 +485,98 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       return this.getGnoConsensusStateAtHeight(clientId, consensusHeight);
     }
     throw new Error(`Unsupported chain type ${type} for getting consensus state.`);
+  }
+
+  // Renders a JSON view of the IBC core realm. The realm reports lookup
+  // failures as an {"error": ...} body rather than an ABCI error.
+  private async renderCoreRealm<T>(path: string): Promise<T> {
+    const response = await this.tm.abciQuery({
+      path: "vm/qrender",
+      data: Buffer.from(`gno.land/r/aib/ibc/core:${path}`, "utf-8"),
+    });
+    if (response.responseBase.error) {
+      throw new Error(`Failed to render ${path}: ${response.responseBase.error}`);
+    }
+    const data = JSON.parse(Buffer.from(response.responseBase.data).toString("utf-8"));
+    if (data && typeof data === "object" && "error" in data) {
+      throw new Error(`Failed to render ${path}: ${data.error}`);
+    }
+    return data as T;
+  }
+
+  public async getClientStatus(clientId: string): Promise<ClientStatus> {
+    const {
+      status,
+    } = await this.renderCoreRealm<{
+      status: string
+    }>(`clients/${validateIbcIdentifier(clientId, "clientId")}/status`);
+    return parseClientStatus(status);
+  }
+
+  // The Gno realm only hosts Tendermint light clients, so `type` is ignored.
+  public async getConsensusStatesAfter(clientId: string, _type: ClientType, afterRevisionHeight: bigint, limit: number): Promise<ConsensusStateSummary[]> {
+    type RenderedConsensusState = {
+      height: {
+        revision_number: number
+        revision_height: number
+      }
+      timestamp: number
+      root: string
+      next_validators_hash: string
+    };
+    type Page = {
+      items: RenderedConsensusState[]
+      page: number
+      total: number
+    };
+    // Pages are sorted by height, so read backwards from the last page until
+    // reaching heights that were already checked.
+    const path = `clients/${validateIbcIdentifier(clientId, "clientId")}/consensus_states?limit=${GNO_RENDER_PAGE_LIMIT}`;
+    const firstPage = await this.renderCoreRealm<Page>(`${path}&page=1`);
+    const rendered: RenderedConsensusState[] = [];
+    for (let page = firstPage.total; page >= 1; page--) {
+      const {
+        items,
+      } = page === 1 ? firstPage : await this.renderCoreRealm<Page>(`${path}&page=${page}`);
+      const unchecked = items.filter(item => BigInt(item.height.revision_height) > afterRevisionHeight);
+      rendered.unshift(...unchecked);
+      if (unchecked.length < items.length) {
+        break;
+      }
+    }
+    return rendered.slice(0, limit).map(item => ({
+      revisionNumber: BigInt(item.height.revision_number),
+      revisionHeight: BigInt(item.height.revision_height),
+      timestampNanos: BigInt(item.timestamp) * 1_000_000_000n,
+      timestampPrecision: "seconds",
+      root: fromBase64(item.root),
+      nextValidatorsHash: fromBase64(item.next_validators_hash),
+    }));
+  }
+
+  public async getHeaderSummary(height: number): Promise<HeaderSummary> {
+    const header = await this.header(height);
+    return {
+      height,
+      timestampNanos: timestampToNanos(header.time),
+      appHash: header.appHash,
+      nextValidatorsHash: header.nextValidatorsHash,
+    };
+  }
+
+  // Updates reach the Gno realm as MsgRun transactions whose headers are
+  // embedded in generated Gno source, which cannot be decoded reliably. The
+  // relayer freezes Gno-hosted clients with submitConflictingHeader instead.
+  public async findConflictingHeader(_clientId: string, _height: Height): Promise<Any | undefined> {
+    return undefined;
+  }
+
+  public async submitMisbehaviour(_clientId: string, _misbehaviour: Any): Promise<MsgResult> {
+    throw new Error("Submitting a Misbehaviour message to the Gno IBC realm is not supported; use submitConflictingHeader.");
+  }
+
+  public async submitConflictingHeader(clientId: string, src: BaseIbcClient, trustedHeight: number, targetHeight: number): Promise<number> {
+    return this.updateClientBisect(clientId, src, trustedHeight, targetHeight);
   }
 
   public async getLatestClientState(clientId: string, type: ClientType): Promise<AnyClientState> {

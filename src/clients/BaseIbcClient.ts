@@ -1,5 +1,8 @@
 /* istanbul ignore file -- @preserve */
 import {
+  Any,
+} from "@atomone/atomone-types/google/protobuf/any.js";
+import {
   Order, Packet,
 } from "@atomone/atomone-types/ibc/core/channel/v1/channel.js";
 import {
@@ -23,7 +26,7 @@ import {
 import * as winston from "winston";
 
 import {
-  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, ChannelHandshakeProof, ChannelInfo, ClientType, ConnectionHandshakeProof, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, MsgResult, PacketV2WithMetadata, PacketWithMetadata,
+  Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, ChannelHandshakeProof, ChannelInfo, ClientStatus, ClientType, ConnectionHandshakeProof, ConsensusStateSummary, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, HeaderSummary, MsgResult, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types";
 import {
   decodeClientState, decodeConsensusState,
@@ -209,6 +212,22 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
      * Concrete return types to be provided by the specific client implementations
      */
   abstract buildHeader(lastHeight: number): Promise<T["lightClientHeader"]>;
+
+  // Misbehaviour. The host methods act on a light client stored on this chain;
+  // getHeaderSummary describes this chain's own header.
+  abstract getClientStatus(clientId: string): Promise<ClientStatus>;
+  abstract getConsensusStatesAfter(clientId: string, type: ClientType, afterRevisionHeight: bigint, limit: number): Promise<ConsensusStateSummary[]>;
+  abstract getHeaderSummary(height: number): Promise<HeaderSummary>;
+  /** The header that created the consensus state at `height`, as submitted in its update tx, if it can be recovered. */
+  abstract findConflictingHeader(clientId: string, height: Height): Promise<Any | undefined>;
+  /** Submits a Misbehaviour message (an Any of the light client's Misbehaviour type). */
+  abstract submitMisbehaviour(clientId: string, misbehaviour: Any): Promise<MsgResult>;
+  /**
+   * Updates the client with `src`'s own header at `targetHeight`, trusting the
+   * consensus state at `trustedHeight`. When a different consensus state is
+   * already stored at `targetHeight`, the light client freezes itself.
+   */
+  abstract submitConflictingHeader(clientId: string, src: BaseIbcClient, trustedHeight: number, targetHeight: number): Promise<number>;
   abstract buildCreateClientArgs(trustPeriodSec?: number | null,): Promise<{
     clientState: T["clientState"]
     consensusState: T["consensusState"]

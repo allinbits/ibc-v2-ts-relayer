@@ -119,6 +119,8 @@ describe("v1queries/ibc", () => {
       ClientStates: vi.fn(),
       ConsensusState: vi.fn(),
       ConsensusStates: vi.fn(),
+      ConsensusStateHeights: vi.fn(),
+      ClientStatus: vi.fn(),
       ClientParams: vi.fn(),
     };
 
@@ -393,6 +395,53 @@ describe("v1queries/ibc", () => {
 
         expect(mockClientQuery.ClientStates).toHaveBeenCalledTimes(2);
         expect(result.clientStates).toHaveLength(2);
+      });
+
+      it("should query all consensus state heights across pages", async () => {
+        mockClientQuery.ConsensusStateHeights
+          .mockResolvedValueOnce({
+            consensusStateHeights: [
+              {
+                revisionNumber: 0n,
+                revisionHeight: 5n,
+              },
+            ],
+            pagination: {
+              nextKey: new Uint8Array([1]),
+            },
+          })
+          .mockResolvedValueOnce({
+            consensusStateHeights: [
+              {
+                revisionNumber: 0n,
+                revisionHeight: 9n,
+              },
+            ],
+            pagination: {
+              nextKey: new Uint8Array(),
+            },
+          });
+
+        const extension = setupIbcExtension(mockQueryClient);
+        const result = await extension.ibc.client.allConsensusStateHeights("07-tendermint-0");
+
+        expect(mockClientQuery.ConsensusStateHeights).toHaveBeenCalledTimes(2);
+        expect(mockClientQuery.ConsensusStateHeights.mock.calls[0][0].clientId).toBe("07-tendermint-0");
+        expect(result.map(h => h.revisionHeight)).toEqual([5n, 9n]);
+      });
+
+      it("should query client status", async () => {
+        mockClientQuery.ClientStatus.mockResolvedValue({
+          status: "Frozen",
+        });
+
+        const extension = setupIbcExtension(mockQueryClient);
+        const result = await extension.ibc.client.status("07-tendermint-0");
+
+        expect(mockClientQuery.ClientStatus).toHaveBeenCalledWith({
+          clientId: "07-tendermint-0",
+        });
+        expect(result.status).toBe("Frozen");
       });
 
       it("should query consensus state with height", async () => {
