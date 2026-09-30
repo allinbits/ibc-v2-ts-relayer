@@ -13,7 +13,8 @@
     "test:txs:e2e": "vitest run --config vitest.config.txs.ts",
     "test:misbehaviour:e2e": "vitest run --config vitest.config.misbehaviour.ts",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json"
   },
   "bin": {
     "ibc-v2-relayer": "./dist/index.js"

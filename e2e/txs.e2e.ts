@@ -57,7 +57,7 @@ import {
 } from "./setup.ts";
 
 function ibcRegistry(): Registry {
-  return new Registry([...defaultRegistryTypes, ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as GeneratedType]]);
+  return new Registry([...defaultRegistryTypes, ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as unknown as GeneratedType]]);
 }
 
 // Mirrors the voucher denom derivation of the gno-realms transfer app
