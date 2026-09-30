@@ -37,20 +37,20 @@ import {
 } from "@cosmjs/encoding";
 // The mars chain runs as a service container (named `mars` in CI and compose);
 // override for differently named setups. Its CometBFT validator key is baked
-// into the image at scaffold time — a deterministic throwaway, not a secret.
+// into the image at scaffold time — deterministic throwaways, not secrets.
 const MARS_CONTAINER = process.env.MARS_CONTAINER ?? "mars";
-const VALIDATOR_KEY_PATH = "/home/tendermint/.mars/config/priv_validator_key.json";
+const A1GNO_CONTAINER = process.env.A1GNO_CONTAINER ?? "a1gno";
 
 /**
- * Loads the mars validator's ed25519 keypair out of its container, ready to
- * sign a forged commit. The suite runs on the host, not inside a chain
- * container, so the key is read with `docker exec`.
+ * Reads a CometBFT ed25519 validator key out of a chain container. The suite
+ * runs on the host, not inside a chain container, so the key is read with
+ * `docker exec`.
  *
  * priv_validator_key.json holds `priv_key.value` as base64 of 64 bytes:
  * the ed25519 seed (first 32) followed by the public key (last 32).
  */
-export async function marsValidatorKeypair(): Promise<Ed25519Keypair> {
-  const raw = execFileSync("docker", ["exec", MARS_CONTAINER, "cat", VALIDATOR_KEY_PATH]);
+export async function validatorKeypair(container: string, keyPath: string): Promise<Ed25519Keypair> {
+  const raw = execFileSync("docker", ["exec", container, "cat", keyPath]);
   const key = JSON.parse(raw.toString()) as {
     priv_key: {
       value: string
@@ -59,6 +59,12 @@ export async function marsValidatorKeypair(): Promise<Ed25519Keypair> {
   const secret = fromBase64(key.priv_key.value);
   return Ed25519.makeKeypair(secret.slice(0, 32));
 }
+
+export const marsValidatorKeypair = (): Promise<Ed25519Keypair> =>
+  validatorKeypair(MARS_CONTAINER, "/home/tendermint/.mars/config/priv_validator_key.json");
+
+export const atomoneValidatorKeypair = (): Promise<Ed25519Keypair> =>
+  validatorKeypair(A1GNO_CONTAINER, "/root/.atomone/config/priv_validator_key.json");
 
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
   Buffer.from(a).equals(Buffer.from(b));
@@ -126,8 +132,8 @@ export function precommitSignBytes(
  * 64-byte private key (seed || public key). Leaves the input untouched.
  * If appHash is omitted, flip one bit to guarantee a different app hash.
  */
-export default async function forgeConflictingHeader(input: TendermintHeader): Promise<TendermintHeader> {
-  const keypair = await marsValidatorKeypair();
+export default async function forgeConflictingHeader(input: TendermintHeader, signingKeypair?: Ed25519Keypair): Promise<TendermintHeader> {
+  const keypair = signingKeypair ?? await marsValidatorKeypair();
   const publicKey = keypair.pubkey;
   const output = structuredClone(input);
   const header = output.signedHeader?.header;

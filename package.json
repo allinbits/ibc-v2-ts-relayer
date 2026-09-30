@@ -12,6 +12,7 @@
     "test:gno:e2e": "vitest run --config vitest.config.gno.ts",
     "test:txs:e2e": "vitest run --config vitest.config.txs.ts",
     "test:misbehaviour:e2e": "vitest run --config vitest.config.misbehaviour.ts",
+    "test:misbehaviour:gno:e2e": "vitest run --config vitest.config.misbehaviour-gno.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json"
