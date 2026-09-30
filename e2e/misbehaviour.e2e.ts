@@ -13,7 +13,7 @@ import {
 } from "vitest";
 
 import {
-  BaseIbcClient,
+  BaseIbcClient, isTendermint,
 } from "../src/clients/BaseIbcClient";
 import {
   Link as LinkV2,
@@ -33,6 +33,8 @@ import {
   ClientType,
   ConsensusStateSummary,
   MisbehaviourEvidence,
+  MisbehaviourKind,
+  MisbehaviourStatus,
   RelayPaths,
 } from "../src/types";
 import {
@@ -45,6 +47,22 @@ import {
 import {
   storage,
 } from "../src/utils/storage";
+
+// Optional test helper: produces a mars-validator-signed header that mars never
+// committed. Absent or unimplemented -> the freeze test skips itself.
+type ForgeConflictingHeader = (honest: TendermintHeader) => Promise<TendermintHeader>;
+
+async function loadForgeHelper(): Promise<ForgeConflictingHeader | undefined> {
+  try {
+    const mod = await import("./helpers/forge-header.js");
+    return (mod.default ?? (mod as {
+      forgeConflictingHeader?: ForgeConflictingHeader
+    }).forgeConflictingHeader) as ForgeConflictingHeader | undefined;
+  }
+  catch {
+    return undefined;
+  }
+}
 
 const MARS = "http://localhost:26657";
 const VENUS = "http://localhost:36657";
@@ -229,11 +247,83 @@ describe("misbehaviour monitor against live chains", () => {
     expect(header).toBeUndefined();
   });
 
-  // Needs a header for a mars height that mars never committed but that its
-  // validator signed, installed on venus's client. Supply the forging helper
-  // (the validator key is at /home/tendermint/.mars/config/priv_validator_key.json
-  // in the mars container), then: monitor.checkOnce() records pending
-  // evidence with the offending header, relayer.processPendingMisbehaviour()
-  // submits it, and venus's client reports Frozen.
-  test.todo("freezes venus's client after mars's validator signs a conflicting header");
+  // The full detect -> record -> submit -> freeze path. Skips until the
+  // forge-header helper produces a mars-validator-signed conflicting header
+  // (see e2e/helpers/forge-header.ts).
+  test("freezes venus's client after mars's validator signs a conflicting header", async (ctx) => {
+    const forgeConflictingHeader = await loadForgeHelper();
+    if (!forgeConflictingHeader) {
+      narrate("Skipping freeze test: no e2e/helpers/forge-header.ts helper found");
+      return ctx.skip();
+    }
+
+    // The funded relayer clients (side A is mars, side B is venus).
+    const link = relayer["links"].get(path.id) as LinkV2;
+    const marsFunded = link.endA.client;
+    const venusFunded = link.endB.client;
+    if (!isTendermint(marsFunded) || !isTendermint(venusFunded)) {
+      throw new Error("expected Tendermint clients on both ends of the mars <-> venus path");
+    }
+
+    // Trust venus's newest stored consensus state and build mars's honest
+    // header for a later, still-committed mars height venus has not seen.
+    const stored = await venus.getConsensusStatesAfter(path.clientB, ClientType.Tendermint, 0n, 1000);
+    const trusted = Number(stored[stored.length - 1].revisionHeight);
+    const honest = await marsFunded.buildHeader(trusted);
+    const targetHeight = Number(honest.signedHeader!.header!.height);
+    narrate(`Building a conflicting header for mars height ${targetHeight}, trusted from venus's stored height ${trusted}`);
+
+    let forged: TendermintHeader;
+    try {
+      forged = await forgeConflictingHeader(honest);
+    }
+    catch (e) {
+      if (e instanceof Error && e.name === "HeaderForgeNotImplemented") {
+        narrate(`Skipping freeze test: ${e.message}`);
+        return ctx.skip();
+      }
+      throw e;
+    }
+
+    const honestAppHash = honest.signedHeader!.header!.appHash;
+    const forgedAppHash = forged.signedHeader!.header!.appHash;
+    narrate("Forged header vs mars's honest header at the same height:",
+      `height ${forged.signedHeader?.header?.height} (honest ${honest.signedHeader?.header?.height})`,
+      `forged app hash ${short(forgedAppHash)} vs honest ${short(honestAppHash)}`);
+    // A conflict needs a different block; anything else is a broken helper.
+    expect(Number(forged.signedHeader?.header?.height)).toBe(targetHeight);
+    expect(toHex(forgedAppHash)).not.toBe(toHex(honestAppHash));
+
+    // Install the forged header on venus's client. It is validly signed by
+    // mars's validators, so venus accepts and stores it (a single new height
+    // does not auto-freeze); the client stays Active.
+    narrate(`Installing the forged header on venus client ${path.clientB} via MsgUpdateClient`);
+    await venusFunded.updateTendermintClient(path.clientB, forged);
+    expect(await venus.getClientStatus(path.clientB)).toBe(ClientStatus.Active);
+
+    // The monitor compares venus's stored state at the forged height with
+    // mars's real header at that height and records the fork.
+    narrate("Running the monitor: it should detect the fork and record pending evidence");
+    await monitor.checkOnce();
+
+    const forkEvidence = (await storage.getMisbehaviourEvidence())
+      .find(e => e.relayPathId === path.id && e.clientId === path.clientB && e.revisionHeight === targetHeight);
+    expect(forkEvidence).toBeDefined();
+    narrate("Evidence recorded by the monitor:", describeEvidence(forkEvidence!));
+    expect(forkEvidence!.kind).toBe(MisbehaviourKind.Fork);
+    expect(forkEvidence!.status).toBe(MisbehaviourStatus.Pending);
+    expect(forkEvidence!.conflictingHeader).not.toBeNull();
+
+    // The relayer submits the evidence, which freezes venus's client.
+    narrate("Running the relayer's evidence submission");
+    await relayer.processPendingMisbehaviour();
+
+    const frozenStatus = await venus.getClientStatus(path.clientB);
+    const confirmed = (await storage.getMisbehaviourEvidence()).find(e => e.id === forkEvidence!.id)!;
+    narrate("After submission:",
+      `venus client ${path.clientB} status: ${frozenStatus}`,
+      `evidence #${confirmed.id} status: ${confirmed.status}, tx ${confirmed.txHash ?? "none"}`);
+    expect(frozenStatus).toBe(ClientStatus.Frozen);
+    expect(confirmed.status).toBe(MisbehaviourStatus.Confirmed);
+  }, 120000);
 });
