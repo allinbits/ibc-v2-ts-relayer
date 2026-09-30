@@ -290,9 +290,11 @@ describe("misbehaviour monitor against AtomOne and Gno", () => {
     expect(confirmed.status).toBe(MisbehaviourStatus.Confirmed);
   }, 180000);
 
-  // Freeze AtomOne's 10-gno client with a conflicting Gno header. Blocked:
-  // gnodev does not expose its validator key, so the Gno header cannot be
-  // signed (see e2e/helpers/forge-gno-header.ts). Skips until that changes.
+  // Freeze AtomOne's 10-gno client with a conflicting Gno header. The gno image
+  // now pins gnodev's validator key (gnolang/gno#6259), so this is feasible;
+  // it runs once forge-gno-header.ts signs a conflicting Gno header and the gno
+  // image carrying the key is published. Unlike the Gno host, AtomOne can
+  // recover the offending header, so the relayer freezes via a Misbehaviour.
   test("freezes AtomOne's 10-gno client after the Gno validator signs a conflicting header", async (ctx) => {
     const forgeConflictingGnoHeader = await loadGnoForge();
     if (!forgeConflictingGnoHeader) {
@@ -301,16 +303,21 @@ describe("misbehaviour monitor against AtomOne and Gno", () => {
     }
 
     const link = relayer["links"].get(path.id) as LinkV2;
+    const atoneFunded = link.endA.client;
     const gnoFunded = link.endB.client;
-    if (!isGno(gnoFunded)) {
-      throw new Error("expected a Gno client on side B of the path");
+    if (!isTendermint(atoneFunded) || !isGno(gnoFunded)) {
+      throw new Error("expected an AtomOne Tendermint client and a Gno client on the path");
     }
+
     const stored = await atone.getConsensusStatesAfter(path.clientA, ClientType.Gno, 0n, 1000);
     const trusted = Number(stored[stored.length - 1].revisionHeight);
     const honest = await gnoFunded.buildHeader(trusted);
+    const targetHeight = Number(honest.signedHeader!.header!.height);
+    narrate(`Building a conflicting Gno header for height ${targetHeight}, trusted from the 10-gno client's stored height ${trusted}`);
 
+    let forged: ibc.lightclients.gno.v1.gno.Header;
     try {
-      await forgeConflictingGnoHeader(honest);
+      forged = await forgeConflictingGnoHeader(honest);
     }
     catch (e) {
       if (e instanceof Error && e.name === "HeaderForgeNotImplemented") {
@@ -319,7 +326,37 @@ describe("misbehaviour monitor against AtomOne and Gno", () => {
       }
       throw e;
     }
+    narrate("Forged header vs the Gno chain's honest header at the same height:",
+      `forged app hash ${short(forged.signedHeader!.header!.appHash)} vs honest ${short(honest.signedHeader!.header!.appHash)}`);
+    expect(Number(forged.signedHeader?.header?.height)).toBe(targetHeight);
+    expect(toHex(forged.signedHeader!.header!.appHash)).not.toBe(toHex(honest.signedHeader!.header!.appHash));
 
-    throw new Error("forge-gno-header returned a header; implement the AtomOne-side freeze assertions");
+    narrate(`Installing the forged Gno header on AtomOne client ${path.clientA} via MsgUpdateClient`);
+    await atoneFunded.updateGnoClient(path.clientA, forged);
+    expect(await atone.getClientStatus(path.clientA)).toBe(ClientStatus.Active);
+
+    narrate("Running the monitor: it should detect the fork and record pending evidence with the offending header");
+    await monitor.checkOnce();
+
+    const forkEvidence = (await storage.getMisbehaviourEvidence())
+      .find(e => e.relayPathId === path.id && e.clientId === path.clientA && e.revisionHeight === targetHeight);
+    expect(forkEvidence).toBeDefined();
+    narrate("Evidence recorded by the monitor:", describeEvidence(forkEvidence!));
+    expect(forkEvidence!.kind).toBe(MisbehaviourKind.Fork);
+    expect(forkEvidence!.status).toBe(MisbehaviourStatus.Pending);
+    // AtomOne stores the offending Gno header in its update tx, so it is
+    // recovered and the relayer submits a Misbehaviour of both headers.
+    expect(forkEvidence!.conflictingHeader).not.toBeNull();
+
+    narrate("Running the relayer's evidence submission (Misbehaviour of the two Gno headers)");
+    await relayer.processPendingMisbehaviour();
+
+    const frozenStatus = await atone.getClientStatus(path.clientA);
+    const confirmed = (await storage.getMisbehaviourEvidence()).find(e => e.id === forkEvidence!.id)!;
+    narrate("After submission:",
+      `AtomOne client ${path.clientA} status: ${frozenStatus}`,
+      `evidence #${confirmed.id} status: ${confirmed.status}, tx ${confirmed.txHash ?? "none"}`);
+    expect(frozenStatus).toBe(ClientStatus.Frozen);
+    expect(confirmed.status).toBe(MisbehaviourStatus.Confirmed);
   }, 180000);
 });

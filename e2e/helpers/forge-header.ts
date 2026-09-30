@@ -40,6 +40,7 @@ import {
 // into the image at scaffold time — deterministic throwaways, not secrets.
 const MARS_CONTAINER = process.env.MARS_CONTAINER ?? "mars";
 const A1GNO_CONTAINER = process.env.A1GNO_CONTAINER ?? "a1gno";
+const GNO_CONTAINER = process.env.GNO_CONTAINER ?? "gno";
 
 /**
  * Reads a CometBFT ed25519 validator key out of a chain container. The suite
@@ -65,6 +66,12 @@ export const marsValidatorKeypair = (): Promise<Ed25519Keypair> =>
 
 export const atomoneValidatorKeypair = (): Promise<Ed25519Keypair> =>
   validatorKeypair(A1GNO_CONTAINER, "/root/.atomone/config/priv_validator_key.json");
+
+// The gno image pins gnodev's validator to this key (gnolang/gno#6259); its
+// priv_validator_key.json is amino JSON but, like CometBFT's, carries the
+// 64-byte ed25519 key at priv_key.value.
+export const gnoValidatorKeypair = (): Promise<Ed25519Keypair> =>
+  validatorKeypair(GNO_CONTAINER, "/app/gnosecrets/priv_validator_key.json");
 
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
   Buffer.from(a).equals(Buffer.from(b));
