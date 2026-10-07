@@ -5,8 +5,8 @@ import (
 	"time"
 	"encoding/hex"
 
-	"gno.land/p/aib/ibc/lightclient/tendermint"
-	"gno.land/p/aib/ibc/types"
+	"gno.land/p/aib/ibc/lightclient/tendermint/v0"
+	"gno.land/p/aib/ibc/types/v0"
 	"gno.land/r/aib/ibc/core"
 )
 
