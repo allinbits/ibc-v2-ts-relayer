@@ -25,10 +25,13 @@ WORKDIR    /app
 # gnodev master dropped -lazy-loader and glob -paths: examples under
 # $GNOROOT/examples load by default, and -paths takes explicit comma-separated
 # package paths (kept for the IBC realms to ensure they deploy at genesis).
+# The core/transfer realms are proxies (gno-realms #69); their impl/v0 realms
+# must deploy too, so init() RegisterImpl bootstraps the active implementation
+# (without it CreateClient panics "core: no implementation installed").
 RUN        echo '#!/bin/sh' > /app/entrypoint.sh && \
            echo 'set -e' >> /app/entrypoint.sh && \
            echo 'if [ -z "$GNO_RELAYER_ADDRESS" ]; then echo "ERROR: GNO_RELAYER_ADDRESS environment variable is not set" >&2; exit 1; fi' >> /app/entrypoint.sh && \
-           echo '/usr/local/bin/gnodev local -root /app/gno -validator-key-file /app/gnosecrets/priv_validator_key.json -paths gno.land/r/aib/ibc/core,gno.land/r/aib/ibc/apps/transfer -empty-blocks -no-watch -v -add-account $GNO_RELAYER_ADDRESS=1000000000000ugnot -node-rpc-listener 0.0.0.0:26657 -web-listener 0.0.0.0:8888 &' >> /app/entrypoint.sh && \
+           echo '/usr/local/bin/gnodev local -root /app/gno -validator-key-file /app/gnosecrets/priv_validator_key.json -paths gno.land/r/aib/ibc/core,gno.land/r/aib/ibc/core/impl/v0,gno.land/r/aib/ibc/apps/transfer,gno.land/r/aib/ibc/apps/transfer/impl/v0 -empty-blocks -no-watch -v -add-account $GNO_RELAYER_ADDRESS=1000000000000ugnot -node-rpc-listener 0.0.0.0:26657 -web-listener 0.0.0.0:8888 &' >> /app/entrypoint.sh && \
            echo "/app/tx-indexer/build/tx-indexer start --remote http://127.0.0.1:26657 --listen-address 0.0.0.0:8546 --db-path /app/tx-indexer/indexer-db" >> /app/entrypoint.sh && \
            chmod +x /app/entrypoint.sh
 EXPOSE 8888
