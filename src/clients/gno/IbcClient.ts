@@ -857,7 +857,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       validatorsHash: toHex(header.signedHeader.header.validatorsHash ?? new Uint8Array()),
       nextValidatorsHash: toHex(header.signedHeader.header.nextValidatorsHash ?? new Uint8Array()),
       proposerAddress: toHex(header.signedHeader.header.proposerAddress),
-      totalVotingPower: header.validatorSet.validators.reduce((sum, val) => sum + val.votingPower, 0n).toString(),
       validators: header.validatorSet.validators.map(val => ({
         address: toHex(val.address),
         pubKey: toHex(val.pubKey.ed25519 ?? val.pubKey.secp256k1 ?? new Uint8Array()),
@@ -874,7 +873,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       })),
       trustedProposerAddress: toHex(header.trustedValidators.proposer?.address ?? new Uint8Array()),
       trustedProposerPubKey: toHex(header.trustedValidators.proposer?.pubKey.ed25519 ?? header.trustedValidators.proposer?.pubKey.secp256k1 ?? new Uint8Array()),
-      trustedVotingPower: header.trustedValidators.validators.reduce((sum, val) => sum + val.votingPower, 0n).toString(),
       trustedProposerVotingPower: header.trustedValidators.proposer?.votingPower.toString() ?? "0",
       commitHeight: header.signedHeader.commit.height.toString(),
       commitRound: header.signedHeader.commit.round.toString(),
