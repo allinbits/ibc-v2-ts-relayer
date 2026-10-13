@@ -35,7 +35,6 @@ func main(cur realm) {
 				PubKey:      hexDec("{{ proposerPubKey }}"),
 				VotingPower: {{ proposerVotingPower }},
 			},
-			TotalVotingPower: {{ totalVotingPower }},
 		}
 		trustedHeight = types.Height{{ openBr }}{{ trustedRevisionNumber }}, {{ trustedRevisionHeight }}{{ closeBr }}        // TODO update
 		trustedValset = &tendermint.ValidatorSet{ // TODO update
@@ -53,7 +52,6 @@ func main(cur realm) {
 					PubKey:      hexDec("{{ trustedProposerPubKey }}"),
 					VotingPower: {{ trustedProposerVotingPower}},
 			},
-			TotalVotingPower: {{ trustedVotingPower }},
 		}
 		msgHeader = &tendermint.MsgHeader{
 			Header: &tendermint.Header{
