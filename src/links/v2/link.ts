@@ -10,8 +10,14 @@ import {
 import * as winston from "winston";
 
 import {
-  BaseIbcClient, isGno, isGnoClientState, isGnoConsensusState, isTendermint, isTendermintClientState, isTendermintConsensusState,
+  BaseIbcClient, isEthereum, isGno, isGnoClientState, isGnoConsensusState, isTendermint, isTendermintClientState, isTendermintConsensusState,
 } from "../../clients/BaseIbcClient.js";
+import type {
+  EthereumIbcClient,
+} from "../../clients/ethereum/IbcClient.js";
+import {
+  isEthereumClientState, isEthereumConsensusState,
+} from "../../clients/ethereum/types.js";
 import {
   GnoIbcClient,
 } from "../../clients/gno/IbcClient.js";
@@ -190,6 +196,15 @@ export class Link {
       merklePrefixB = Buffer.from("main", "utf-8");
       merklePathPrefixB = Buffer.from("/pv/vm:gno.land/r/aib/ibc/core:", "utf-8");
     }
+    // The ICS26 router keys its commitments by the ICS24 path itself: its
+    // prefix is a single empty element, which hosts of an Ethereum client
+    // register from the client's type.
+    if (isEthereum(nodeA)) {
+      merklePrefixA = Buffer.from("", "utf-8");
+    }
+    if (isEthereum(nodeB)) {
+      merklePrefixB = Buffer.from("", "utf-8");
+    }
     await nodeB.registerCounterParty(clientIdB, clientIdA, merklePrefixA, merklePathPrefixA);
     await nodeA.registerCounterParty(clientIdA, clientIdB, merklePrefixB, merklePathPrefixB);
     const endA = getEndpoint(nodeA, clientIdA);
@@ -321,14 +336,14 @@ export class Link {
       src.client.clientType,
     );
 
-    if (!isTendermintConsensusState(knownHeader) && !isGnoConsensusState(knownHeader)) {
+    if (!isTendermintConsensusState(knownHeader) && !isGnoConsensusState(knownHeader) && !isEthereumConsensusState(knownHeader)) {
       throw new Error(
-        `Expected TendermintConsensusState or GnoConsensusState, got ${knownHeader}`,
+        `Expected a Tendermint, Gno or Ethereum consensus state, got ${knownHeader}`,
       );
     }
-    if (!isTendermint(src.client) && !isGno(src.client)) {
+    if (!isTendermint(src.client) && !isGno(src.client) && !isEthereum(src.client)) {
       throw new Error(
-        `updateClientIfStale only supported for Tendermint/Gno clients, got ${src.client.clientType}`,
+        `updateClientIfStale only supported for Tendermint/Gno/Ethereum clients, got ${src.client.clientType}`,
       );
     }
 
@@ -338,6 +353,9 @@ export class Link {
     }
     else if (isGnoConsensusState(knownHeader)) {
       knownSeconds = Number(knownHeader.timestamp?.seconds);
+    }
+    else if (isEthereumConsensusState(knownHeader)) {
+      knownSeconds = Number(knownHeader.timestamp.seconds);
     }
     else {
       knownSeconds = 0;
@@ -353,7 +371,7 @@ export class Link {
           return null;
         }
       }
-      else if (isGno(src.client)) {
+      else if (isGno(src.client) || isEthereum(src.client)) {
         const currentHeader = await src.client.latestHeader();
         const curSeconds = Number(currentHeader.time.seconds);
         if (curSeconds - knownSeconds < maxAge) {
@@ -386,16 +404,16 @@ export class Link {
     } = this.getEnds(source);
     // The following checks are for Termendmint clients.
     // TODO: Add support for other client types
-    if (!isTendermint(src.client) && !isGno(src.client)) {
+    if (!isTendermint(src.client) && !isGno(src.client) && !isEthereum(src.client)) {
       throw new Error(
-        `updateClientToHeight only supported for Tendermint/Gno clients, got ${src.client.clientType}`,
+        `updateClientToHeight only supported for Tendermint/Gno/Ethereum clients, got ${src.client.clientType}`,
       );
     }
     const clientState = await dest.client.getLatestClientState(dest.clientID, src.client.clientType);
 
-    if (!isTendermintClientState(clientState) && !isGnoClientState(clientState)) {
+    if (!isTendermintClientState(clientState) && !isGnoClientState(clientState) && !isEthereumClientState(clientState)) {
       throw new Error(
-        `Expected TendermintClientState or GnoClientState, got ${clientState}`,
+        `Expected a Tendermint, Gno or Ethereum client state, got ${clientState}`,
       );
     }
     // TODO: revisit where revision number comes from - this must be the number from the source chain
@@ -823,6 +841,8 @@ function getEndpoint(
       return new TendermintEndpoint(client as TendermintIbcClient, clientId, connectionId);
     case ClientType.Gno:
       return new TendermintEndpoint(client as GnoIbcClient, clientId, connectionId);
+    case ClientType.Ethereum:
+      return new TendermintEndpoint(client as EthereumIbcClient, clientId, connectionId);
     default:
       throw new Error(`Unsupported client type: ${client.clientType}`);
   }
@@ -859,6 +879,17 @@ async function createClients(
     clientIdB = clientId;
   }
 
+  if (isEthereum(nodeA)) {
+    const args = await nodeA.buildCreateClientArgs(trustPeriodA);
+    const {
+      clientId,
+    } = await nodeB.createEthereumClient(
+      args.clientState, args.consensusState,
+    );
+    nodeB.logger.info(`Created client for nodeB: ${clientId}`);
+    clientIdB = clientId;
+  }
+
   // client on A pointing to B
   if (isTendermint(nodeB)) {
     const args2 = await nodeB.buildCreateClientArgs(trustPeriodB);
@@ -876,6 +907,17 @@ async function createClients(
     const {
       clientId,
     } = await nodeA.createGnoClient(
+      args2.clientState, args2.consensusState,
+    );
+    nodeA.logger.info(`Created client for nodeA: ${clientId}`);
+    clientIdA = clientId;
+  }
+
+  if (isEthereum(nodeB)) {
+    const args2 = await nodeB.buildCreateClientArgs(trustPeriodB);
+    const {
+      clientId,
+    } = await nodeA.createEthereumClient(
       args2.clientState, args2.consensusState,
     );
     nodeA.logger.info(`Created client for nodeA: ${clientId}`);

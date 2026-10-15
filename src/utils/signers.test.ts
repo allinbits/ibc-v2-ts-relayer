@@ -303,4 +303,31 @@ describe("signers", () => {
       consoleSpy.mockRestore();
     });
   });
+  describe("getSigner - Ethereum chains", () => {
+    const useSecret = (secret: string | null) => {
+      vi.mocked(Entry).mockImplementation(function (this: any) {
+        return {
+          getPassword: vi.fn().mockReturnValue(secret),
+        } as any;
+      } as any);
+    };
+
+    it("should derive the account from a mnemonic", async () => {
+      // The well-known "test test ... junk" mnemonic's first account.
+      useSecret("test test test test test test test test test test test junk");
+      const account = await getSigner("11155111", ChainType.Ethereum) as any;
+      expect(account.address).toBe("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
+    });
+
+    it("should accept a hex private key", async () => {
+      useSecret("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
+      const account = await getSigner("11155111", ChainType.Ethereum) as any;
+      expect(account.address).toBe("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+    });
+
+    it("should throw when no secret is stored", async () => {
+      useSecret(null);
+      await expect(getSigner("11155111", ChainType.Ethereum)).rejects.toThrow("Mnemonic not found in keyring");
+    });
+  });
 });

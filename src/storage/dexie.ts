@@ -3,6 +3,7 @@ import Dexie, {
 } from "dexie";
 
 import {
+  ChainConfig,
   ChainFees,
   MisbehaviourEvidence,
   MonitorCursor,
@@ -13,6 +14,7 @@ const db = new Dexie("Relayer") as Dexie & {
   relayPaths: EntityTable<RelayPaths, "id">
   relayedHeights: EntityTable<RelayedHeights, "id">
   chainFees: EntityTable<ChainFees, "id">
+  chainConfigs: EntityTable<ChainConfig, "id">
   misbehaviourEvidence: EntityTable<MisbehaviourEvidence, "id">
   monitorCursors: EntityTable<MonitorCursor, "id">
 };
@@ -26,6 +28,10 @@ db.version(3).stores({
 db.version(4).stores({
   misbehaviourEvidence: "++id, status, &[hostChainId+clientId+revisionNumber+revisionHeight]",
   monitorCursors: "++id, &[relayPathId+side]",
+});
+
+db.version(5).stores({
+  chainConfigs: "++id, &chainId",
 });
 
 export {

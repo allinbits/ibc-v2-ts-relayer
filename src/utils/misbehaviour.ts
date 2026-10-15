@@ -24,6 +24,9 @@ import {
 } from "@gnolang/gno-types";
 
 import {
+  isEthereumConsensusState,
+} from "../clients/ethereum/types.js";
+import {
   AnyConsensusState, ClientStatus, ConsensusStateSummary, HeaderSummary, MisbehaviourKind,
 } from "../types/index.js";
 
@@ -50,6 +53,18 @@ export function summarizeConsensusState(
   consensusState: AnyConsensusState,
   timestampPrecision: ConsensusStateSummary["timestampPrecision"] = "nanoseconds",
 ): ConsensusStateSummary {
+  if (isEthereumConsensusState(consensusState)) {
+    // Ethereum consensus states carry the execution block time in seconds
+    // and the execution state root; there is no validator set.
+    return {
+      revisionNumber: height.revisionNumber,
+      revisionHeight: height.revisionHeight,
+      timestampNanos: consensusState.timestamp.seconds * NANOS_PER_SECOND,
+      timestampPrecision: "seconds",
+      root: consensusState.stateRoot,
+      nextValidatorsHash: new Uint8Array(),
+    };
+  }
   return {
     revisionNumber: height.revisionNumber,
     revisionHeight: height.revisionHeight,

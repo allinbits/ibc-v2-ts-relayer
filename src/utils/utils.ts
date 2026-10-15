@@ -111,6 +111,9 @@ export async function getPrefix(chainType: ChainType, node: string): Promise<str
       tmClient.disconnect();
     }
   }
+  else if (chainType === ChainType.Ethereum) {
+    return "0x";
+  }
   else {
     return "g";
   }

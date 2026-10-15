@@ -78,6 +78,9 @@ import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
 } from "../BaseIbcClient.js";
 import {
+  EthereumClientState, EthereumConsensusState, EthereumLightClientHeader,
+} from "../ethereum/types.js";
+import {
   acknowledgement,
   createClientTemplate, recvPacket, registerCounterParty, timeout, updateClientTemplate,
 } from "./queries.js";
@@ -918,6 +921,20 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     _header: ibc.lightclients.gno.v1.gno.Header,
   ): Promise<MsgResult> {
     throw new Error("Gno LC on Gno not implemented.");
+  }
+
+  public async createEthereumClient(
+    _clientState: EthereumClientState,
+    _consensusState: EthereumConsensusState,
+  ): Promise<CreateClientResult> {
+    throw new Error("TODO: Ethereum light client support");
+  }
+
+  public async updateEthereumClient(
+    _clientId: string,
+    _updates: EthereumLightClientHeader,
+  ): Promise<MsgResult> {
+    throw new Error("TODO: Ethereum light client support");
   }
 
   public async connOpenInit(

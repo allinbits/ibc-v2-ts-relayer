@@ -41,6 +41,26 @@ export class DexieStorage implements IStorage {
     return res;
   }
 
+  async setChainConfig(chainId: string, config: Record<string, string>): Promise<void> {
+    await db.chainConfigs.where({
+      chainId,
+    }).delete();
+    await db.chainConfigs.add({
+      chainId,
+      config: JSON.stringify(config),
+    });
+  }
+
+  async getChainConfig(chainId: string): Promise<Record<string, string>> {
+    const res = await db.chainConfigs.where({
+      chainId,
+    }).first();
+    if (!res) {
+      throw new Error(`Chain config not found for chain ID: ${chainId}`);
+    }
+    return JSON.parse(res.config) as Record<string, string>;
+  }
+
   async updateRelayedHeights(
     pathId: number,
     packetHeightA: number,

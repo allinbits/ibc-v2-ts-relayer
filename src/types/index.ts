@@ -26,13 +26,17 @@ import {
   ibc,
 } from "@gnolang/gno-types";
 
+import type {
+  EthereumClientState, EthereumConsensusState,
+} from "../clients/ethereum/types.js";
+
 export enum ChainType {
   Cosmos = "cosmos",
   Ethereum = "ethereum",
   Gno = "gno",
 }
-export type AnyClientState = TendermintClientState | ibc.lightclients.gno.v1.gno.ClientState;
-export type AnyConsensusState = TendermintConsensusState | ibc.lightclients.gno.v1.gno.ConsensusState;
+export type AnyClientState = TendermintClientState | ibc.lightclients.gno.v1.gno.ClientState | EthereumClientState;
+export type AnyConsensusState = TendermintConsensusState | ibc.lightclients.gno.v1.gno.ConsensusState | EthereumConsensusState;
 export interface RelayPaths {
   id: number
   chainIdA: string
@@ -46,6 +50,15 @@ export interface RelayPaths {
   clientA: string
   clientB: string
   version: number
+}
+/**
+ * Chain-specific settings that do not fit the path record, as a JSON object
+ * of strings (e.g. the contract addresses and beacon API of an Ethereum chain).
+ */
+export interface ChainConfig {
+  id: number
+  chainId: string
+  config: string
 }
 export interface ChainFees {
   id: number

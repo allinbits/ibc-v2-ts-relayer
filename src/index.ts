@@ -128,6 +128,29 @@ program.command("add-gas-price")
       process.exit(1);
     }
   });
+program.command("add-ethereum-chain")
+  .description("Add the settings of an Ethereum chain: its ICS26 router and beacon API")
+  .requiredOption("-c, --chain-id <chainId>", "EVM chain ID, e.g. 11155111")
+  .requiredOption("-r, --router <address>", "ICS26Router address")
+  .requiredOption("-b, --beacon <url>", "Beacon node API serving the light-client endpoints")
+  .option("-p, --proof-rpc <url>", "Execution RPC serving eth_getProof at finalized blocks (default: the path's node)")
+  .action(async (options) => {
+    try {
+      const relayer = new Relayer(log);
+      await relayer.addEthereumChain(options.chainId, {
+        router: options.router,
+        beacon: options.beacon,
+        proofRpc: options.proofRpc,
+      });
+    }
+    catch (error) {
+      log.error("Failed to add Ethereum chain", {
+        error,
+        chainId: options.chainId,
+      });
+      process.exit(1);
+    }
+  });
 program.command("relay")
   .description("Relay packets between chains")
   .action(async () => {

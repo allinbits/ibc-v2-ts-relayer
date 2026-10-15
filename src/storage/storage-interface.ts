@@ -35,6 +35,23 @@ export interface IStorage {
   getChainFees(chainId: string): Promise<ChainFees>
 
   /**
+   * Stores chain-specific settings, replacing any previous ones.
+   *
+   * @param chainId - The chain identifier
+   * @param config - The settings, as string values
+   */
+  setChainConfig(chainId: string, config: Record<string, string>): Promise<void>
+
+  /**
+   * Retrieves the settings stored with setChainConfig.
+   *
+   * @param chainId - The chain identifier
+   * @returns The settings
+   * @throws Error if no settings are stored for the chain
+   */
+  getChainConfig(chainId: string): Promise<Record<string, string>>
+
+  /**
    * Updates the relay heights for a specific path.
    *
    * @param pathId - The relay path ID
