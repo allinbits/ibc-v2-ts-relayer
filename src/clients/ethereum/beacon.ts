@@ -135,6 +135,35 @@ export class BeaconClient {
     return res.map(r => r.data);
   }
 
+  /**
+   * The hash of the execution block the beacon block at id commits to: its
+   * execution payload's before Gloas, its bid's parent block hash from Gloas
+   * on — the block a light-client header for that slot carries.
+   */
+  public async executionBlockHash(id: string): Promise<string> {
+    const body = (await this.get<{
+      data: {
+        message: {
+          body: {
+            execution_payload?: {
+              block_hash: string
+            }
+            signed_execution_payload_bid?: {
+              message: {
+                parent_block_hash: string
+              }
+            }
+          }
+        }
+      }
+    }>(`/eth/v2/beacon/blocks/${id}`)).data.message.body;
+    const hash = body.execution_payload?.block_hash ?? body.signed_execution_payload_bid?.message.parent_block_hash;
+    if (!hash) {
+      throw new Error(`beacon block ${id} commits to no execution block`);
+    }
+    return hash;
+  }
+
   public async finalityUpdate(): Promise<LightClientUpdate> {
     return (await this.get<{
       data: LightClientUpdate

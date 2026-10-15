@@ -77,6 +77,11 @@ export interface EthereumUpdate {
   trustedSlot: bigint
   finalizedSlot: bigint
   signatureSlot: bigint
+  /**
+   * Unix time of the signature slot: the host rejects an update until its
+   * own block time reaches it.
+   */
+  signatureTime: bigint
 }
 
 /**

@@ -219,8 +219,14 @@ export class EthereumIbcClient extends BaseIbcClient<EthereumIbcClientTypes> {
     return source.getTimeoutProofV2(this, packet, headerHeight);
   }
 
-  public async buildHeader(lastHeight: number, targetHeight?: number): Promise<EthereumLightClientHeader> {
-    return source.buildHeader(this, lastHeight, targetHeight);
+  /**
+   * The updates that bring a counterparty's client of this chain, trusting
+   * slot lastHeight, to finality at or past targetHeight. Pass
+   * nextSyncCommitteeKnown = false when its trusted state does not know the
+   * next sync committee yet.
+   */
+  public async buildHeader(lastHeight: number, targetHeight?: number, nextSyncCommitteeKnown = true): Promise<EthereumLightClientHeader> {
+    return source.buildHeader(this, lastHeight, targetHeight, nextSyncCommitteeKnown);
   }
 
   public async buildCreateClientArgs(_trustPeriodSec?: number | null): Promise<{
