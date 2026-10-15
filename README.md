@@ -94,3 +94,20 @@ Finally we build the message like so:
         timeoutTimestamp: <unixTimestamp> // in SECONDS
       })
 ```
+## Ethereum as a host of gno.land light clients
+
+`src/clients/ethereum/host.ts` relays to [GnoLightClient](https://github.com/gnolang/gno-eth-ibc) contracts
+behind the solidity-ibc-eureka v3.0.2 ICS26Router; `gnoibc.ts` holds its header and proof encoders, checked
+byte for byte against the Go encoder (`src/clients/ethereum/testdata/gnoibc-vectors.json`, from
+`go run ./cmd/genfixtures -ts-out …` in gno-eth-ibc's `fixtures/`). The contract ABI and bytecode in
+`src/clients/ethereum/artifacts/` are generated with `pnpm gen:eth-artifacts` (`GNO_ETH_IBC` points at a
+gno-eth-ibc checkout with a Foundry build; each file records the source commit).
+
+End to end on local chains (`pnpm test:eth-host:e2e`): run `make e2e-local` in gno-eth-ibc first. It leaves
+the gno testnet (`127.0.0.1:26657`) and anvil (`127.0.0.1:8545`) running with the router deployed
+(`contracts/deployments/local.json`). The test then deploys a GnoLightClient through `createGnoClient`, adds
+it with `registerCounterParty`, sends an ICS20 transfer from gno over a placeholder Ethereum client (created
+with gno-eth-ibc's Go relayer), relays it with `updateClient`, `getPacketProofV2` and `receivePacketsV2`, and
+checks the ack and the voucher balance. Environment: `GNO_ETH_IBC` (default `../gnolang/gno-eth-ibc`),
+`GNO_RPC`, `ETH_RPC`, `ETH_PRIVATE_KEY` and `GNO_MNEMONIC` (defaults: the public dev keys of anvil and of the
+testnet's test1 account).

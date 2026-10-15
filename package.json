@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
-    "gen:eth-artifacts": "node scripts/gen-eth-artifacts.mjs"
+    "gen:eth-artifacts": "node scripts/gen-eth-artifacts.mjs",
+    "test:eth-host:e2e": "vitest run --config vitest.config.eth-host.ts"
   },
   "bin": {
     "ibc-v2-relayer": "./dist/index.js"
