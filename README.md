@@ -111,3 +111,22 @@ with gno-eth-ibc's Go relayer), relays it with `updateClient`, `getPacketProofV2
 checks the ack and the voucher balance. Environment: `GNO_ETH_IBC` (default `../gnolang/gno-eth-ibc`),
 `GNO_RPC`, `ETH_RPC`, `ETH_PRIVATE_KEY` and `GNO_MNEMONIC` (defaults: the public dev keys of anvil and of the
 testnet's test1 account).
+
+## gno.land as a host of Ethereum light clients
+
+The gno client relays Ethereum (`relayer add-ethereum-chain -c <chain-id> -r <ICS26Router> -b <beacon API>
+[-p <proof RPC>]`) to the Ethereum light client of the IBC core realm
+(`gno.land/p/aib/ibc/lightclient/ethereum/v0` in gno-realms, which needs the chain's `crypto/bls12381`
+natives). Heights of an Ethereum client are finalized beacon slots.
+
+- `createEthereumClient` and the counterparty registration (the router's empty merkle prefix) are MsgRun
+  scripts, built by `src/clients/gno/ethereum.ts`.
+- Updates and packets are MsgCalls to `gno.land/r/aib/ibc/ethrelay`, whose arguments are messages in the
+  `gno.land/p/clockwork/wire` format (`src/clients/ethereum/wire.ts`). An update carries the sync committee's
+  non-signers, not its keys; one that crosses sync committee periods takes several transactions, each sent
+  once gno's block time has reached its signature slot.
+- Storage proofs are taken with `eth_getProof` at finalized blocks, 64 to 96 blocks behind head. Most public
+  RPCs refuse that; set the chain's proof RPC (`-p`) to one that serves it, such as an archive node.
+
+Gas on gno.land: about 40M per update (50M when it crosses a period), 94M to receive a packet, 63M per
+acknowledgement.
