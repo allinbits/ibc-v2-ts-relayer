@@ -7,6 +7,9 @@ import {
 import {
   Entry,
 } from "@napi-rs/keyring";
+import {
+  Account, mnemonicToAccount, privateKeyToAccount,
+} from "viem/accounts";
 
 import {
   ChainType,
@@ -14,7 +17,7 @@ import {
 
 export const getSigner = async (chainId: string, chainType: ChainType, options?: {
   prefix: string
-}): Promise<OfflineSigner | GnoWallet> => {
+}): Promise<OfflineSigner | GnoWallet | Account> => {
   if (chainType === ChainType.Cosmos) {
     if (typeof window !== "undefined") {
       if (window.keplr) {
@@ -49,6 +52,21 @@ export const getSigner = async (chainId: string, chainType: ChainType, options?:
         addressPrefix: options?.prefix || "g",
       });
     }
+  }
+  else if (chainType === ChainType.Ethereum) {
+    if (typeof window !== "undefined") {
+      throw new Error("Browser Ethereum signing not supported yet");
+    }
+    const entry = new Entry("mnemonic", chainId);
+    const secret = entry.getPassword();
+    if (!secret) {
+      throw new Error("Mnemonic not found in keyring");
+    }
+    // The keyring entry holds a mnemonic, or a 0x-prefixed private key.
+    if (/^0x[0-9a-fA-F]{64}$/.test(secret.trim())) {
+      return privateKeyToAccount(secret.trim() as `0x${string}`);
+    }
+    return mnemonicToAccount(secret);
   }
   else {
     throw new Error(`Unsupported chain type: ${chainType}`);

@@ -108,6 +108,22 @@ export class SQLiteStorage implements IStorage {
     return res;
   }
 
+  async setChainConfig(chainId: string, config: Record<string, string>): Promise<void> {
+    const db = await openDB(this.dbPath);
+    await db.prepare("INSERT INTO chainConfigs (chainId, config) VALUES (?, ?)").run([chainId, JSON.stringify(config)]);
+  }
+
+  async getChainConfig(chainId: string): Promise<Record<string, string>> {
+    const db = await openDB(this.dbPath);
+    const res = await db.prepare("SELECT config FROM chainConfigs WHERE chainId = ?").get([chainId]) as {
+      config: string
+    } | undefined;
+    if (!res) {
+      throw new Error(`Chain config not found for chain ID: ${chainId}`);
+    }
+    return JSON.parse(res.config) as Record<string, string>;
+  }
+
   async updateRelayedHeights(
     pathId: number,
     packetHeightA: number,

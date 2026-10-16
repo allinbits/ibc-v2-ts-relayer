@@ -100,6 +100,35 @@ describe("SQLiteStorage", () => {
     });
   });
 
+  describe("chain configs", () => {
+    it("should store and retrieve a chain config", async () => {
+      await storage.setChainConfig("sepolia", {
+        router: "0x01",
+        beacon: "http://beacon",
+      });
+      expect(await storage.getChainConfig("sepolia")).toEqual({
+        router: "0x01",
+        beacon: "http://beacon",
+      });
+    });
+
+    it("should replace an existing chain config", async () => {
+      await storage.setChainConfig("sepolia", {
+        router: "0x01",
+      });
+      await storage.setChainConfig("sepolia", {
+        router: "0x02",
+      });
+      expect(await storage.getChainConfig("sepolia")).toEqual({
+        router: "0x02",
+      });
+    });
+
+    it("should throw when no config is stored", async () => {
+      await expect(storage.getChainConfig("unknown-chain")).rejects.toThrow("Chain config not found");
+    });
+  });
+
   describe("updateRelayedHeights", () => {
     it("should update relayed heights in the database", async () => {
       // First add a relay path

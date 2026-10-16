@@ -15,7 +15,9 @@
     "test:misbehaviour:gno:e2e": "vitest run --config vitest.config.misbehaviour-gno.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json"
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
+    "gen:eth-artifacts": "node scripts/gen-eth-artifacts.mjs",
+    "test:eth-host:e2e": "vitest run --config vitest.config.eth-host.ts"
   },
   "bin": {
     "ibc-v2-relayer": "./dist/index.js"
@@ -47,6 +49,7 @@
     "handlebars": "^4.7.9",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1",
+    "viem": "2.57.1",
     "wait-on": "^9.1.0",
     "winston": "^3.19.0"
   },

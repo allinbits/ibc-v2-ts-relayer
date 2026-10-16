@@ -28,9 +28,12 @@ import * as winston from "winston";
 import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, ChannelHandshakeProof, ChannelInfo, ClientStatus, ClientType, ConnectionHandshakeProof, ConsensusStateSummary, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, HeaderSummary, MsgResult, PacketV2WithMetadata, PacketWithMetadata,
 } from "../types";
+import type {
+  EthereumIbcClient,
+} from "./ethereum/IbcClient.js";
 import {
-  decodeClientState, decodeConsensusState,
-} from "../utils/utils";
+  EthereumClientState, EthereumConsensusState, EthereumLightClientHeader,
+} from "./ethereum/types.js";
 import {
   GnoIbcClient,
 } from "./gno/IbcClient.js";
@@ -62,17 +65,21 @@ export function isTendermint(client: BaseIbcClient): client is TendermintIbcClie
 export function isGno(client: BaseIbcClient): client is GnoIbcClient {
   return client.clientType === ClientType.Gno;
 }
-export function isTendermintClientState(clientState: ReturnType<typeof decodeClientState>): clientState is TendermintClientState {
+export function isEthereum(client: BaseIbcClient): client is EthereumIbcClient {
+  return client.clientType === ClientType.Ethereum;
+}
+
+export function isTendermintClientState(clientState: object): clientState is TendermintClientState {
   return "chainId" in clientState && "trustLevel" in clientState;
 }
-export function isTendermintConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is TendermintConsensusState {
+export function isTendermintConsensusState(consensusState: object): consensusState is TendermintConsensusState {
   return "nextValidatorsHash" in consensusState && !("lcType" in consensusState);
 }
 
-export function isGnoClientState(clientState: ReturnType<typeof decodeClientState>): clientState is ibc.lightclients.gno.v1.gno.ClientState {
+export function isGnoClientState(clientState: object): clientState is ibc.lightclients.gno.v1.gno.ClientState {
   return "lcType" in clientState && clientState.lcType === "10-gno";
 }
-export function isGnoConsensusState(consensusState: ReturnType<typeof decodeConsensusState>): consensusState is ibc.lightclients.gno.v1.gno.ConsensusState {
+export function isGnoConsensusState(consensusState: object): consensusState is ibc.lightclients.gno.v1.gno.ConsensusState {
   return "lcType" in consensusState && consensusState.lcType === "10-gno";
 }
 
@@ -161,6 +168,23 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
      */
   abstract updateTendermintClient(clientId: string, header: TendermintHeader): Promise<MsgResult>;
   abstract updateGnoClient(clientId: string, header: ibc.lightclients.gno.v1.gno.Header): Promise<MsgResult>;
+
+  /**
+   * Creates a light client of an Ethereum chain on this chain.
+   */
+  abstract createEthereumClient(
+    clientState: EthereumClientState,
+    consensusState: EthereumConsensusState,
+  ): Promise<CreateClientResult>;
+
+  /**
+   * Applies, in order, the updates an Ethereum chain built for its light
+   * client on this chain (EthereumIbcClient.buildHeader).
+   */
+  abstract updateEthereumClient(
+    clientId: string,
+    updates: EthereumLightClientHeader,
+  ): Promise<MsgResult>;
 
   /* Registering counterparty client for IBC v2 handshaking  Tx */
   abstract registerCounterParty(clientId: string, counterpartyClientId: string, merklePrefix: Uint8Array, merklePathPrefix?: Uint8Array): Promise<MsgResult>;

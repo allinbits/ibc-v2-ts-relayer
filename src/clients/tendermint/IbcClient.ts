@@ -108,6 +108,9 @@ import {
 import {
   BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
 } from "../BaseIbcClient.js";
+import {
+  EthereumClientState, EthereumConsensusState, EthereumLightClientHeader,
+} from "../ethereum/types.js";
 
 const ibcRegistryInstance = new Registry([...defaultRegistryTypes, ["/ibc.core.client.v1.MsgCreateClient", MsgCreateClient as unknown as GeneratedType], ["/ibc.core.client.v1.MsgUpdateClient", MsgUpdateClient as unknown as GeneratedType], ["/ibc.core.client.v2.MsgRegisterCounterparty", MsgRegisterCounterparty as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenInit", MsgConnectionOpenInit as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenTry", MsgConnectionOpenTry as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenAck", MsgConnectionOpenAck as unknown as GeneratedType], ["/ibc.core.connection.v1.MsgConnectionOpenConfirm", MsgConnectionOpenConfirm as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenInit", MsgChannelOpenInit as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenTry", MsgChannelOpenTry as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenAck", MsgChannelOpenAck as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgChannelOpenConfirm", MsgChannelOpenConfirm as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgRecvPacket", MsgRecvPacket as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgAcknowledgement", MsgAcknowledgement as unknown as GeneratedType], ["/ibc.core.channel.v1.MsgTimeout", MsgTimeout as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgSendPacket", MsgSendPacket as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgRecvPacket", MsgRecvPacketV2 as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgAcknowledgement", MsgAcknowledgementV2 as unknown as GeneratedType], ["/ibc.core.channel.v2.MsgTimeout", MsgTimeoutV2 as unknown as GeneratedType], ["/ibc.applications.transfer.v1.MsgTransfer", MsgTransfer as unknown as GeneratedType]]);
 export type TendermintIbcClientOptions = SigningStargateClientOptions & BaseIbcClientOptions & {
@@ -947,6 +950,20 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
       transactionHash: result.transactionHash,
       height: result.height,
     };
+  }
+
+  public async createEthereumClient(
+    _clientState: EthereumClientState,
+    _consensusState: EthereumConsensusState,
+  ): Promise<CreateClientResult> {
+    throw new Error("Ethereum light clients are not supported on Cosmos chains");
+  }
+
+  public async updateEthereumClient(
+    _clientId: string,
+    _updates: EthereumLightClientHeader,
+  ): Promise<MsgResult> {
+    throw new Error("Ethereum light clients are not supported on Cosmos chains");
   }
 
   public async connOpenInit(

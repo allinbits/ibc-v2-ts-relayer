@@ -14,11 +14,20 @@ import {
 import {
   Entry,
 } from "@napi-rs/keyring";
+import {
+  Account,
+} from "viem";
 import * as winston from "winston";
 
 import {
   BaseIbcClient,
 } from "./clients/BaseIbcClient.js";
+import {
+  EthereumIbcClient,
+} from "./clients/ethereum/IbcClient.js";
+import {
+  EthereumChainConfig,
+} from "./clients/ethereum/types.js";
 import {
   GnoIbcClient,
 } from "./clients/gno/IbcClient.js";
@@ -99,41 +108,47 @@ export class Relayer extends EventEmitter {
     const signerB = await getSigner(chainIdB, chainTypeB, {
       prefix: prefixB,
     });
-    const feesA = await storage.getChainFees(chainIdA);
-    const feesB = await storage.getChainFees(chainIdB);
+    // Ethereum prices its own gas (EIP-1559).
+    const feesA = chainTypeA === ChainType.Ethereum ? undefined : await storage.getChainFees(chainIdA);
+    // Ethereum prices its own gas (EIP-1559).
+    const feesB = chainTypeB === ChainType.Ethereum ? undefined : await storage.getChainFees(chainIdB);
 
-    const clientA = chainTypeA === ChainType.Cosmos
-      ? await TendermintIbcClient.connectWithSigner(nodeA, signerA as OfflineSigner, {
-        senderAddress: await getSenderAddress(signerA as OfflineSigner, chainIdA),
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-        gasAdjustment: feesA.gasAdjustment,
-        estimatedBlockTime: 6000,
-      })
-      : await GnoIbcClient.connectWithSigner(nodeA, queryNodeA, signerA as GnoWallet, {
-        senderAddress: (await (signerA as GnoWallet).getAddress()),
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-        gasAdjustment: feesA.gasAdjustment,
-        addressPrefix: prefixA,
-        estimatedBlockTime: 6000,
-      });
-    const clientB = chainTypeB === ChainType.Cosmos
-      ? await TendermintIbcClient.connectWithSigner(nodeB, signerB as OfflineSigner, {
-        senderAddress: await getSenderAddress(signerB as OfflineSigner, chainIdB),
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-        gasAdjustment: feesB.gasAdjustment,
-        estimatedBlockTime: 6000,
-      })
-      : await GnoIbcClient.connectWithSigner(nodeB, queryNodeB, signerB as GnoWallet, {
-        senderAddress: (await (signerB as GnoWallet).getAddress()),
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-        gasAdjustment: feesB.gasAdjustment,
-        addressPrefix: prefixB,
-        estimatedBlockTime: 6000,
-      });
+    const clientA = chainTypeA === ChainType.Ethereum
+      ? await this.connectEthereumClient(chainIdA, nodeA)
+      : chainTypeA === ChainType.Cosmos
+        ? await TendermintIbcClient.connectWithSigner(nodeA, signerA as OfflineSigner, {
+          senderAddress: await getSenderAddress(signerA as OfflineSigner, chainIdA),
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+          gasAdjustment: feesA.gasAdjustment,
+          estimatedBlockTime: 6000,
+        })
+        : await GnoIbcClient.connectWithSigner(nodeA, queryNodeA, signerA as GnoWallet, {
+          senderAddress: (await (signerA as GnoWallet).getAddress()),
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+          gasAdjustment: feesA.gasAdjustment,
+          addressPrefix: prefixA,
+          estimatedBlockTime: 6000,
+        });
+    const clientB = chainTypeB === ChainType.Ethereum
+      ? await this.connectEthereumClient(chainIdB, nodeB)
+      : chainTypeB === ChainType.Cosmos
+        ? await TendermintIbcClient.connectWithSigner(nodeB, signerB as OfflineSigner, {
+          senderAddress: await getSenderAddress(signerB as OfflineSigner, chainIdB),
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+          gasAdjustment: feesB.gasAdjustment,
+          estimatedBlockTime: 6000,
+        })
+        : await GnoIbcClient.connectWithSigner(nodeB, queryNodeB, signerB as GnoWallet, {
+          senderAddress: (await (signerB as GnoWallet).getAddress()),
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+          gasAdjustment: feesB.gasAdjustment,
+          addressPrefix: prefixB,
+          estimatedBlockTime: 6000,
+        });
     // Capture each chain's current height *before* the client/channel is
     // created. No IBC events for this path can exist below this height, so we
     // use it as the initial relay floor to avoid a "since genesis" event scan
@@ -249,10 +264,33 @@ export class Relayer extends EventEmitter {
     );
   }
 
+  /**
+   * Stores the settings of an Ethereum chain: its ICS26 router, beacon API
+   * and, optionally, an RPC serving eth_getProof at finalized blocks.
+   */
+  async addEthereumChain(chainId: string, config: EthereumChainConfig) {
+    const entries: Record<string, string> = {
+      router: config.router,
+      beacon: config.beacon,
+    };
+    if (config.proofRpc) {
+      entries.proofRpc = config.proofRpc;
+    }
+    await storage.setChainConfig(chainId, entries);
+  }
+
+  private async connectEthereumClient(chainId: string, node: string): Promise<EthereumIbcClient> {
+    const account = await getSigner(chainId, ChainType.Ethereum) as Account;
+    const config = await storage.getChainConfig(chainId) as unknown as EthereumChainConfig;
+    return EthereumIbcClient.connectWithSigner(node, account, config, {
+      logger: this.logger,
+    });
+  }
+
   // Connects signing clients for both ends of a path.
   private async connectPathClients(path: RelayPaths): Promise<{
-    clientA: TendermintIbcClient | GnoIbcClient
-    clientB: TendermintIbcClient | GnoIbcClient
+    clientA: TendermintIbcClient | GnoIbcClient | EthereumIbcClient
+    clientB: TendermintIbcClient | GnoIbcClient | EthereumIbcClient
   }> {
     const prefixA = await getPrefix(path.chainTypeA, path.nodeA);
     const prefixB = await getPrefix(path.chainTypeB, path.nodeB);
@@ -262,39 +300,43 @@ export class Relayer extends EventEmitter {
     const signerB = await getSigner(path.chainIdB, path.chainTypeB, {
       prefix: prefixB,
     });
-    const feesA = await storage.getChainFees(path.chainIdA);
-    const feesB = await storage.getChainFees(path.chainIdB);
+    const feesA = path.chainTypeA === ChainType.Ethereum ? undefined : await storage.getChainFees(path.chainIdA);
+    const feesB = path.chainTypeB === ChainType.Ethereum ? undefined : await storage.getChainFees(path.chainIdB);
     this.logger.info(`Using signer for chain ${path.chainIdA} with prefix ${prefixA}`);
     this.logger.info(`Using signer for chain ${path.chainIdB} with prefix ${prefixB}`);
 
-    const clientA = path.chainTypeA === ChainType.Cosmos
-      ? await TendermintIbcClient.connectWithSigner(path.nodeA, signerA as OfflineSigner, {
-        senderAddress: await getSenderAddress(signerA as OfflineSigner, path.chainIdA),
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-        gasAdjustment: feesA.gasAdjustment > 1 ? feesA.gasAdjustment : 1.4,
-      })
-      : await GnoIbcClient.connectWithSigner(path.nodeA, path.queryNodeA, signerA as GnoWallet, {
-        senderAddress: (await (signerA as GnoWallet).getAddress()),
-        addressPrefix: prefixA,
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
-        gasAdjustment: feesA.gasAdjustment > 1.4 ? feesA.gasAdjustment : 2,
-      });
-    const clientB = path.chainTypeB === ChainType.Cosmos
-      ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
-        senderAddress: await getSenderAddress(signerB as OfflineSigner, path.chainIdB),
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-        gasAdjustment: feesB.gasAdjustment > 1 ? feesB.gasAdjustment : 1.4,
-      })
-      : await GnoIbcClient.connectWithSigner(path.nodeB, path.queryNodeB, signerB as GnoWallet, {
-        senderAddress: (await (signerB as GnoWallet).getAddress()),
-        addressPrefix: prefixB,
-        logger: this.logger,
-        gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
-        gasAdjustment: feesB.gasAdjustment > 1.4 ? feesB.gasAdjustment : 2,
-      });
+    const clientA = path.chainTypeA === ChainType.Ethereum
+      ? await this.connectEthereumClient(path.chainIdA, path.nodeA)
+      : path.chainTypeA === ChainType.Cosmos
+        ? await TendermintIbcClient.connectWithSigner(path.nodeA, signerA as OfflineSigner, {
+          senderAddress: await getSenderAddress(signerA as OfflineSigner, path.chainIdA),
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+          gasAdjustment: feesA.gasAdjustment > 1 ? feesA.gasAdjustment : 1.4,
+        })
+        : await GnoIbcClient.connectWithSigner(path.nodeA, path.queryNodeA, signerA as GnoWallet, {
+          senderAddress: (await (signerA as GnoWallet).getAddress()),
+          addressPrefix: prefixA,
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
+          gasAdjustment: feesA.gasAdjustment > 1.4 ? feesA.gasAdjustment : 2,
+        });
+    const clientB = path.chainTypeB === ChainType.Ethereum
+      ? await this.connectEthereumClient(path.chainIdB, path.nodeB)
+      : path.chainTypeB === ChainType.Cosmos
+        ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
+          senderAddress: await getSenderAddress(signerB as OfflineSigner, path.chainIdB),
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+          gasAdjustment: feesB.gasAdjustment > 1 ? feesB.gasAdjustment : 1.4,
+        })
+        : await GnoIbcClient.connectWithSigner(path.nodeB, path.queryNodeB, signerB as GnoWallet, {
+          senderAddress: (await (signerB as GnoWallet).getAddress()),
+          addressPrefix: prefixB,
+          logger: this.logger,
+          gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
+          gasAdjustment: feesB.gasAdjustment > 1.4 ? feesB.gasAdjustment : 2,
+        });
     return {
       clientA,
       clientB,

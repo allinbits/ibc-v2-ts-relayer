@@ -27,7 +27,7 @@ import {
 } from "@atomone/atomone-types/ibc/lightclients/tendermint/v1/tendermint.js";
 import {
   fromBase64,
-  fromHex, toAscii, toBech32, toHex,
+  fromHex, toAscii, toBase64, toBech32, toHex,
 } from "@cosmjs/encoding";
 import {
   GasPrice,
@@ -42,6 +42,7 @@ import {
   GnoWallet,
   MemFile,
   MemPackage,
+  MsgCall,
   MsgEndpoint,
   MsgRun,
 } from "@gnolang/gno-js-client";
@@ -75,8 +76,17 @@ import {
   buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, isTrustVerifyError, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
 import {
-  BaseIbcClient, BaseIbcClientOptions, isGno, isTendermint,
+  BaseIbcClient, BaseIbcClientOptions, isEthereum, isGno, isTendermint,
 } from "../BaseIbcClient.js";
+import {
+  EthereumClientState, EthereumConsensusState, EthereumLightClientHeader,
+} from "../ethereum/types.js";
+import {
+  encodePacketMsg, WirePacket,
+} from "../ethereum/wire.js";
+import {
+  createEthereumClientScript, ETH_RELAY_REALM, isEthereumClientId, parseEthereumClientState, parseEthereumConsensusState, registerEthereumCounterpartyScript, RenderedEthereumClient, RenderedEthereumConsensusState,
+} from "./ethereum.js";
 import {
   acknowledgement,
   createClientTemplate, recvPacket, registerCounterParty, timeout, updateClientTemplate,
@@ -101,6 +111,13 @@ const GNO_GAS_REGISTER_COUNTERPARTY = 100_000_000;
 const GNO_GAS_PER_RECV_PACKET = 160_000_000;
 const GNO_GAS_PER_ACK = 140_000_000;
 const GNO_GAS_PER_TIMEOUT = 120_000_000;
+// Ethereum clients, through gno.land/r/aib/ibc/ethrelay. Measured on a live
+// Sepolia client: an update takes 37M to 50M gas, a packet with its storage
+// proof 63M to 94M.
+const GNO_GAS_ETH_UPDATE_CLIENT = 80_000_000;
+const GNO_GAS_ETH_PER_RECV_PACKET = 130_000_000;
+const GNO_GAS_ETH_PER_ACK = 100_000_000;
+const GNO_GAS_ETH_PER_TIMEOUT = 100_000_000;
 
 export interface GnoIbcClientTypes {
   header: ibc.lightclients.gno.v1.gno.GnoHeader
@@ -484,6 +501,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     if (type === ClientType.Gno) {
       return this.getGnoConsensusStateAtHeight(clientId, consensusHeight);
     }
+    if (type === ClientType.Ethereum) {
+      return parseEthereumConsensusState(await this.getRenderedEthereumConsensusState(clientId, consensusHeight));
+    }
     throw new Error(`Unsupported chain type ${type} for getting consensus state.`);
   }
 
@@ -513,8 +533,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     return parseClientStatus(status);
   }
 
-  // The Gno realm only hosts Tendermint light clients, so `type` is ignored.
-  public async getConsensusStatesAfter(clientId: string, _type: ClientType, afterRevisionHeight: bigint, limit: number): Promise<ConsensusStateSummary[]> {
+  // Misbehaviour checks compare Tendermint consensus states; there is
+  // nothing to compare an Ethereum client's against.
+  public async getConsensusStatesAfter(clientId: string, type: ClientType, afterRevisionHeight: bigint, limit: number): Promise<ConsensusStateSummary[]> {
+    if (type === ClientType.Ethereum) {
+      return [];
+    }
     type RenderedConsensusState = {
       height: {
         revision_number: number
@@ -586,7 +610,30 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     if (type === ClientType.Gno) {
       return this.getLatestGnoClientState(clientId);
     }
+    if (type === ClientType.Ethereum) {
+      const {
+        client_state: clientState,
+      } = await this.renderCoreRealm<RenderedEthereumClient>(`clients/${validateIbcIdentifier(clientId, "clientId")}`);
+      return parseEthereumClientState(clientState);
+    }
     throw new Error(`Unsupported chain type ${type} for getting latest client state.`);
+  }
+
+  // The consensus state of an Ethereum client at a slot, or its latest one.
+  private async getRenderedEthereumConsensusState(clientId: string, consensusHeight?: Height): Promise<RenderedEthereumConsensusState> {
+    const path = `clients/${validateIbcIdentifier(clientId, "clientId")}`;
+    if (consensusHeight) {
+      return this.renderCoreRealm<RenderedEthereumConsensusState>(
+        `${path}/consensus_states/${consensusHeight.revisionNumber}/${consensusHeight.revisionHeight}`,
+      );
+    }
+    const {
+      last_consensus_state: latest,
+    } = await this.renderCoreRealm<RenderedEthereumClient>(path);
+    if (!latest) {
+      throw new Error(`Client ${clientId} has no consensus state at its latest height`);
+    }
+    return latest;
   }
 
   public async getLatestTendermintClientState(clientId: string): Promise<TendermintClientState> {
@@ -754,6 +801,16 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       attempted = Number(header.signedHeader?.header?.height ?? 0);
       submit = () => this.updateGnoClient(clientId, header);
     }
+    else if (isEthereum(src)) {
+      // Sync committee updates have no trust level to bisect over: buildHeader
+      // already returns every update needed to reach the latest finality.
+      const trusted = await this.getRenderedEthereumConsensusState(clientId, src.revisionHeight(trustedHeight));
+      const updates = await src.buildHeader(trustedHeight, targetHeight, trusted.next_sync_committee_known);
+      if (updates.length > 0) {
+        await this.updateEthereumClient(clientId, updates);
+      }
+      return updates.length > 0 ? Number(updates[updates.length - 1].finalizedSlot) : trustedHeight;
+    }
     else {
       throw new Error(`Unsupported client type for updateClient: ${src.clientType}`);
     }
@@ -920,6 +977,142 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     throw new Error("Gno LC on Gno not implemented.");
   }
 
+  public async createEthereumClient(
+    clientState: EthereumClientState,
+    consensusState: EthereumConsensusState,
+  ): Promise<CreateClientResult> {
+    this.logger.verbose("Create Ethereum client");
+    const memPackage = MemPackage.fromPartial({
+      files: [
+        MemFile.fromPartial({
+          name: "run.gno",
+          body: createEthereumClientScript(clientState, consensusState),
+        }),
+      ],
+      name: "main",
+      path: "",
+    });
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
+      {
+        gas_wanted: BigInt(Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment)),
+        gas_fee: Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment * 4 / 100) + "ugnot",
+      });
+    if (result.deliver_tx.ResponseBase.Error) {
+      throw new Error(`Failed to create Ethereum client: ${result.deliver_tx.ResponseBase.Error.value}`);
+    }
+    return {
+      events: [],
+      transactionHash: Buffer.from(fromBase64(result.hash)).toString("hex").toUpperCase(),
+      height: Number(result.height),
+      clientId: atob(result.deliver_tx.ResponseBase.Data),
+    };
+  }
+
+  // Applies the updates in order, one transaction each: the client accepts an
+  // update only once this chain's block time has reached its signature slot.
+  public async updateEthereumClient(
+    clientId: string,
+    updates: EthereumLightClientHeader,
+  ): Promise<MsgResult> {
+    if (updates.length === 0) {
+      throw new Error("Must submit at least 1 update");
+    }
+    let result: MsgResult;
+    for (const update of updates) {
+      await this.waitForTime(update.signatureTime);
+      this.logger.verbose(`Update Ethereum client ${clientId} from slot ${update.trustedSlot} to ${update.finalizedSlot}`);
+      result = await this.callEthRelay("update Ethereum client", GNO_GAS_ETH_UPDATE_CLIENT, [
+        {
+          func: "UpdateClient",
+          args: [validateIbcIdentifier(clientId, "clientId"), toBase64(update.message)],
+        },
+      ]);
+    }
+    return result;
+  }
+
+  // Waits until this chain's latest block time reaches unixSeconds.
+  private async waitForTime(unixSeconds: bigint): Promise<void> {
+    while (BigInt(Math.floor((await this.currentTime()).getTime() / 1000)) < unixSeconds) {
+      await sleep(2000);
+    }
+  }
+
+  // Sends MsgCalls to gno.land/r/aib/ibc/ethrelay in one transaction.
+  private async callEthRelay(what: string, gasPerCall: number, calls: {
+    func: string
+    args: string[]
+  }[]): Promise<MsgResult> {
+    const caller = await this.sign.getAddress();
+    const messages = calls.map(({
+      func, args,
+    }) => ({
+      type_url: MsgEndpoint.MSG_CALL,
+      value: MsgCall.encode({
+        caller,
+        send: fundsToCoins(new Map()),
+        max_deposit: fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT)),
+        pkg_path: ETH_RELAY_REALM,
+        func,
+        args,
+      }).finish(),
+    }));
+    const gas = gasPerCall * this.gasAdjustment * calls.length;
+    const tx: Tx = {
+      messages,
+      fee: {
+        gas_wanted: BigInt(Math.floor(gas)),
+        gas_fee: Math.floor(gas * 4 / 100) + "ugnot",
+      },
+      memo: "",
+      signatures: [],
+    };
+    const signedTx: Tx = await this.sign.signTransaction(tx, decodeTxMessages);
+    const result = await this.sign.sendTransaction(signedTx, TransactionEndpoint.BROADCAST_TX_COMMIT);
+    if (result.deliver_tx.ResponseBase.Error) {
+      throw new Error(`Failed to ${what}: ${result.deliver_tx.ResponseBase.Error.value ?? result.deliver_tx.ResponseBase.Log}`);
+    }
+    return {
+      events: [],
+      transactionHash: Buffer.from(fromBase64(result.hash)).toString("hex").toUpperCase(),
+      height: Number(result.height),
+    };
+  }
+
+  // Packets on an Ethereum client go to ethrelay with their storage proofs,
+  // which an Ethereum chain hands out wire-encoded.
+  private async relayEthPackets(
+    what: string,
+    func: "RecvPacket" | "Acknowledgement" | "Timeout",
+    gasPerCall: number,
+    packets: readonly PacketV2[],
+    proofs: readonly Uint8Array[],
+    proofHeight: Height | undefined,
+    acks?: readonly Uint8Array[],
+  ): Promise<MsgResult> {
+    const proofSlot = proofHeight?.revisionHeight ?? 0n;
+    return this.callEthRelay(what, gasPerCall, packets.map((packet, i) => {
+      const wirePacket: WirePacket = {
+        sequence: packet.sequence,
+        sourceClient: validateIbcIdentifier(packet.sourceClient, "sourceClient"),
+        destinationClient: validateIbcIdentifier(packet.destinationClient, "destinationClient"),
+        timeoutTimestamp: packet.timeoutTimestamp,
+        payloads: packet.payloads.map(p => ({
+          sourcePort: validateIbcIdentifier(p.sourcePort, "sourcePort"),
+          destinationPort: validateIbcIdentifier(p.destinationPort, "destinationPort"),
+          version: validateIbcIdentifier(p.version, "version"),
+          encoding: validateIbcIdentifier(p.encoding, "encoding"),
+          value: p.value,
+        })),
+      };
+      this.logger.verbose(`${what} #${packet.sequence} (${packet.sourceClient} -> ${packet.destinationClient})`);
+      return {
+        func,
+        args: [toBase64(encodePacketMsg(wirePacket, proofSlot, acks ? [acks[i]] : undefined, proofs[i]))],
+      };
+    }));
+  }
+
   public async connOpenInit(
     _clientId: string,
     _remoteClientId: string,
@@ -1029,6 +1222,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     if (packets.length === 0) {
       throw new Error("Must submit at least 1 packet");
+    }
+    if (isEthereumClientId(packets[0].destinationClient)) {
+      return this.relayEthPackets("receive packets", "RecvPacket", GNO_GAS_ETH_PER_RECV_PACKET, packets, proofCommitments, proofHeight);
     }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
@@ -1140,6 +1336,11 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     if (acks.length === 0) {
       throw new Error("Must submit at least 1 ack");
+    }
+    if (isEthereumClientId(acks[0].originalPacket.sourceClient)) {
+      // An Ethereum chain hands out the app acknowledgement itself.
+      return this.relayEthPackets("acknowledge packets", "Acknowledgement", GNO_GAS_ETH_PER_ACK,
+        acks.map(a => a.originalPacket), proofAckeds, proofHeight, acks.map(a => a.acknowledgement));
     }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
@@ -1253,6 +1454,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     if (packets.length === 0) {
       throw new Error("Must submit at least 1 packet");
+    }
+    if (isEthereumClientId(packets[0].sourceClient)) {
+      return this.relayEthPackets("timeout packets", "Timeout", GNO_GAS_ETH_PER_TIMEOUT, packets, proofsUnreceived, proofHeight);
     }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
@@ -1371,12 +1575,14 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       `Register Counterparty : ${counterpartyClientId} => ${clientId}`,
     );
 
-    const rundotgno = registerCounterParty({
-      clientId: validateIbcIdentifier(clientId.trim(), "clientId"),
-      counterpartyClientId: validateIbcIdentifier(counterpartyClientId.trim(), "counterpartyClientId"),
-      iavlStoreKey: toHex(merklePrefix),
-      storeKey: "",
-    });
+    const rundotgno = isEthereumClientId(clientId)
+      ? registerEthereumCounterpartyScript(validateIbcIdentifier(clientId.trim(), "clientId"), validateIbcIdentifier(counterpartyClientId.trim(), "counterpartyClientId"))
+      : registerCounterParty({
+        clientId: validateIbcIdentifier(clientId.trim(), "clientId"),
+        counterpartyClientId: validateIbcIdentifier(counterpartyClientId.trim(), "counterpartyClientId"),
+        iavlStoreKey: toHex(merklePrefix),
+        storeKey: "",
+      });
     const memFile = MemFile.fromPartial({
       name: "run.gno",
       body: rundotgno,
