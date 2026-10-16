@@ -105,7 +105,6 @@ async function readChainParams(c: EthereumIbcClient): Promise<ChainParams> {
 
 const slotTime = (p: ChainParams, slot: bigint) => p.genesisTime + slot * p.secondsPerSlot;
 const slotAt = (p: ChainParams, time: bigint) => (time - p.genesisTime) / p.secondsPerSlot;
-const periodOf = (p: ChainParams, slot: bigint) => slot / (p.slotsPerEpoch * p.epochsPerSyncCommitteePeriod);
 const toSlot = (h: Height | number): bigint => typeof h === "number" ? BigInt(h) : h.revisionHeight;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const dateAt = (seconds: bigint): ReadonlyDateWithNanoseconds => Object.assign(new Date(Number(seconds) * 1000), {
@@ -496,11 +495,86 @@ async function toUpdate(
   };
 }
 
+/** One update of a catch-up plan, with the committee period that signs it. */
+export interface PlannedUpdate {
+  update: LightClientUpdate
+  signingPeriod: bigint
+  isNext: boolean
+  trustedSlot: bigint
+}
+
+/**
+ * Plans the updates that bring a gno-side client trusting the finalized slot
+ * trusted to the finality update fin: first the update revealing the next sync
+ * committee when the trusted state does not know it, then one best update per
+ * period to cross, then fin itself. Any of the earlier updates may advance
+ * finality on its own; once one reaches fin's finalized slot, fin is not
+ * appended, since the client would refuse an update that does not advance it.
+ */
+export async function planUpdates(
+  beacon: Pick<EthereumIbcClient["beacon"], "updates">,
+  slotsPerPeriod: bigint,
+  fin: LightClientUpdate,
+  trustedSlot: bigint,
+  nextSyncCommitteeKnown: boolean,
+): Promise<PlannedUpdate[]> {
+  const plan: PlannedUpdate[] = [];
+  const finalized = BigInt(fin.finalized_header.beacon.slot);
+  let trusted = trustedSlot;
+  let nextKnown = nextSyncCommitteeKnown;
+  for (;;) {
+    if (finalized <= trusted) {
+      return plan;
+    }
+    const period = trusted / slotsPerPeriod;
+    if (!nextKnown) {
+      const [u] = await beacon.updates(period, 1);
+      if (!u?.next_sync_committee) {
+        throw new Error(`no update revealing the next sync committee of period ${period}`);
+      }
+      plan.push({
+        update: u,
+        signingPeriod: period,
+        isNext: false,
+        trustedSlot: trusted,
+      });
+      nextKnown = true;
+      const f = BigInt(u.finalized_header.beacon.slot);
+      if (f > trusted) {
+        trusted = f;
+      }
+      continue;
+    }
+    const signaturePeriod = BigInt(fin.signature_slot) / slotsPerPeriod;
+    if (signaturePeriod <= period + 1n) {
+      plan.push({
+        update: fin,
+        signingPeriod: signaturePeriod,
+        isNext: signaturePeriod === period + 1n,
+        trustedSlot: trusted,
+      });
+      return plan;
+    }
+    // Several periods behind: cross into the next one with its best update,
+    // signed by the next committee, which also reveals the one after.
+    const [u] = await beacon.updates(period + 1n, 1);
+    if (!u) {
+      throw new Error(`no update for period ${period + 1n}`);
+    }
+    plan.push({
+      update: u,
+      signingPeriod: period + 1n,
+      isNext: true,
+      trustedSlot: trusted,
+    });
+    trusted = BigInt(u.finalized_header.beacon.slot);
+    nextKnown = u.next_sync_committee !== undefined;
+  }
+}
+
 /**
  * The updates that bring a gno-side client trusting lastHeight (a finalized
- * slot) to the latest finality, at or past targetHeight: first the update
- * revealing the next sync committee when the trusted state does not know it,
- * then one best update per period to cross, then the finality update.
+ * slot) to the latest finality, at or past targetHeight (see planUpdates).
  * Throws NotFinalizedError when finality has not reached targetHeight yet.
  */
 export async function buildHeader(
@@ -510,49 +584,18 @@ export async function buildHeader(
   nextSyncCommitteeKnown = true,
 ): Promise<EthereumLightClientHeader> {
   const p = await chainParams(c);
-  const updates: EthereumLightClientHeader = [];
-  let trusted = BigInt(lastHeight);
-  let nextKnown = nextSyncCommitteeKnown;
-
   const fin = await c.beacon.finalityUpdate();
   const finalized = BigInt(fin.finalized_header.beacon.slot);
   if (targetHeight !== undefined && finalized < BigInt(targetHeight)) {
     throw new NotFinalizedError(`Ethereum has finalized slot ${finalized}, not yet ${targetHeight}`);
   }
-  if (finalized <= trusted) {
-    return updates;
+  const plan = await planUpdates(c.beacon, p.slotsPerEpoch * p.epochsPerSyncCommitteePeriod, fin,
+    BigInt(lastHeight), nextSyncCommitteeKnown);
+  const updates: EthereumLightClientHeader = [];
+  for (const s of plan) {
+    updates.push(await toUpdate(c, p, s.update, await committeeOf(c, s.signingPeriod), s.isNext, s.trustedSlot));
   }
-  for (;;) {
-    const period = periodOf(p, trusted);
-    if (!nextKnown) {
-      const [u] = await c.beacon.updates(period, 1);
-      if (!u?.next_sync_committee) {
-        throw new Error(`no update revealing the next sync committee of period ${period}`);
-      }
-      updates.push(await toUpdate(c, p, u, await committeeOf(c, period), false, trusted));
-      nextKnown = true;
-      const f = BigInt(u.finalized_header.beacon.slot);
-      if (f > trusted) {
-        trusted = f;
-      }
-      continue;
-    }
-    const signaturePeriod = periodOf(p, BigInt(fin.signature_slot));
-    if (signaturePeriod <= period + 1n) {
-      const isNext = signaturePeriod === period + 1n;
-      updates.push(await toUpdate(c, p, fin, await committeeOf(c, signaturePeriod), isNext, trusted));
-      return updates;
-    }
-    // Several periods behind: cross into the next one with its best update,
-    // signed by the next committee, which also reveals the one after.
-    const [u] = await c.beacon.updates(period + 1n, 1);
-    if (!u) {
-      throw new Error(`no update for period ${period + 1n}`);
-    }
-    updates.push(await toUpdate(c, p, u, await committeeOf(c, period + 1n), true, trusted));
-    trusted = BigInt(u.finalized_header.beacon.slot);
-    nextKnown = u.next_sync_committee !== undefined;
-  }
+  return updates;
 }
 
 export const commitmentStorageSlot = (path: Uint8Array): Hex => commitmentSlot(path);
