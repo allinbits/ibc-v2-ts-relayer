@@ -107,7 +107,7 @@ End to end on local chains (`pnpm test:eth-host:e2e`): run `make e2e-local` in g
 the gno testnet (`127.0.0.1:26657`) and anvil (`127.0.0.1:8545`) running with the router deployed
 (`contracts/deployments/local.json`). The test then deploys a GnoLightClient through `createGnoClient`, adds
 it with `registerCounterParty`, sends an ICS20 transfer from gno over a placeholder Ethereum client (created
-with gno-eth-ibc's Go relayer), relays it with `updateClient`, `getPacketProofV2` and `receivePacketsV2`, and
+with `createEthereumClient`), relays it with `updateClient`, `getPacketProofV2` and `receivePacketsV2`, and
 checks the ack and the voucher balance. Environment: `GNO_ETH_IBC` (default `../gnolang/gno-eth-ibc`),
 `GNO_RPC`, `ETH_RPC`, `ETH_PRIVATE_KEY` and `GNO_MNEMONIC` (defaults: the public dev keys of anvil and of the
 testnet's test1 account).

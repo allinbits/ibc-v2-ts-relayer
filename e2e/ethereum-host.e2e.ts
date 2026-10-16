@@ -6,15 +6,12 @@
  *
  * The test deploys a GnoLightClient through EthereumIbcClient.createGnoClient
  * from GnoIbcClient.buildCreateClientArgs, adds it to the router, links it to
- * a placeholder Ethereum client on gno (created with gno-eth-ibc's Go
- * relayer), sends an ICS20 transfer from gno, and relays it with this
- * repository's code only: updateClient, getPacketProofV2, receivePacketsV2.
+ * a placeholder Ethereum client on gno (GnoIbcClient.createEthereumClient),
+ * sends an ICS20 transfer from gno, and relays it with this repository's code
+ * only: updateClient, getPacketProofV2, receivePacketsV2.
  */
 import {
-  execFileSync,
-} from "node:child_process";
-import {
-  existsSync, readFileSync,
+  readFileSync,
 } from "node:fs";
 import {
   join, resolve,
@@ -27,7 +24,10 @@ import {
   GnoWallet,
 } from "@gnolang/gno-js-client";
 import {
-  createPublicClient, Hex, http, parseAbi,
+  TransactionEndpoint,
+} from "@gnolang/tm2-js-client";
+import {
+  createPublicClient, Hex, hexToBytes, http, parseAbi,
 } from "viem";
 import {
   privateKeyToAccount,
@@ -39,6 +39,12 @@ import {
 import {
   EthereumIbcClient,
 } from "../src/clients/ethereum/IbcClient.ts";
+import {
+  IBC_STORE_COMMITMENT_SLOT,
+} from "../src/clients/ethereum/sourceAbi.ts";
+import {
+  ETHEREUM_LC_TYPE, EthereumClientState, EthereumConsensusState,
+} from "../src/clients/ethereum/types.ts";
 import {
   GnoIbcClient,
 } from "../src/clients/gno/IbcClient.ts";
@@ -62,39 +68,97 @@ const GNO_MNEMONIC = process.env.GNO_MNEMONIC
   ?? "source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast";
 const RECEIVER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
-function goRelayer(...args: string[]): string {
-  const bin = join(GNO_ETH_IBC, ".cache/bin/relayer");
-  if (!existsSync(bin)) {
-    execFileSync("go", ["build", "-o", bin, "./cmd/relayer"], {
-      cwd: join(GNO_ETH_IBC, "relayer"),
-    });
-  }
-  return execFileSync(bin, args, {
-    env: {
-      ...process.env,
-      GNO_MNEMONIC,
-    },
-    encoding: "utf8",
-  });
-}
-
-function gnoTransfer(gnoClientId: string, amount: number): {
+// Sends an ICS20 transfer of ugnot from gno and returns the packet it sent.
+async function gnoTransfer(wallet: GnoWallet, gnoClientId: string, amount: number): Promise<{
   height: number
   packet: PacketV2
-} {
+}> {
   const timeout = Math.floor(Date.now() / 1000) + 3600;
-  const out = execFileSync(join(GNO_ETH_IBC, "testnet/.data/bin/gnokey"), ["maketx", "call", "-home", join(GNO_ETH_IBC, "testnet/.data/gnokey"), "-insecure-password-stdin", "-pkgpath", "gno.land/r/aib/ibc/apps/transfer", "-func", "Transfer", "-args", gnoClientId, "-args", RECEIVER, "-args", "ugnot", "-args", String(amount), "-args", String(timeout), "-args", "", "-send", `${amount}ugnot`, "-gas-fee", "10000000ugnot", "-gas-wanted", "150000000", "-broadcast", "-chainid", "gno-eth-dev", "-remote", GNO_RPC, "test1"], {
-    input: "\n",
-    encoding: "utf8",
+  const result = await wallet.callMethod("gno.land/r/aib/ibc/apps/transfer", "Transfer", [gnoClientId, RECEIVER, "ugnot", String(amount), String(timeout), ""], TransactionEndpoint.BROADCAST_TX_COMMIT, (new Map()).set("ugnot", amount), (new Map()).set("ugnot", 3000000), {
+    gas_wanted: 150_000_000n,
+    gas_fee: "10000000ugnot",
   });
-  const height = Number(/HEIGHT:\s+(\d+)/.exec(out)?.[1]);
-  const packetHex = /"encoded_packet_hex","value":"([0-9a-f]+)"/.exec(out)?.[1];
-  if (!height || !packetHex) {
-    throw new Error(`transfer failed:\n${out}`);
+  const {
+    Events: rawEvents, Error: error,
+  } = result.deliver_tx.ResponseBase;
+  if (error) {
+    throw new Error(`transfer failed: ${JSON.stringify(error)}`);
+  }
+  // typed as a JSON string, delivered parsed
+  const events: GnoEvent[] = typeof rawEvents === "string" ? JSON.parse(rawEvents) : rawEvents ?? [];
+  const packetHex = events.flatMap(e => e.attrs ?? []).find(a => a.key === "encoded_packet_hex")?.value;
+  if (!packetHex) {
+    throw new Error(`no packet in the transfer's events: ${JSON.stringify(events)}`);
   }
   return {
-    height,
+    height: Number(result.height),
     packet: PacketV2.decode(Buffer.from(packetHex, "hex")),
+  };
+}
+
+interface GnoEvent {
+  attrs?: {
+    key: string
+    value: string
+  }[]
+}
+
+// An Ethereum client on gno that is never updated, anvil having no beacon
+// chain: enough to send packets from gno to the router.
+function placeholderEthereumClient(chainId: bigint, router: Hex): {
+  clientState: EthereumClientState
+  consensusState: EthereumConsensusState
+} {
+  const fork = (v: number) => ({
+    version: new Uint8Array([v, 0, 0, 0]),
+    epoch: 0n,
+  });
+  return {
+    clientState: {
+      lcType: ETHEREUM_LC_TYPE,
+      chainId,
+      genesisValidatorsRoot: new Uint8Array(32),
+      minSyncCommitteeParticipants: 1n,
+      syncCommitteeSize: 32n,
+      genesisTime: 0n,
+      genesisSlot: 0n,
+      forkParameters: {
+        genesisForkVersion: new Uint8Array(4),
+        altair: fork(1),
+        bellatrix: fork(2),
+        capella: fork(3),
+        deneb: fork(4),
+        electra: fork(5),
+        fulu: fork(6),
+        gloas: {
+          version: new Uint8Array(4),
+          epoch: 2n ** 64n - 1n,
+        },
+      },
+      secondsPerSlot: 12n,
+      slotsPerEpoch: 32n,
+      epochsPerSyncCommitteePeriod: 256n,
+      latestHeight: {
+        revisionNumber: 0n,
+        revisionHeight: 1n,
+      },
+      latestExecutionBlockNumber: 1n,
+      ibcContractAddress: hexToBytes(router),
+      ibcCommitmentSlot: hexToBytes(IBC_STORE_COMMITMENT_SLOT),
+    },
+    consensusState: {
+      lcType: ETHEREUM_LC_TYPE,
+      slot: 1n,
+      stateRoot: new Uint8Array(32),
+      // must precede the packets' timeouts
+      timestamp: {
+        seconds: BigInt(Math.floor(Date.now() / 1000) - 60),
+      },
+      currentSyncCommittee: {
+        pubkeysHash: new Uint8Array(32),
+        aggregatePubkey: new Uint8Array(48),
+      },
+    },
   };
 }
 
@@ -115,9 +179,11 @@ test("Ethereum hosts a GnoLightClient and receives a packet from gno", async () 
     logger: log,
   });
 
-  // the gno side: an Ethereum client that is never updated (anvil has no beacon chain)
-  const created = JSON.parse(goRelayer("gno-create-eth-client", "-gno-rpc", GNO_RPC, "-evm-chain-id", eth.chainId, "-router", deployment.ics26Router));
-  const gnoClientId: string = created.clientId;
+  // the gno side: an Ethereum client that is never updated
+  const placeholder = placeholderEthereumClient(BigInt(eth.chainId), deployment.ics26Router);
+  const {
+    clientId: gnoClientId,
+  } = await gno.createEthereumClient(placeholder.clientState, placeholder.consensusState);
 
   // the Ethereum side, through this repository's host
   const args = await gno.buildCreateClientArgs();
@@ -125,10 +191,10 @@ test("Ethereum hosts a GnoLightClient and receives a packet from gno", async () 
     clientId,
   } = await eth.createGnoClient(args.clientState, args.consensusState);
   await eth.registerCounterParty(clientId, gnoClientId, Buffer.from("main"), Buffer.from("/pv/vm:gno.land/r/aib/ibc/core:"));
-  goRelayer("gno-register-counterparty", "-gno-rpc", GNO_RPC, "-client", gnoClientId, "-counterparty", clientId);
+  await gno.registerCounterParty(gnoClientId, clientId, new Uint8Array());
   expect(await eth.getCounterparty(clientId)).toBe(gnoClientId);
 
-  const sent = gnoTransfer(gnoClientId, 1234);
+  const sent = await gnoTransfer(wallet, gnoClientId, 1234);
   expect(sent.packet.destinationClient).toBe(clientId);
 
   // relay as link.ts does: update to a height above the packet's, prove at height - 1
@@ -168,7 +234,7 @@ test("Ethereum hosts a GnoLightClient and receives a packet from gno", async () 
   expect(after.map(s => s.revisionHeight)).toContain(headerHeight.revisionHeight);
 
   // a second round uses the validator set the client cached
-  const second = gnoTransfer(gnoClientId, 66);
+  const second = await gnoTransfer(wallet, gnoClientId, 66);
   await gno.waitOneBlock();
   await gno.waitOneBlock();
   const h2 = await eth.updateClient(clientId, gno);
