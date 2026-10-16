@@ -122,7 +122,7 @@ natives). Heights of an Ethereum client are finalized beacon slots.
 - `createEthereumClient` and the counterparty registration (the router's empty merkle prefix) are MsgRun
   scripts, built by `src/clients/gno/ethereum.ts`.
 - Updates and packets are MsgCalls to `gno.land/r/aib/ibc/ethrelay`, whose arguments are messages in the
-  `gno.land/p/clockwork/wire` format (`src/clients/ethereum/wire.ts`). An update carries the sync committee's
+  `gno.land/p/aib/encoding/wire/v0` format (`src/clients/ethereum/wire.ts`). An update carries the sync committee's
   non-signers, not its keys; one that crosses sync committee periods takes several transactions, each sent
   once gno's block time has reached its signature slot.
 - Storage proofs are taken with `eth_getProof` at finalized blocks, 64 to 96 blocks behind head. Most public

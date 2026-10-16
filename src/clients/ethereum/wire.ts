@@ -1,6 +1,6 @@
 /**
  * Encodings for gno.land/r/aib/ibc/ethrelay: the positional wire format of
- * gno.land/p/clockwork/wire, and the SSZ trees the gno-side Ethereum client
+ * gno.land/p/aib/encoding/wire/v0, and the SSZ trees the gno-side Ethereum client
  * checks non-signers against. Mirrors gno-eth-ibc relayer/ethgno (Go).
  */
 import {
