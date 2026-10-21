@@ -59,6 +59,7 @@ import {
   parseRevisionNumber,
   presentPacketData,
   presentPacketDataV2,
+  revisionNumberFor,
   secondsFromDateNanos,
   splitPendingPackets,
   subtractBlock,
@@ -174,6 +175,23 @@ describe("utils", () => {
 
     it("should not match revision at start of chain id", () => {
       expect(parseRevisionNumber("4-cosmoshub")).toBe(0n);
+    });
+  });
+
+  describe("revisionNumberFor", () => {
+    it("should parse the chain id without an override", () => {
+      expect(revisionNumberFor("test-ibc-1", undefined)).toBe(1n);
+      expect(revisionNumberFor("test-ibc-1", "")).toBe(1n);
+      expect(revisionNumberFor("test-ibc-1", "other-2=0")).toBe(1n);
+    });
+
+    it("should use the override for the named chain", () => {
+      expect(revisionNumberFor("test-ibc-1", "test-ibc-1=0")).toBe(0n);
+      expect(revisionNumberFor("test-ibc-1", "other-2=5, test-ibc-1=3")).toBe(3n);
+    });
+
+    it("should refuse a malformed override", () => {
+      expect(() => revisionNumberFor("test-ibc-1", "test-ibc-1=x")).toThrow();
     });
   });
 

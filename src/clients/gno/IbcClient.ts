@@ -73,7 +73,7 @@ import {
   parseClientStatus, timestampToNanos,
 } from "../../utils/misbehaviour.js";
 import {
-  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, isTrustVerifyError, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, subtractBlock, timestampFromDateNanos, toIntHeight, validateIbcIdentifier,
+  buildGnoClientState, buildGnoConsensusState, buildTendermintClientState, checkAndParseOp, convertProofsToIcs23, getErrorMessage, heightQueryString, isTrustVerifyError, mergeUint8Arrays, parsePacketsFromBlockResult, parsePacketsFromBlockResultV2, parsePacketsFromTendermintEvents, parsePacketsFromTendermintEventsV2, parseRevisionNumber, revisionNumberFor, subtractBlock, timestampFromDateNanos, toIntHeight, validateIbcIdentifier,
 } from "../../utils/utils.js";
 import {
   BaseIbcClient, BaseIbcClientOptions, isEthereum, isGno, isTendermint,
@@ -175,7 +175,9 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const chainId = (await tmClient.status()).nodeInfo.network;
     options.chainId = chainId;
     options.clientType = ClientType.Gno;
-    options.revisionNumber = parseRevisionNumber(chainId);
+    // GNO_REVISION_NUMBERS ("chainId=revision,...") overrides the revision the
+    // chain id encodes, to match a counterparty light client set up otherwise.
+    options.revisionNumber = revisionNumberFor(chainId, process.env.GNO_REVISION_NUMBERS);
     signer.connect(provider);
     return new GnoIbcClient(
       signer, tmClient, graphClient, options as GnoIbcClientOptions,

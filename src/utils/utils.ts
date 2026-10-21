@@ -189,6 +189,24 @@ export function parseRevisionNumber(chainId: string): bigint {
   return 0n;
 }
 
+// revisionNumberFor is parseRevisionNumber unless `overrides` names the chain:
+// a comma-separated list of `chainId=revision`, e.g. "test-ibc-1=0". It exists
+// for a counterparty light client that was set up with a revision the chain id
+// does not encode, such as a GnoLightClient deployed with revision 0 for a
+// chain id ending in "-1".
+export function revisionNumberFor(chainId: string, overrides: string | undefined): bigint {
+  for (const entry of (overrides ?? "").split(",")) {
+    const [id, rev] = entry.trim().split("=");
+    if (id === chainId && rev !== undefined) {
+      if (!/^\d+$/.test(rev)) {
+        throw new Error(`revision override for ${chainId} must be a decimal number, not "${rev}"`);
+      }
+      return BigInt(rev);
+    }
+  }
+  return parseRevisionNumber(chainId);
+}
+
 // may will run the transform if value is defined, otherwise returns undefined
 export function may<T, U>(
   transform: (val: T) => U,
