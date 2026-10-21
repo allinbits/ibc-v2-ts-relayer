@@ -57,6 +57,16 @@ export interface RelayerConfig {
     maxRetryBackoff: number
   }
 
+  /** Gno chain configuration */
+  gno: {
+    /**
+     * Maximum storage deposit, in ugnot, a Gno transaction may lock (its
+     * max_deposit). The chain locks only what the transaction stores, so this
+     * is a cap, not a cost (default: 20000000)
+     */
+    maxDeposit: number
+  }
+
   /** Timing estimates */
   timing: {
     /** Estimated block time in milliseconds (default: 6000) */
@@ -165,6 +175,9 @@ function loadConfig(): RelayerConfig {
       maxRetries: getPositiveInt(process.env.NETWORK_MAX_RETRIES, 3, 0, 10),
       retryBackoff: getPositiveInt(process.env.NETWORK_RETRY_BACKOFF, 1000, 100, 10000),
       maxRetryBackoff: getPositiveInt(process.env.NETWORK_MAX_RETRY_BACKOFF, 30000, 1000, 120000),
+    },
+    gno: {
+      maxDeposit: getPositiveInt(process.env.GNO_MAX_DEPOSIT, 20000000, 1),
     },
     timing: {
       estimatedBlockTime: getPositiveInt(process.env.ESTIMATED_BLOCK_TIME, 6000, 1000, 60000),
