@@ -52,6 +52,7 @@ describe("config", () => {
       expect(config.network.maxRetryBackoff).toBe(30000);
       expect(config.timing.estimatedBlockTime).toBe(6000);
       expect(config.timing.estimatedIndexerTime).toBe(500);
+      expect(config.gno.maxDeposit).toBe(20000000);
     });
   });
 
@@ -346,6 +347,26 @@ describe("config", () => {
       } = await import("./index.js");
 
       expect(config.network.maxRetryBackoff).toBe(120000); // max
+    });
+  });
+
+  describe("gno configuration", () => {
+    it("should accept a valid max deposit", async () => {
+      process.env.GNO_MAX_DEPOSIT = "50000000";
+      const {
+        config,
+      } = await import("./index.js");
+
+      expect(config.gno.maxDeposit).toBe(50000000);
+    });
+
+    it("should use default for an invalid max deposit", async () => {
+      process.env.GNO_MAX_DEPOSIT = "0";
+      const {
+        config,
+      } = await import("./index.js");
+
+      expect(config.gno.maxDeposit).toBe(20000000); // below min: default
     });
   });
 

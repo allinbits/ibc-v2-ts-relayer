@@ -65,6 +65,7 @@ import {
   GraphQLClient,
 } from "graphql-request";
 
+import config from "../../config/index.js";
 import {
   Ack, AckV2, AckV2WithMetadata, AckWithMetadata, AnyClientState, AnyConsensusState, BlockResultsResponse, BlockSearchResponse, ChannelHandshakeProof, ChannelInfo, ClientStatus, ClientType, ConnectionHandshakeProof, ConsensusStateSummary, CreateChannelResult, CreateClientResult, CreateConnectionResult, DataProof, FullProof, HeaderSummary, MsgResult, PacketV2WithMetadata, PacketWithMetadata, ProvenQuery, TxSearchResponse,
 } from "../../types/index.js";
@@ -90,8 +91,6 @@ export type GnoIbcClientOptions = CreateWalletOptions & BaseIbcClientOptions & {
   gasAdjustment?: number
 };
 
-/** Default deposit amount for Gno MsgRun transactions (in ugnot) */
-const GNO_DEFAULT_DEPOSIT = 3000000;
 /** Maximum page size of the IBC core realm's paginated render views */
 const GNO_RENDER_PAGE_LIMIT = 100;
 
@@ -804,7 +803,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", config.gno.maxDeposit),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment)),
         gas_fee: Math.floor(GNO_GAS_CREATE_CLIENT * this.gasAdjustment * 4 / 100) + "ugnot",
@@ -897,7 +896,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       name: "main",
       path: "",
     });
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", config.gno.maxDeposit),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment)),
         gas_fee: Math.floor(GNO_GAS_UPDATE_CLIENT * this.gasAdjustment * 4 / 100) + "ugnot",
@@ -1032,7 +1031,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
-    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", config.gno.maxDeposit));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < packets.length; i++) {
       const packet = packets[i];
@@ -1143,7 +1142,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
-    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", config.gno.maxDeposit));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < acks.length; i++) {
       const ics23 = MerkleProof.decode(proofAckeds[i]);
@@ -1256,7 +1255,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     }
     const messages = [];
     const amount: string = fundsToCoins(new Map());
-    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
+    const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", config.gno.maxDeposit));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < packets.length; i++) {
       const ics23 = MerkleProof.decode(proofsUnreceived[i]);
@@ -1387,7 +1386,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       path: "",
     });
 
-    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT),
+    const result = await this.sign.executePackage(memPackage, TransactionEndpoint.BROADCAST_TX_COMMIT, new Map(), (new Map()).set("ugnot", config.gno.maxDeposit),
       {
         gas_wanted: BigInt(Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment)),
         gas_fee: Math.floor(GNO_GAS_REGISTER_COUNTERPARTY * this.gasAdjustment * 4 / 100) + "ugnot",
