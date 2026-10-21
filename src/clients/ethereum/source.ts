@@ -213,10 +213,12 @@ async function firstBlockAtOrAfter(c: EthereumIbcClient, t: bigint): Promise<big
 }
 
 /**
- * Blocks of slots in (minSlot, maxSlot), the link's exclusive height range.
+ * Blocks of slots in (minSlot, maxSlot], the link's scan window: a round's
+ * floor is the bound the last one reached, so the windows tile the chain.
  * Without a minimum slot (a path's first check) the range starts at the
- * chain config's fromBlock, the router's deployment block (0 without one),
- * and "latest" is resolved to a number so the scan can go in chunks.
+ * chain config's fromBlock, the router's deployment block (0 without one);
+ * without a maximum it ends at the latest block, resolved to a number so
+ * the scan can go in chunks.
  */
 async function blockRange(c: EthereumIbcClient, minSlot: number | undefined, maxSlot: number | undefined): Promise<{
   fromBlock: bigint
@@ -227,7 +229,7 @@ async function blockRange(c: EthereumIbcClient, minSlot: number | undefined, max
   const fromBlock = minSlot === undefined ? floor : await firstBlockAtOrAfter(c, slotTime(p, BigInt(minSlot) + 1n));
   const toBlock = maxSlot === undefined
     ? await c.publicClient.getBlockNumber()
-    : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot))) - 1n;
+    : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot) + 1n)) - 1n;
   return {
     fromBlock: fromBlock < floor ? floor : fromBlock,
     toBlock,

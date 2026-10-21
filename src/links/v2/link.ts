@@ -510,18 +510,8 @@ export class Link {
     heights: RelayedHeights
     info: RelayInfo
   }> {
-    // FIXME: is there a cleaner way to get the height we query at?
-    const [packetHeightA, packetHeightB, packetsA, packetsB]
-      = await Promise.all([
-        this.endA.client.currentHeight(),
-        this.endB.client.currentHeight(),
-        this.getPendingPackets("A", {
-          minHeight: relayFrom.packetHeightA,
-        }),
-        this.getPendingPackets("B", {
-          minHeight: relayFrom.packetHeightB,
-        }),
-      ]);
+    const [packetBoundA, packetBoundB] = await Promise.all([this.scanBound("A"), this.scanBound("B")]);
+    const [packetsA, packetsB] = await Promise.all([this.scanPackets("A", relayFrom.packetHeightA, packetBoundA), this.scanPackets("B", relayFrom.packetHeightB, packetBoundB)]);
 
     const filteredPacketsA
       = this.packetFilter !== null
@@ -560,26 +550,18 @@ export class Link {
     // let's wait a bit to ensure our newly committed acks are indexed
     await Promise.all([this.endA.client.waitForIndexer(), this.endB.client.waitForIndexer()]);
 
-    const [ackHeightA, ackHeightB, acksA, acksB] = await Promise.all([
-      this.endA.client.currentHeight(),
-      this.endB.client.currentHeight(),
-      this.getPendingAcks("A", {
-        minHeight: relayFrom.ackHeightA,
-      }),
-      this.getPendingAcks("B", {
-        minHeight: relayFrom.ackHeightB,
-      }),
-    ]);
+    const [ackBoundA, ackBoundB] = await Promise.all([this.scanBound("A"), this.scanBound("B")]);
+    const [acksA, acksB] = await Promise.all([this.scanAcks("A", relayFrom.ackHeightA, ackBoundA), this.scanAcks("B", relayFrom.ackHeightB, ackBoundB)]);
 
     await Promise.all([this.relayAcks("A", acksA), this.relayAcks("B", acksB)]);
 
     await Promise.all([this.timeoutPackets("A", timeoutA), this.timeoutPackets("B", timeoutB)]);
 
     const heights = {
-      packetHeightA,
-      packetHeightB,
-      ackHeightA,
-      ackHeightB,
+      packetHeightA: nextFloor(relayFrom.packetHeightA, packetBoundA),
+      packetHeightB: nextFloor(relayFrom.packetHeightB, packetBoundB),
+      ackHeightA: nextFloor(relayFrom.ackHeightA, ackBoundA),
+      ackHeightB: nextFloor(relayFrom.ackHeightB, ackBoundB),
     };
 
     const info: RelayInfo = {
@@ -593,6 +575,53 @@ export class Link {
       heights,
       info,
     };
+  }
+
+  /**
+   * The highest height of a side whose packets and acks can be relayed in
+   * this round: one below its latest provable header, as relayPackets and
+   * relayAcks prove an event at the height after its block. A Tendermint or
+   * gno chain proves up to its latest block, Ethereum up to its latest
+   * finalized slot, so an event past the bound stays unscanned until the
+   * header that proves it exists, and the loop never waits for one.
+   *
+   * A round scans (floor, bound] and hands the bound back as the next floor,
+   * so the scans tile the chain: a head read apart from the scan could stand
+   * past the blocks the scan covered, and the blocks between were lost.
+   */
+  private async scanBound(side: Side): Promise<number> {
+    const {
+      src,
+    } = this.getEnds(side);
+    const client = src.client;
+    if (!isTendermint(client) && !isGno(client) && !isEthereum(client)) {
+      throw new Error(
+        `scanning only supported for Tendermint/Gno/Ethereum clients, got ${client.clientType}`,
+      );
+    }
+    return Number((await client.latestHeader()).height) - 1;
+  }
+
+  /** The pending packets sent in (floor, bound]; none when the bound is not past the floor. */
+  private async scanPackets(source: Side, floor: number | undefined, bound: number): Promise<PacketV2WithMetadata[]> {
+    if (floor !== undefined && bound <= floor) {
+      return [];
+    }
+    return this.getPendingPackets(source, {
+      minHeight: floor,
+      maxHeight: bound,
+    });
+  }
+
+  /** The pending acks written in (floor, bound]; none when the bound is not past the floor. */
+  private async scanAcks(source: Side, floor: number | undefined, bound: number): Promise<AckV2WithMetadata[]> {
+    if (floor !== undefined && bound <= floor) {
+      return [];
+    }
+    return this.getPendingAcks(source, {
+      minHeight: floor,
+      maxHeight: bound,
+    });
   }
 
   public async getPendingPackets(
@@ -855,6 +884,14 @@ export class Link {
     }
   }
 }
+
+/**
+ * The floor of the next scan: the bound this one reached, unless the floor
+ * already stood past it (a provable header read behind an earlier one, or a
+ * floor recorded before scans were bounded), which no scan may undercut.
+ */
+const nextFloor = (floor: number | undefined, bound: number): number =>
+  floor === undefined ? bound : Math.max(floor, bound);
 
 const idDelim = ":";
 const packetId = (packet: Packet) =>
