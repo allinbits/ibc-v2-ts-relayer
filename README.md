@@ -127,6 +127,9 @@ natives). Heights of an Ethereum client are finalized beacon slots.
   once gno's block time has reached its signature slot.
 - Storage proofs are taken with `eth_getProof` at finalized blocks, 64 to 96 blocks behind head. Most public
   RPCs refuse that; set the chain's proof RPC (`-p`) to one that serves it, such as an archive node.
+- The relay loop reads the router's packet and acknowledgement events up to the finalized slot, each round
+  scanning from the bound the last one reached, so a packet is relayed in the round its slot is final (two
+  to three epochs after its block) and the loop never stands waiting for finality.
 
 Gas on gno.land: about 40M per update (50M when it crosses a period), 94M to receive a packet, 63M per
 acknowledgement.
