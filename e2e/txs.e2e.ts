@@ -232,7 +232,7 @@ describe("IBC Transfer Tests", async () => {
     },
     ).toEqual({
       denom: atoneVoucherOnGno,
-      balance: 10,
+      balance: "10",
       address: "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x",
     });
 
@@ -262,7 +262,7 @@ describe("IBC Transfer Tests", async () => {
     },
     ).toEqual({
       denom: atoneVoucherOnGno,
-      balance: 0,
+      balance: "0",
       address: "g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x",
     });
 

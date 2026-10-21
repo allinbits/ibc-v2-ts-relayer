@@ -130,3 +130,10 @@ natives). Heights of an Ethereum client are finalized beacon slots.
 
 Gas on gno.land: about 40M per update (50M when it crosses a period), 94M to receive a packet, 63M per
 acknowledgement.
+
+Amounts on gno.land are 256-bit since gno-realms ADR 0005: the transfer realm takes `uint256` amounts
+(`transfer.Transfer(client, receiver, denom, amount, timeout, memo)` with the amount in decimal digits) and
+renders every amount, voucher balances included, as a decimal JSON string, never a JSON number. Vouchers are
+`gno.land/p/nt/grc20/v1` tokens registered in `gno.land/r/nt/grc20reg/v1`, with the decimals governance set for
+their denom. The relayer itself never parses an amount: packets travel as bytes; the e2e suite reads the renders
+as strings.
