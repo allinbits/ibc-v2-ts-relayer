@@ -123,4 +123,10 @@ export interface EthereumChainConfig {
    * blocks behind head); defaults to the path's node.
    */
   proofRpc?: string
+  /**
+   * The block the router was deployed at (decimal digits): log scans over a
+   * client's lifetime start there instead of at block 0, which public RPCs
+   * refuse ("getLogs request exceeded max allowed range").
+   */
+  fromBlock?: string
 }

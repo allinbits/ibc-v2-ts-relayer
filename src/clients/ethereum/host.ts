@@ -486,7 +486,46 @@ export async function getClientStatus(c: EthereumIbcClient, clientId: string): P
   return ClientStatus.Active;
 }
 
-/** Consensus states stored after a height, from GnoLightClient's ClientUpdated logs (eth_getLogs over all blocks). */
+/** The first chunk of an eth_getLogs scan, in blocks; a node refusing it gets half, down to MIN_LOG_CHUNK. */
+export const LOG_CHUNK = 50_000n;
+export const MIN_LOG_CHUNK = 1_000n;
+
+/**
+ * Collects the logs of [fromBlock, toBlock] through `request`, one block
+ * range at a time: public RPCs cap the range of one eth_getLogs ("exceeded
+ * max allowed range"), so a refused range is split in two until the node
+ * accepts it, down to MIN_LOG_CHUNK; a refusal there is the node's last word.
+ */
+export async function getLogsChunked<T>(
+  request: (fromBlock: bigint, toBlock: bigint) => Promise<T[]>,
+  fromBlock: bigint,
+  toBlock: bigint,
+  chunk: bigint = LOG_CHUNK,
+): Promise<T[]> {
+  const out: T[] = [];
+  let from = fromBlock;
+  let size = chunk;
+  while (from <= toBlock) {
+    const to = from + size - 1n > toBlock ? toBlock : from + size - 1n;
+    try {
+      out.push(...await request(from, to));
+      from = to + 1n;
+    }
+    catch (err) {
+      if (size <= MIN_LOG_CHUNK) {
+        throw err;
+      }
+      size = size / 2n < MIN_LOG_CHUNK ? MIN_LOG_CHUNK : size / 2n;
+    }
+  }
+  return out;
+}
+
+/**
+ * Consensus states stored after a height, from GnoLightClient's ClientUpdated
+ * logs: eth_getLogs from the chain config's fromBlock (the router's
+ * deployment block; 0 without one) to the tip, in chunks a public RPC accepts.
+ */
 export async function getConsensusStatesAfter(
   c: EthereumIbcClient,
   clientId: string,
@@ -502,20 +541,25 @@ export async function getConsensusStatesAfter(
   const lc = await lightClientAddress(c, clientId, at);
   const cs = await readClientState(c, clientId, at);
   let logs: RawLog[];
+  const start = BigInt(c.config.fromBlock ?? "0");
   try {
-    logs = await c.publicClient.request({
-      method: "eth_getLogs",
-      params: [
-        {
-          address: lc,
-          fromBlock: "0x0",
-          toBlock: toHex(tip),
-        },
-      ],
-    }) as typeof logs;
+    logs = await getLogsChunked(
+      (fromBlock, toBlock) => c.publicClient.request({
+        method: "eth_getLogs",
+        params: [
+          {
+            address: lc,
+            fromBlock: toHex(fromBlock),
+            toBlock: toHex(toBlock),
+          },
+        ],
+      }) as Promise<RawLog[]>,
+      start,
+      tip,
+    );
   }
   catch (err) {
-    throw new Error(`getConsensusStatesAfter: the node refused eth_getLogs over the client's lifetime: ${(err as Error).message}`);
+    throw new Error(`getConsensusStatesAfter: the node refused eth_getLogs over the client's lifetime (from block ${start}): ${(err as Error).message}`);
   }
   const heights = new Set<bigint>();
   for (const log of logs) {

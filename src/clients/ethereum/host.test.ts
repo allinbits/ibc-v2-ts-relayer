@@ -18,7 +18,7 @@ import {
   iCS26RouterAbi,
 } from "./artifacts/ICS26Router.js";
 import {
-  appAcknowledgement, toAbiPacket, toGnoClientState, toGnoConsensusState, writeAckEvents,
+  appAcknowledgement, getLogsChunked, MIN_LOG_CHUNK, toAbiPacket, toGnoClientState, toGnoConsensusState, writeAckEvents,
 } from "./host.js";
 
 const ROUTER: Hex = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
@@ -124,5 +124,55 @@ describe("Ethereum host", () => {
     expect(cons.timestamp.seconds).toBe(1_767_225_600n);
     expect(cons.timestamp.nanos).toBe(123_456_789);
     expect(cons.root.hash).toEqual(new Uint8Array(32).fill(0x11));
+  });
+});
+
+describe("getLogsChunked", () => {
+  /** A node that refuses any range wider than `max` blocks, as public Sepolia RPCs do. */
+  function node(max: bigint) {
+    const ranges: [bigint, bigint][] = [];
+    const request = async (from: bigint, to: bigint) => {
+      if (to - from + 1n > max) {
+        throw new Error("getLogs request exceeded max allowed range");
+      }
+      ranges.push([from, to]);
+      return [`${from}-${to}`];
+    };
+    return {
+      request,
+      ranges,
+    };
+  }
+
+  it("covers the whole range once, in chunks the node accepts", async () => {
+    const n = node(10_000n);
+    const logs = await getLogsChunked(n.request, 11_964_087n, 12_000_000n);
+    expect(n.ranges[0]).toEqual([11_964_087n, 11_964_087n + 6_250n - 1n]);
+    let next = 11_964_087n;
+    for (const [from, to] of n.ranges) {
+      expect(from).toBe(next);
+      expect(to - from + 1n).toBeLessThanOrEqual(10_000n);
+      next = to + 1n;
+    }
+    expect(next).toBe(12_000_001n);
+    expect(logs).toHaveLength(n.ranges.length);
+  });
+
+  it("asks for one range when the node takes it whole", async () => {
+    const n = node(1_000_000n);
+    await getLogsChunked(n.request, 0n, 49_999n);
+    expect(n.ranges).toEqual([[0n, 49_999n]]);
+  });
+
+  it("gives up only below the smallest chunk", async () => {
+    const n = node(MIN_LOG_CHUNK - 1n);
+    await expect(getLogsChunked(n.request, 0n, 5_000n)).rejects.toThrow("exceeded max allowed range");
+    expect(n.ranges).toEqual([]);
+  });
+
+  it("scans nothing past the tip", async () => {
+    const n = node(1_000_000n);
+    expect(await getLogsChunked(n.request, 10n, 9n)).toEqual([]);
+    expect(n.ranges).toEqual([]);
   });
 });

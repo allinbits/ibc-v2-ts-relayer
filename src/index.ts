@@ -134,6 +134,7 @@ program.command("add-ethereum-chain")
   .requiredOption("-r, --router <address>", "ICS26Router address")
   .requiredOption("-b, --beacon <url>", "Beacon node API serving the light-client endpoints")
   .option("-p, --proof-rpc <url>", "Execution RPC serving eth_getProof at finalized blocks (default: the path's node)")
+  .option("-f, --from-block <block>", "The router's deployment block: log scans start there instead of block 0, which public RPCs refuse")
   .action(async (options) => {
     try {
       const relayer = new Relayer(log);
@@ -141,6 +142,7 @@ program.command("add-ethereum-chain")
         router: options.router,
         beacon: options.beacon,
         proofRpc: options.proofRpc,
+        fromBlock: options.fromBlock,
       });
     }
     catch (error) {

@@ -276,6 +276,12 @@ export class Relayer extends EventEmitter {
     if (config.proofRpc) {
       entries.proofRpc = config.proofRpc;
     }
+    if (config.fromBlock !== undefined) {
+      if (!/^\d+$/.test(config.fromBlock)) {
+        throw new Error(`fromBlock must be a block number in decimal digits, not "${config.fromBlock}"`);
+      }
+      entries.fromBlock = config.fromBlock;
+    }
     await storage.setChainConfig(chainId, entries);
   }
 
