@@ -47,6 +47,14 @@ import {
  */
 export type Side = "A" | "B";
 
+/**
+ * How many blocks (Ethereum: slots) updateClientToHeight waits for the
+ * source's provable header to reach the height it needs before giving up on
+ * this round. Ethereum finality normally takes two to three epochs (64 to 96
+ * slots); past this the relay loop retries later rather than hanging.
+ */
+const MAX_HEADER_WAIT_BLOCKS = 150;
+
 export function otherSide(side: Side): Side {
   if (side === "A") {
     return "B";
@@ -422,11 +430,43 @@ export class Link {
       return clientState.latestHeight;
     }
 
-    const curHeight = (await src.client.latestHeader()).height;
-    if (curHeight < minHeight) {
-      await src.client.waitOneBlock();
+    // An update can only reach the source's latest provable header: its
+    // latest block for a Tendermint chain, its latest finalized slot for
+    // Ethereum, which trails the head by two epochs or more. Below minHeight
+    // it is no use, as every proof is then taken at a state before the event
+    // it is for, so wait for the header to get there before updating.
+    await this.waitForHeader(source, src.client, minHeight);
+    const height = await this.updateClient(source);
+    if (Number(height.revisionHeight) < minHeight) {
+      throw new Error(
+        `client on ${this.otherChain(source)} updated to height ${height.revisionHeight}, below the needed ${minHeight}`,
+      );
     }
-    return this.updateClient(source);
+    return height;
+  }
+
+  /** Waits until the source's latest provable header is at or past minHeight. */
+  private async waitForHeader(
+    source: Side,
+    src: TendermintIbcClient | GnoIbcClient | EthereumIbcClient,
+    minHeight: number,
+  ): Promise<void> {
+    let height = (await src.latestHeader()).height;
+    if (height >= minHeight) {
+      return;
+    }
+    this.logger.info(
+      `Waiting for ${this.chain(source)} to reach height ${minHeight} (latest provable header: ${height})`,
+    );
+    for (let waited = 0; height < minHeight; waited++) {
+      if (waited >= MAX_HEADER_WAIT_BLOCKS) {
+        throw new Error(
+          `${this.chain(source)} has not reached height ${minHeight} after ${waited} blocks (latest provable header: ${height}); retry later`,
+        );
+      }
+      await src.waitOneBlock();
+      height = (await src.latestHeader()).height;
+    }
   }
 
   /**
