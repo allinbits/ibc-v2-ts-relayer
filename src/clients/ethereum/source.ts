@@ -34,6 +34,9 @@ import type {
   EthereumIbcClient,
 } from "./IbcClient.js";
 import {
+  getLogsChunked,
+} from "./logs.js";
+import {
   IBC_STORE_COMMITMENT_SLOT, routerSourceAbi,
 } from "./sourceAbi.js";
 import {
@@ -209,16 +212,24 @@ async function firstBlockAtOrAfter(c: EthereumIbcClient, t: bigint): Promise<big
   return lo;
 }
 
-/** Blocks of slots in (minSlot, maxSlot), the link's exclusive height range. */
+/**
+ * Blocks of slots in (minSlot, maxSlot), the link's exclusive height range.
+ * Without a minimum slot (a path's first check) the range starts at the
+ * chain config's fromBlock, the router's deployment block (0 without one),
+ * and "latest" is resolved to a number so the scan can go in chunks.
+ */
 async function blockRange(c: EthereumIbcClient, minSlot: number | undefined, maxSlot: number | undefined): Promise<{
   fromBlock: bigint
-  toBlock: bigint | "latest"
+  toBlock: bigint
 }> {
   const p = await chainParams(c);
-  const fromBlock = minSlot === undefined ? 0n : await firstBlockAtOrAfter(c, slotTime(p, BigInt(minSlot) + 1n));
-  const toBlock = maxSlot === undefined ? "latest" : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot))) - 1n;
+  const floor = BigInt(c.config.fromBlock ?? "0");
+  const fromBlock = minSlot === undefined ? floor : await firstBlockAtOrAfter(c, slotTime(p, BigInt(minSlot) + 1n));
+  const toBlock = maxSlot === undefined
+    ? await c.publicClient.getBlockNumber()
+    : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot))) - 1n;
   return {
-    fromBlock,
+    fromBlock: fromBlock < floor ? floor : fromBlock,
     toBlock,
   };
 }
@@ -263,18 +274,23 @@ export async function querySentPacketsV2(
 ): Promise<PacketV2WithMetadata[]> {
   const p = await chainParams(c);
   const range = await blockRange(c, minHeight, maxHeight);
-  if (range.toBlock !== "latest" && range.toBlock < range.fromBlock) {
+  if (range.toBlock < range.fromBlock) {
     return [];
   }
-  const logs = await c.publicClient.getContractEvents({
-    address: c.config.router,
-    abi: routerSourceAbi,
-    eventName: "SendPacket",
-    args: {
-      clientId: clientID,
-    },
-    ...range,
-  });
+  const logs = await getLogsChunked(
+    (fromBlock, toBlock) => c.publicClient.getContractEvents({
+      address: c.config.router,
+      abi: routerSourceAbi,
+      eventName: "SendPacket",
+      args: {
+        clientId: clientID,
+      },
+      fromBlock,
+      toBlock,
+    }),
+    range.fromBlock,
+    range.toBlock,
+  );
   return Promise.all(logs.map(async log => ({
     packet: toPacketV2(log.args.packet as AbiPacket),
     height: Number(slotAt(p, await blockTimestamp(c, log.blockNumber))),
@@ -289,18 +305,23 @@ export async function queryWrittenAcksV2(
 ): Promise<AckV2WithMetadata[]> {
   const p = await chainParams(c);
   const range = await blockRange(c, minHeight, maxHeight);
-  if (range.toBlock !== "latest" && range.toBlock < range.fromBlock) {
+  if (range.toBlock < range.fromBlock) {
     return [];
   }
-  const logs = await c.publicClient.getContractEvents({
-    address: c.config.router,
-    abi: routerSourceAbi,
-    eventName: "WriteAcknowledgement",
-    args: {
-      clientId: clientID,
-    },
-    ...range,
-  });
+  const logs = await getLogsChunked(
+    (fromBlock, toBlock) => c.publicClient.getContractEvents({
+      address: c.config.router,
+      abi: routerSourceAbi,
+      eventName: "WriteAcknowledgement",
+      args: {
+        clientId: clientID,
+      },
+      fromBlock,
+      toBlock,
+    }),
+    range.fromBlock,
+    range.toBlock,
+  );
   return Promise.all(logs.map(async (log) => {
     const acks = log.args.acknowledgements as readonly Hex[];
     if (acks.length !== 1) {

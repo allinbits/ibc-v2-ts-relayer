@@ -18,8 +18,12 @@ import {
   iCS26RouterAbi,
 } from "./artifacts/ICS26Router.js";
 import {
-  appAcknowledgement, getLogsChunked, MIN_LOG_CHUNK, toAbiPacket, toGnoClientState, toGnoConsensusState, writeAckEvents,
+  appAcknowledgement, toAbiPacket, toGnoClientState, toGnoConsensusState, writeAckEvents,
 } from "./host.js";
+import {
+  getLogsChunked,
+  MIN_LOG_CHUNK,
+} from "./logs.js";
 
 const ROUTER: Hex = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
