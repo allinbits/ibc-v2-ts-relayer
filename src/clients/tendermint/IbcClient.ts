@@ -134,6 +134,10 @@ export interface TendermintIbcClientTypes {
   clientState: TendermintClientState
   lightClientHeader: TendermintHeader
 }
+
+/** How many of a node's latest blocks scanHorizon looks for in its event index. */
+const INDEX_WINDOW = 1000;
+
 export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes> {
   public readonly gasPrice: GasPrice;
   public readonly gasAdjustment: number;
@@ -282,9 +286,37 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   // we may have to wait a bit before a tx returns and making queries on the event log
-  /** The node's latest block: the events are read from its tx index. */
+  /** The lowest block the node serves, below which it has pruned. */
+  public async earliestAvailableHeight(): Promise<number | undefined> {
+    return (await this.tm.status()).syncInfo.earliestBlockHeight;
+  }
+
+  /**
+   * The highest height the node's event index is complete through. Packets
+   * and acks are read with tx_search and block_search, from an index the
+   * node's IndexerService fills after each commit, asynchronously: the
+   * node's height says nothing of it. The service takes the blocks one at a
+   * time, in order, and indexes a block's events before its transactions
+   * (CometBFT state/txindex/indexer_service.go), so the latest block
+   * block_search finds, H, means the transactions of every block through
+   * H - 1 and the block events through H are indexed: H - 1. Throws when
+   * none of the latest INDEX_WINDOW blocks is indexed, as the round must
+   * then not move its floors.
+   */
   public async scanHorizon(): Promise<number> {
-    return this.currentHeight();
+    const height = await this.currentHeight();
+    const from = Math.max(1, height - INDEX_WINDOW);
+    const search = await this.tm.blockSearch({
+      query: `block.height >= ${from}`,
+      order_by: "desc",
+      page: 1,
+      per_page: 1,
+    });
+    const indexed = search.blocks[0]?.block.header.height;
+    if (indexed === undefined) {
+      throw new Error(`${this.chainId}'s event index has none of the blocks from ${from} to ${height}: its indexer lags or is off; retry later`);
+    }
+    return indexed - 1;
   }
 
   public async waitForIndexer(): Promise<void> {

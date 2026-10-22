@@ -155,6 +155,14 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   abstract waitOneBlock(deadline?: number): Promise<void>;
   abstract waitForIndexer(): Promise<void>;
   /**
+   * The lowest block the node still serves, when it says: the misbehaviour
+   * monitor skips a header it cannot read only below it, as pruned for good.
+   * Undefined for a node that does not report it (gno does not prune).
+   */
+  public async earliestAvailableHeight(): Promise<number | undefined> {
+    return undefined;
+  }
+  /**
    * The highest height whose packet and acknowledgement events the event
    * queries (querySentPacketsV2, queryWrittenAcksV2) serve completely: the
    * height the indexer or node behind them has reached. A scan past it

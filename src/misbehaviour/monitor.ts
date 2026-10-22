@@ -192,11 +192,19 @@ export class MisbehaviourMonitor {
         header = await source.getHeaderSummary(height);
       }
       catch (e) {
-        // Most likely pruned by the source node; unverifiable, so it cannot
-        // serve as the trusted height for evidence either.
-        this.logger.warn(`Cannot verify consensus state at height ${height} of client ${clientId} on ${host.chainId}: ${getErrorMessage(e)}`);
-        checked = height;
-        continue;
+        // Skipped only when the source node has confirmed the block pruned:
+        // unverifiable then for good, it cannot serve as the trusted height
+        // for evidence either. Any other failure, a 503 say, stops the
+        // check here, so that the cursor stays below the height and the
+        // next check tries it again.
+        const earliest = await source.earliestAvailableHeight().catch(() => undefined);
+        if (earliest !== undefined && height < earliest) {
+          this.logger.warn(`Cannot verify consensus state at height ${height} of client ${clientId} on ${host.chainId}: ${source.chainId} has pruned it (earliest block ${earliest})`);
+          checked = height;
+          continue;
+        }
+        this.logger.warn(`Cannot verify consensus state at height ${height} of client ${clientId} on ${host.chainId} yet: ${getErrorMessage(e)}; retrying next check`);
+        break;
       }
       const kind = detectConsensusStateConflict(consensusState, header);
       if (kind) {

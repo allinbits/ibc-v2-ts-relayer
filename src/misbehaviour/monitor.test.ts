@@ -96,6 +96,7 @@ function mockHost(chainId: string, states: ConsensusStateSummary[] = [], status 
       value: new Uint8Array([1, 2, 3]),
     })),
     getHeaderSummary: vi.fn(),
+    earliestAvailableHeight: vi.fn(async (): Promise<number | undefined> => undefined),
     currentHeight: vi.fn(async () => 1000),
     disconnect: vi.fn(),
   };
@@ -113,6 +114,8 @@ function mockSource(chainId: string, currentHeight = 1000) {
       appHash: new Uint8Array([height]),
       nextValidatorsHash: new Uint8Array([0xff]),
     })),
+    // A node that does not report pruning unless a test says it does.
+    earliestAvailableHeight: vi.fn(async (): Promise<number | undefined> => undefined),
     getClientStatus: vi.fn(async () => ClientStatus.Active),
     getConsensusStatesAfter: vi.fn(async () => []),
     disconnect: vi.fn(),
@@ -231,9 +234,10 @@ describe("MisbehaviourMonitor.checkClient", () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("above chain-a's current height 15"));
   });
 
-  it("does not trust consensus states whose header is unavailable", async () => {
+  it("does not trust consensus states whose header the source has pruned", async () => {
     const host = mockHost("chain-b", [honestState(10), honestState(20), honestState(30, 99)]);
     const source = mockSource("chain-a");
+    source.earliestAvailableHeight.mockResolvedValue(25);
     source.getHeaderSummary.mockImplementation(async (height: number) => {
       if (height === 20) {
         throw new Error("height 20 is not available, lowest height is 25");
@@ -252,6 +256,52 @@ describe("MisbehaviourMonitor.checkClient", () => {
       revisionHeight: 30,
       trustedRevisionHeight: 10,
     }));
+  });
+
+  it("stops at a header it fails to read for any other reason, and checks it again next time", async () => {
+    const host = mockHost("chain-b", [honestState(10), honestState(20), honestState(30)]);
+    const source = mockSource("chain-a");
+    // The node serves every block; one read fails with a 503.
+    source.earliestAvailableHeight.mockResolvedValue(1);
+    source.getHeaderSummary.mockImplementationOnce(async (height: number) => ({
+      height,
+      timestampNanos: BigInt(height) * 1_000_000_000n,
+      appHash: new Uint8Array([height]),
+      nextValidatorsHash: new Uint8Array([0xff]),
+    })).mockImplementationOnce(async () => {
+      throw new Error("503 Service Unavailable");
+    });
+    const monitor = new MisbehaviourMonitor(logger);
+
+    await monitor.checkClient(monitored(host, source), "B");
+    expect(source.getHeaderSummary).not.toHaveBeenCalledWith(30);
+    expect(storage.setMonitorCursor).toHaveBeenLastCalledWith(1, "B", 10);
+
+    // The next check resumes at 20.
+    vi.mocked(storage.getMonitorCursor).mockResolvedValue(10);
+    await monitor.checkClient(monitored(host, source), "B");
+    expect(source.getHeaderSummary).toHaveBeenLastCalledWith(30);
+    expect(storage.setMonitorCursor).toHaveBeenLastCalledWith(1, "B", 30);
+  });
+
+  it("stops at a header it fails to read when the node does not report pruning", async () => {
+    const host = mockHost("chain-b", [honestState(10), honestState(20), honestState(30)]);
+    const source = mockSource("chain-a");
+    source.getHeaderSummary.mockImplementation(async (height: number) => {
+      if (height === 20) {
+        throw new Error("height 20 is not available");
+      }
+      return {
+        height,
+        timestampNanos: BigInt(height) * 1_000_000_000n,
+        appHash: new Uint8Array([height]),
+        nextValidatorsHash: new Uint8Array([0xff]),
+      };
+    });
+
+    await new MisbehaviourMonitor(logger).checkClient(monitored(host, source), "B");
+    expect(source.getHeaderSummary).not.toHaveBeenCalledWith(30);
+    expect(storage.setMonitorCursor).toHaveBeenLastCalledWith(1, "B", 10);
   });
 
   it("checks at most maxHeightsPerCheck consensus states", async () => {
