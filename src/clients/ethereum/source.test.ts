@@ -251,8 +251,9 @@ describe("querySentPacketsV2", () => {
     Object.assign(c.publicClient, {
       getBlock: async (args?: {
         blockNumber?: bigint
+        blockTag?: string
       }) => {
-        if (args?.blockNumber === undefined) {
+        if (args?.blockNumber === undefined && args?.blockTag === undefined) {
           headReads++;
           return getBlock(headReads === 1
             ? undefined
@@ -413,5 +414,101 @@ describe("router state reads", () => {
       },
     } as unknown as EthereumIbcClient;
     await expect(queryUnreceivedAcksV2(c, "client-0", [1n])).rejects.toThrow(/503/);
+  });
+});
+
+/*
+ * Block timestamps were cached by number for good, those of blocks a reorg
+ * could still replace included. Before Gloas, on a fork that missed slot
+ * 128, block 128 is at slot 129. A reorg puts a block at slot 128 under that
+ * number, with a packet in it; a scan up to slot 128 then took block 128
+ * for one past the slot from the stale timestamp, ended at block 127, and
+ * the link saved floor 128 past the packet.
+ */
+describe("querySentPacketsV2 across a reorg of unfinalized blocks", () => {
+  it("maps slots to the blocks of the chain the scan reads", async () => {
+    const chain = {
+      // Fork A missed slot 128; fork B did not.
+      missed: true,
+      finalized: 96n,
+      latest: 171n,
+    };
+    const slotOfBlock = (n: bigint) => (chain.missed && n >= 128n ? n + 1n : n);
+    const packetLog = {
+      ...sendPacketLog(128n),
+    };
+    const scanned: [bigint, bigint][] = [];
+    const c = {
+      config: {
+        router: "0x6a1E8C6F167006dE6d95fE05e930765d0EA9f49d",
+      },
+      beacon: forkSchedule().beacon,
+      publicClient: {
+        getBlock: async (args?: {
+          blockNumber?: bigint
+          blockTag?: string
+        }) => {
+          const number = args?.blockTag === "finalized" ? chain.finalized : args?.blockNumber ?? chain.latest;
+          return {
+            number,
+            timestamp: GENESIS + slotOfBlock(number) * 12n,
+          };
+        },
+        getContractEvents: async ({
+          fromBlock, toBlock,
+        }: {
+          fromBlock: bigint
+          toBlock: bigint
+        }) => {
+          scanned.push([fromBlock, toBlock]);
+          // Only fork B has the packet in block 128.
+          return !chain.missed && fromBlock <= 128n && 128n <= toBlock ? [packetLog] : [];
+        },
+      },
+    } as unknown as EthereumIbcClient;
+
+    // On fork A the scan to slot 128 ends at block 127, block 128 being at
+    // slot 129; the search reads block 128's timestamp on the way.
+    await querySentPacketsV2(c, "client-0", 96, 128);
+    expect(scanned).toEqual([[97n, 127n]]);
+
+    // The reorg replaces the unfinalized blocks, and finality passes them.
+    chain.missed = false;
+    chain.finalized = 160n;
+    const packets = await querySentPacketsV2(c, "client-0", 96, 128);
+    expect(scanned[1]).toEqual([97n, 128n]);
+    expect(packets.map(p => p.height)).toEqual([128]);
+  });
+
+  it("keeps a finalized block's timestamp across scans", async () => {
+    const reads: bigint[] = [];
+    const c = {
+      config: {
+        router: "0x6a1E8C6F167006dE6d95fE05e930765d0EA9f49d",
+      },
+      beacon: forkSchedule().beacon,
+      publicClient: {
+        getBlock: async (args?: {
+          blockNumber?: bigint
+          blockTag?: string
+        }) => {
+          const number = args?.blockTag === "finalized" ? 150n : args?.blockNumber ?? 171n;
+          if (args?.blockNumber !== undefined) {
+            reads.push(number);
+          }
+          return {
+            number,
+            timestamp: GENESIS + number * 12n,
+          };
+        },
+        getContractEvents: async () => [],
+      },
+    } as unknown as EthereumIbcClient;
+
+    await querySentPacketsV2(c, "client-0", 96, 128);
+    const first = reads.length;
+    await querySentPacketsV2(c, "client-0", 96, 128);
+    // The second scan's searches visit the same blocks, all finalized.
+    expect(reads.length).toBe(first);
   });
 });

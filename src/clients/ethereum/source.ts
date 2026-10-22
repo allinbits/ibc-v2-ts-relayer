@@ -231,22 +231,47 @@ export async function getHeaderSummary(_c: EthereumIbcClient, _height: number): 
 
 // --- blocks and slots ---
 
-const timestampCache = new WeakMap<EthereumIbcClient, Map<bigint, bigint>>();
+/** Timestamps of finalized blocks, which no reorg can replace. */
+const finalizedTimestamps = new WeakMap<EthereumIbcClient, Map<bigint, bigint>>();
 
-async function blockTimestamp(c: EthereumIbcClient, n: bigint): Promise<bigint> {
-  let cache = timestampCache.get(c);
-  if (!cache) {
-    cache = new Map();
-    timestampCache.set(c, cache);
+/**
+ * The block timestamps one scan reads. A block at or below the RPC's
+ * finalized block, read as the scan starts, is cached for good; any other
+ * only for the scan: a reorg can put another block, at another slot, at its
+ * number, and a timestamp kept from the old fork would map slots to the
+ * wrong blocks, ending a later range short of the bound the link saves.
+ */
+class ScanTimestamps {
+  private readonly scan = new Map<bigint, bigint>();
+  private readonly finalized: Map<bigint, bigint>;
+
+  public constructor(private readonly c: EthereumIbcClient, private readonly finalizedNumber: bigint) {
+    let cache = finalizedTimestamps.get(c);
+    if (!cache) {
+      cache = new Map();
+      finalizedTimestamps.set(c, cache);
+    }
+    this.finalized = cache;
   }
-  let ts = cache.get(n);
-  if (ts === undefined) {
-    ts = (await c.publicClient.getBlock({
-      blockNumber: n,
-    })).timestamp;
-    cache.set(n, ts);
+
+  public async of(n: bigint): Promise<bigint> {
+    const cache = n <= this.finalizedNumber ? this.finalized : this.scan;
+    let ts = cache.get(n);
+    if (ts === undefined) {
+      ts = (await this.c.publicClient.getBlock({
+        blockNumber: n,
+      })).timestamp;
+      cache.set(n, ts);
+    }
+    return ts;
   }
-  return ts;
+}
+
+async function scanTimestamps(c: EthereumIbcClient): Promise<ScanTimestamps> {
+  const finalized = await c.publicClient.getBlock({
+    blockTag: "finalized",
+  });
+  return new ScanTimestamps(c, finalized.number);
 }
 
 interface BlockRef {
@@ -258,7 +283,7 @@ interface BlockRef {
  * The first block whose timestamp is at or after t, or the block after
  * latest. A binary search: missed slots make block numbers drift from slots.
  */
-async function firstBlockAtOrAfter(c: EthereumIbcClient, t: bigint, latest: BlockRef): Promise<bigint> {
+async function firstBlockAtOrAfter(timestamps: ScanTimestamps, t: bigint, latest: BlockRef): Promise<bigint> {
   if (latest.timestamp < t) {
     return latest.number + 1n;
   }
@@ -266,7 +291,7 @@ async function firstBlockAtOrAfter(c: EthereumIbcClient, t: bigint, latest: Bloc
   let hi = latest.number;
   while (lo < hi) {
     const mid = (lo + hi) / 2n;
-    if (await blockTimestamp(c, mid) < t) {
+    if (await timestamps.of(mid) < t) {
       lo = mid + 1n;
     }
     else {
@@ -287,8 +312,10 @@ async function firstBlockAtOrAfter(c: EthereumIbcClient, t: bigint, latest: Bloc
 async function blockRange(c: EthereumIbcClient, minSlot: number | undefined, maxSlot: number | undefined): Promise<{
   fromBlock: bigint
   toBlock: bigint
+  timestamps: ScanTimestamps
 }> {
   const p = await chainParams(c);
+  const timestamps = await scanTimestamps(c);
   const floor = BigInt(c.config.fromBlock ?? "0");
   // One read of the head, from which the whole range is derived and against
   // which it is checked: a second read, from a node behind a load balancer
@@ -301,13 +328,14 @@ async function blockRange(c: EthereumIbcClient, minSlot: number | undefined, max
       throw new Error(`the execution RPC is at slot ${head}, not yet at ${maxSlot}: retry later`);
     }
   }
-  const fromBlock = minSlot === undefined ? floor : await firstBlockAtOrAfter(c, slotTime(p, BigInt(minSlot) + 1n), latest);
+  const fromBlock = minSlot === undefined ? floor : await firstBlockAtOrAfter(timestamps, slotTime(p, BigInt(minSlot) + 1n), latest);
   const toBlock = maxSlot === undefined
     ? latest.number
-    : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot) + 1n), latest) - 1n;
+    : await firstBlockAtOrAfter(timestamps, slotTime(p, BigInt(maxSlot) + 1n), latest) - 1n;
   return {
     fromBlock: fromBlock < floor ? floor : fromBlock,
     toBlock,
+    timestamps,
   };
 }
 
@@ -370,7 +398,7 @@ export async function querySentPacketsV2(
   );
   return Promise.all(logs.map(async log => ({
     packet: toPacketV2(log.args.packet as AbiPacket),
-    height: Number(slotAt(p, await blockTimestamp(c, log.blockNumber))),
+    height: Number(slotAt(p, await range.timestamps.of(log.blockNumber))),
   })));
 }
 
@@ -408,7 +436,7 @@ export async function queryWrittenAcksV2(
       // The app acknowledgement as the router stores it (no wrapper).
       acknowledgement: hexToBytes(acks[0]),
       originalPacket: toPacketV2(log.args.packet as AbiPacket),
-      height: Number(slotAt(p, await blockTimestamp(c, log.blockNumber))),
+      height: Number(slotAt(p, await range.timestamps.of(log.blockNumber))),
       txHash: log.transactionHash.slice(2).toUpperCase(),
       txEvents: [],
     };
