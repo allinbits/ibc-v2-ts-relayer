@@ -151,7 +151,8 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   abstract timeoutHeight(blocksInFuture: number): Promise<Height>;
   abstract header(height: number): Promise<T["header"]>;
   abstract latestHeader(): Promise<T["header"]>;
-  abstract waitOneBlock(): Promise<void>;
+  /** Waits for the next block, or until deadline (epoch milliseconds) if one is given and passes first. */
+  abstract waitOneBlock(deadline?: number): Promise<void>;
   abstract waitForIndexer(): Promise<void>;
 
   /* helper methods for specific clients on this chain */

@@ -275,16 +275,25 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     return this.revisionHeight(block);
   }
 
-  public async waitOneBlock(): Promise<void> {
-    // ensure this works
-    const start = await this.currentHeight();
-    let end: number;
-    do {
-      await sleep(this.estimatedBlockTime);
-      end = await this.currentHeight();
-    } while (end === start);
+  /**
+   * Waits until the chain's height moves, polling every estimated block time.
+   * With a deadline (epoch milliseconds) it returns once that passes too: a
+   * halted chain otherwise holds the caller forever.
+   */
+  public async waitOneBlock(deadline?: number): Promise<void> {
     // TODO: this works but only for websocket connections, is there some code that falls back to polling in cosmjs?
     // await firstEvent(this.tm.subscribeNewBlockHeader());
+    const start = await this.currentHeight();
+    for (;;) {
+      const wait = deadline === undefined ? this.estimatedBlockTime : Math.min(this.estimatedBlockTime, deadline - Date.now());
+      if (wait <= 0) {
+        return;
+      }
+      await sleep(wait);
+      if (await this.currentHeight() !== start) {
+        return;
+      }
+    }
   }
 
   // we may have to wait a bit before a tx returns and making queries on the event log

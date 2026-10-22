@@ -1,15 +1,21 @@
 import {
+  keccak256,
+} from "viem";
+import {
   describe, expect, it,
 } from "vitest";
 
 import type {
   LightClientUpdate,
 } from "./beacon.js";
+import {
+  packetPath,
+} from "./execution.js";
 import type {
   EthereumIbcClient,
 } from "./IbcClient.js";
 import {
-  planUpdates, querySentPacketsV2,
+  eventProofOffset, planUpdates, querySentPacketsV2, queryUnreceivedAcksV2, queryUnreceivedPacketsV2,
 } from "./source.js";
 
 // Slots per sync committee period in these tests.
@@ -227,5 +233,124 @@ describe("querySentPacketsV2", () => {
     } = source(200n, undefined, [sendPacketLog(109n)]);
     const packets = await querySentPacketsV2(c, "client-0", 100, 110);
     expect(packets.map(p => [Number(p.packet.sequence), p.height])).toEqual([[1, 110]]);
+  });
+});
+
+/** A client whose beacon spec schedules Gloas at gloasEpoch, if given. */
+function forkSchedule(gloasEpoch?: number) {
+  return {
+    beacon: {
+      genesis: async () => ({
+        genesis_time: GENESIS.toString(),
+        genesis_validators_root: "0x",
+        genesis_fork_version: "0x90000069",
+      }),
+      spec: async () => ({
+        SECONDS_PER_SLOT: "12",
+        SLOTS_PER_EPOCH: "32",
+        EPOCHS_PER_SYNC_COMMITTEE_PERIOD: "256",
+        SYNC_COMMITTEE_SIZE: "512",
+        ...(gloasEpoch === undefined
+          ? {
+          }
+          : {
+            GLOAS_FORK_VERSION: "0x90000075",
+            GLOAS_FORK_EPOCH: String(gloasEpoch),
+          }),
+      }),
+    },
+  } as unknown as EthereumIbcClient;
+}
+
+/*
+ * Before Gloas a finalized beacon block commits to its own slot's execution
+ * payload, whose state root gno's Ethereum client stores for the slot: an
+ * event in the block at slot S is proven at S. From Gloas on it commits to
+ * the latest payload before it (its bid's parent_block_hash), so the event
+ * needs a slot past S.
+ */
+describe("eventProofOffset", () => {
+  it("proves an event at its own slot while Gloas is unscheduled", async () => {
+    const c = forkSchedule();
+    await expect(eventProofOffset(c, 11407273)).resolves.toBe(0);
+  });
+
+  it("proves an event a slot later from the Gloas fork epoch on", async () => {
+    const c = forkSchedule(10);
+    await expect(eventProofOffset(c, 10 * 32 - 1)).resolves.toBe(0);
+    await expect(eventProofOffset(c, 10 * 32)).resolves.toBe(1);
+    await expect(eventProofOffset(c, 10 * 32 + 1000)).resolves.toBe(1);
+  });
+});
+
+describe("router state reads", () => {
+  /** A router whose commitments differ between the latest and the finalized block. */
+  function router(latest: Record<string, string>, finalized: Record<string, string>) {
+    const tags: (string | undefined)[] = [];
+    const c = {
+      config: {
+        router: "0x6a1E8C6F167006dE6d95fE05e930765d0EA9f49d",
+      },
+      publicClient: {
+        readContract: async ({
+          args, blockTag,
+        }: {
+          args: [`0x${string}`]
+          blockTag?: string
+        }) => {
+          tags.push(blockTag);
+          const state = blockTag === "finalized" ? finalized : latest;
+          return state[args[0]] ?? ZERO_WORD;
+        },
+      },
+    } as unknown as EthereumIbcClient;
+    return {
+      c,
+      tags,
+    };
+  }
+  const ZERO_WORD = `0x${"00".repeat(32)}`;
+  const SET = `0x${"11".repeat(32)}`;
+  const key = (type: 1 | 2 | 3, seq: bigint) => keccak256(packetPath("client-0", type, seq));
+
+  it("reads a receipt at the latest or the finalized block", async () => {
+    // Packet 1's receipt is final, packet 2's only in the latest block.
+    const {
+      c, tags,
+    } = router({
+      [key(2, 1n)]: SET,
+      [key(2, 2n)]: SET,
+    }, {
+      [key(2, 1n)]: SET,
+    });
+    await expect(queryUnreceivedPacketsV2(c, "client-0", [1, 2, 3])).resolves.toEqual([3]);
+    await expect(queryUnreceivedPacketsV2(c, "client-0", [1, 2, 3], "finalized")).resolves.toEqual([2, 3]);
+    expect(tags).toEqual(["latest", "latest", "latest", "finalized", "finalized", "finalized"]);
+  });
+
+  it("reads a commitment at the latest or the finalized block", async () => {
+    // Packet 1's commitment was cleared, by an ack or a timeout not final yet.
+    const {
+      c,
+    } = router({
+    }, {
+      [key(1, 1n)]: SET,
+    });
+    await expect(queryUnreceivedAcksV2(c, "client-0", [1])).resolves.toEqual([]);
+    await expect(queryUnreceivedAcksV2(c, "client-0", [1], "finalized")).resolves.toEqual([1]);
+  });
+
+  it("propagates a failed read rather than take it for an absent commitment", async () => {
+    const c = {
+      config: {
+        router: "0x6a1E8C6F167006dE6d95fE05e930765d0EA9f49d",
+      },
+      publicClient: {
+        readContract: async () => {
+          throw new Error("HTTP request failed. Status: 503");
+        },
+      },
+    } as unknown as EthereumIbcClient;
+    await expect(queryUnreceivedAcksV2(c, "client-0", [1])).rejects.toThrow(/503/);
   });
 });

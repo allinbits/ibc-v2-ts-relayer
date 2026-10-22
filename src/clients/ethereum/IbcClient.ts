@@ -187,8 +187,13 @@ export class EthereumIbcClient extends BaseIbcClient<EthereumIbcClientTypes> {
     return source.latestHeader(this);
   }
 
-  public async waitOneBlock(): Promise<void> {
-    return source.waitOneBlock(this);
+  public async waitOneBlock(deadline?: number): Promise<void> {
+    return source.waitOneBlock(this, deadline);
+  }
+
+  /** How many slots past an event's slot the first header that can prove it is: see source.eventProofOffset. */
+  public async eventProofOffset(slot: number): Promise<number> {
+    return source.eventProofOffset(this, slot);
   }
 
   public async waitForIndexer(): Promise<void> {
@@ -248,12 +253,14 @@ export class EthereumIbcClient extends BaseIbcClient<EthereumIbcClientTypes> {
     return source.queryWrittenAcksV2(this, clientID, minHeight, maxHeight);
   }
 
-  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
-    return source.queryUnreceivedPacketsV2(this, clientId, sequences);
+  /** At the latest block by default; at "finalized", the state no reorg can undo. */
+  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[], at: source.StateTag = "latest"): Promise<number[]> {
+    return source.queryUnreceivedPacketsV2(this, clientId, sequences, at);
   }
 
-  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
-    return source.queryUnreceivedAcksV2(this, clientId, sequences);
+  /** At the latest block by default; at "finalized", the state no reorg can undo. */
+  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[], at: source.StateTag = "latest"): Promise<number[]> {
+    return source.queryUnreceivedAcksV2(this, clientId, sequences, at);
   }
 
   public async queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array> {

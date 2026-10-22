@@ -149,15 +149,30 @@ export async function header(c: EthereumIbcClient, height: number): Promise<Ethe
   };
 }
 
+/**
+ * How many slots past an event's slot the first header that can prove it
+ * is. Before Gloas a beacon block commits to its own slot's execution
+ * payload, so a proof at slot S (see proveAt) covers an event in S's block:
+ * 0. From Gloas (EIP-7732) on it commits only to the latest payload before
+ * it, its bid's parent_block_hash, which is also the execution header the
+ * gno-side client stores for the slot (finalizedExecution): 1.
+ */
+export async function eventProofOffset(c: EthereumIbcClient, slot: number): Promise<number> {
+  const p = await chainParams(c);
+  return BigInt(slot) / p.slotsPerEpoch >= p.forks.GLOAS.epoch ? 1 : 0;
+}
+
 /** The latest finalized slot: what a counterparty light client can reach. */
 export async function latestHeader(c: EthereumIbcClient): Promise<EthereumHeader> {
   const fin = await c.beacon.finalityUpdate();
   return header(c, Number(fin.finalized_header.beacon.slot));
 }
 
-export async function waitOneBlock(c: EthereumIbcClient): Promise<void> {
+/** Waits one slot, or until deadline (epoch milliseconds) if that comes first. */
+export async function waitOneBlock(c: EthereumIbcClient, deadline?: number): Promise<void> {
   const p = await chainParams(c);
-  await sleep(Number(p.secondsPerSlot) * 1000);
+  const slot = Number(p.secondsPerSlot) * 1000;
+  await sleep(deadline === undefined ? slot : Math.max(0, Math.min(slot, deadline - Date.now())));
 }
 
 export async function waitForIndexer(_c: EthereumIbcClient): Promise<void> {
@@ -340,12 +355,19 @@ export async function queryWrittenAcksV2(
   }));
 }
 
-async function commitment(c: EthereumIbcClient, path: Uint8Array): Promise<Hex> {
+/**
+ * The state a router query reads: the latest block, or the latest finalized
+ * one, which no reorg can undo.
+ */
+export type StateTag = "latest" | "finalized";
+
+async function commitment(c: EthereumIbcClient, path: Uint8Array, at: StateTag = "latest"): Promise<Hex> {
   return c.publicClient.readContract({
     address: c.config.router,
     abi: routerSourceAbi,
     functionName: "getCommitment",
     args: [keccak256(path)],
+    blockTag: at,
     // Optional in viem, but required by its types without strictNullChecks.
     authorizationList: undefined,
   });
@@ -353,15 +375,18 @@ async function commitment(c: EthereumIbcClient, path: Uint8Array): Promise<Hex> 
 
 const ZERO = `0x${"00".repeat(32)}`;
 
-/** Packets sent to clientId that the router has no receipt for. */
-export async function queryUnreceivedPacketsV2(c: EthereumIbcClient, clientId: string, sequences: readonly number[]): Promise<number[]> {
-  const receipts = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 2, BigInt(s)))));
+/** Packets sent to clientId that the router has no receipt for, at the latest or the finalized block. */
+export async function queryUnreceivedPacketsV2(c: EthereumIbcClient, clientId: string, sequences: readonly number[], at: StateTag = "latest"): Promise<number[]> {
+  const receipts = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 2, BigInt(s)), at)));
   return sequences.filter((_, i) => receipts[i] === ZERO);
 }
 
-/** Packets sent from clientId whose commitment is still there: not yet acknowledged. */
-export async function queryUnreceivedAcksV2(c: EthereumIbcClient, clientId: string, sequences: readonly number[]): Promise<number[]> {
-  const commitments = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 1, BigInt(s)))));
+/**
+ * Packets sent from clientId whose commitment is still there, at the latest
+ * or the finalized block: neither acknowledged nor timed out.
+ */
+export async function queryUnreceivedAcksV2(c: EthereumIbcClient, clientId: string, sequences: readonly number[], at: StateTag = "latest"): Promise<number[]> {
+  const commitments = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 1, BigInt(s)), at)));
   return sequences.filter((_, i) => commitments[i] !== ZERO);
 }
 
