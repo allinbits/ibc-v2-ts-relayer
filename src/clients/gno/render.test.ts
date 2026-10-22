@@ -3,10 +3,13 @@ import {
 } from "vitest";
 
 import {
+  ClientType,
+} from "../../types/index.js";
+import {
   GnoIbcClient,
 } from "./IbcClient.js";
 import {
-  parseRenderPage, renderedSequences,
+  parseRenderPage, renderedCommitment, renderedConsensusState, renderedSequences,
 } from "./render.js";
 
 const Q = "gno.land/r/aib/ibc/core:clients/ethereum-1/packet_commitments?limit=100&page=1";
@@ -25,7 +28,7 @@ describe("parseRenderPage", () => {
   });
 
   it("refuses every other shape", () => {
-    for (const raw of ["", "not json", "null", "[]", "1", "\"x\"", "{}", "{\"items\":null,\"page\":1,\"total\":1}", "{\"items\":[],\"total\":1}", "{\"items\":[],\"page\":2,\"total\":1}", "{\"items\":[],\"page\":1,\"total\":-1}", "{\"items\":[],\"page\":1,\"total\":\"1\"}", "{\"items\":[],\"page\":1,\"total\":1.5}"]) {
+    for (const raw of ["{\"items\":[],\"page\":1,\"total\":0}", "{\"items\":[],\"page\":3,\"total\":2}", "", "not json", "null", "[]", "1", "\"x\"", "{}", "{\"items\":null,\"page\":1,\"total\":1}", "{\"items\":[],\"total\":1}", "{\"items\":[],\"page\":2,\"total\":1}", "{\"items\":[],\"page\":1,\"total\":-1}", "{\"items\":[],\"page\":1,\"total\":\"1\"}", "{\"items\":[],\"page\":1,\"total\":1.5}"]) {
       expect(() => parseRenderPage(raw, Q, 1), raw).toThrow();
     }
   });
@@ -142,5 +145,145 @@ describe("GnoIbcClient render queries", () => {
       client,
     } = gno(query => (query.endsWith("page=1") ? "{\"items\":[],\"page\":1,\"total\":2}" : "{\"error\":\"internal\"}"));
     await expect(client.queryUnreceivedAcksV2("ethereum-1", [1n])).rejects.toThrow(/internal/);
+  });
+});
+
+describe("renderedConsensusState", () => {
+  const item = {
+    height: {
+      revision_number: 2,
+      revision_height: 2,
+    },
+    timestamp: 1234567890,
+    root: "YXBwaGFzaA==",
+    next_validators_hash: "/9gNNzK6IBcVWTwBsskTrrKk/SQzd29h1wP8LYFJbKo=",
+  };
+
+  it("reads the realm's item", () => {
+    const cs = renderedConsensusState(item, "07-tendermint-1");
+    expect([cs.revisionNumber, cs.revisionHeight, cs.timestampNanos]).toEqual([2n, 2n, 1234567890n * 1_000_000_000n]);
+    expect(Buffer.from(cs.root).toString()).toBe("apphash");
+  });
+
+  it("refuses a malformed item", () => {
+    for (const bad of [
+      null,
+      {
+      },
+      {
+        ...item,
+        height: undefined,
+      },
+      {
+        ...item,
+        height: {
+          revision_number: 2,
+        },
+      },
+      {
+        ...item,
+        timestamp: -1,
+      },
+      {
+        ...item,
+        root: 7,
+      },
+      {
+        ...item,
+        next_validators_hash: "not base64!",
+      },
+    ]) {
+      expect(() => renderedConsensusState(bad, "07-tendermint-1")).toThrow();
+    }
+  });
+});
+
+describe("renderedCommitment", () => {
+  it("finds a commitment by its exact sequence, and refuses one without data", () => {
+    const items = [
+      {
+        sequence: "9007199254740993",
+        data: "AQ==",
+      },
+    ];
+    expect(renderedCommitment(items, 9007199254740993n, Q)).toEqual(Uint8Array.from([1]));
+    expect(renderedCommitment(items, 9007199254740992n, Q)).toBeUndefined();
+    expect(() => renderedCommitment([
+      {
+        sequence: "1",
+      },
+    ], 1n, Q)).toThrow();
+  });
+});
+
+/*
+ * The misbehaviour monitor walks consensus states from the last page back
+ * to its cursor. Pages read at different heights shifted when the realm
+ * pruned states between reads, and the cursor moved past states never
+ * checked.
+ */
+describe("GnoIbcClient.getConsensusStatesAfter", () => {
+  /** Consensus states at heights from..to, as the realm renders them. */
+  const states = (from: number, to: number) => Array.from({
+    length: to - from + 1,
+  }, (_, i) => ({
+    height: {
+      revision_number: 1,
+      revision_height: from + i,
+    },
+    timestamp: 1000 + from + i,
+    root: "AA==",
+    next_validators_hash: "AA==",
+  }));
+  const page = (all: unknown[], n: number) => JSON.stringify({
+    items: all.slice((n - 1) * 100, n * 100),
+    page: n,
+    total: Math.max(1, Math.ceil(all.length / 100)),
+  });
+
+  it("reads every page at one height while the realm prunes between reads", async () => {
+    // At the pinned height 500 the realm held heights 1 to 250; every read
+    // of the latest state finds ten more pruned.
+    const snapshot = states(1, 250);
+    let pruned = 0;
+    const {
+      client, queries,
+    } = gno((query, at) => {
+      const n = Number(/page=(\d+)/.exec(query)?.[1]);
+      if (at === 500) {
+        return page(snapshot, n);
+      }
+      pruned += 10;
+      return page(states(1 + pruned, 250), n);
+    });
+
+    const found = await client.getConsensusStatesAfter("07-tendermint-1", ClientType.Tendermint, 100n, 1000);
+    expect(found.map(cs => Number(cs.revisionHeight))).toEqual(Array.from({
+      length: 150,
+    }, (_, i) => 101 + i));
+    expect(queries.slice(1).every(([, at]) => at === 500)).toBe(true);
+  });
+
+  it("fails on an answer that is not a page", async () => {
+    for (const raw of ["{}", "{\"error\":\"client 07-tendermint-1 not found\"}", "{\"items\":[],\"page\":1,\"total\":0}"]) {
+      const {
+        client,
+      } = gno(() => raw);
+      await expect(client.getConsensusStatesAfter("07-tendermint-1", ClientType.Tendermint, 0n, 10), raw).rejects.toThrow();
+    }
+  });
+
+  it("fails when a later page counts other pages than the first", async () => {
+    const {
+      client,
+    } = gno((query) => {
+      const n = Number(/page=(\d+)/.exec(query)?.[1]);
+      return JSON.stringify({
+        items: states(n * 100 - 99, n * 100),
+        page: n,
+        total: n === 1 ? 2 : 3,
+      });
+    });
+    await expect(client.getConsensusStatesAfter("07-tendermint-1", ClientType.Tendermint, 0n, 1000)).rejects.toThrow(/page 2 counts 3 pages, page 1 2/);
   });
 });

@@ -92,8 +92,7 @@ import {
   createClientTemplate, recvPacket, registerCounterParty, timeout, updateClientTemplate,
 } from "./queries.js";
 import {
-  parseRenderPage, RENDER_PAGE_LIMIT, renderedSequences,
-  RenderPage,
+  parseRenderPage, RENDER_PAGE_LIMIT, renderedCommitment, renderedConsensusState, renderedSequences, RenderList, RenderPage,
 } from "./render.js";
 import {
   ProofHelper,
@@ -107,7 +106,6 @@ export type GnoIbcClientOptions = CreateWalletOptions & BaseIbcClientOptions & {
 /** Default deposit amount for Gno MsgRun transactions (in ugnot) */
 const GNO_DEFAULT_DEPOSIT = 3000000;
 /** Maximum page size of the IBC core realm's paginated render views */
-const GNO_RENDER_PAGE_LIMIT = 100;
 
 const GNO_GAS_CREATE_CLIENT = 100_000_000;
 const GNO_GAS_UPDATE_CLIENT = 200_000_000;
@@ -554,43 +552,21 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     if (type === ClientType.Ethereum) {
       return [];
     }
-    type RenderedConsensusState = {
-      height: {
-        revision_number: number
-        revision_height: number
-      }
-      timestamp: number
-      root: string
-      next_validators_hash: string
-    };
-    type Page = {
-      items: RenderedConsensusState[]
-      page: number
-      total: number
-    };
     // Pages are sorted by height, so read backwards from the last page until
-    // reaching heights that were already checked.
-    const path = `clients/${validateIbcIdentifier(clientId, "clientId")}/consensus_states?limit=${GNO_RENDER_PAGE_LIMIT}`;
-    const firstPage = await this.renderCoreRealm<Page>(`${path}&page=1`);
-    const rendered: RenderedConsensusState[] = [];
-    for (let page = firstPage.total; page >= 1; page--) {
-      const {
-        items,
-      } = page === 1 ? firstPage : await this.renderCoreRealm<Page>(`${path}&page=${page}`);
-      const unchecked = items.filter(item => BigInt(item.height.revision_height) > afterRevisionHeight);
+    // reaching heights that were already checked. Every page is read at one
+    // height: one pruned between two reads would shift a later state onto
+    // an earlier page, and the monitor's cursor past it unchecked.
+    const list = await this.openRenderList(`gno.land/r/aib/ibc/core:clients/${validateIbcIdentifier(clientId, "clientId")}/consensus_states`);
+    const rendered: ConsensusStateSummary[] = [];
+    for (let page = list.first.total; page >= 1; page--) {
+      const items = (await list.page(page)).items.map(item => renderedConsensusState(item, clientId));
+      const unchecked = items.filter(item => item.revisionHeight > afterRevisionHeight);
       rendered.unshift(...unchecked);
       if (unchecked.length < items.length) {
         break;
       }
     }
-    return rendered.slice(0, limit).map(item => ({
-      revisionNumber: BigInt(item.height.revision_number),
-      revisionHeight: BigInt(item.height.revision_height),
-      timestampNanos: BigInt(item.timestamp) * 1_000_000_000n,
-      timestampPrecision: "seconds",
-      root: fromBase64(item.root),
-      nextValidatorsHash: fromBase64(item.next_validators_hash),
-    }));
+    return rendered.slice(0, limit);
   }
 
   public async getHeaderSummary(height: number): Promise<HeaderSummary> {
@@ -2017,17 +1993,19 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   /**
-   * Every item of a list the IBC core realm renders. A list of several pages
-   * is read at one height, as items could otherwise shift between pages
-   * past the reads. Throws on an error answer or a malformed one (see
-   * render.ts): only a well-formed list is one.
+   * Opens a list the IBC core realm renders (query is the full vm/qrender
+   * data, with or without a "?"). A list of several pages is read at one
+   * height, as items could otherwise shift between pages past the reads,
+   * and every page must report the first one's page count. Throws on an
+   * error answer or a malformed one (see render.ts): only a well-formed
+   * list is one.
    */
-  public async pagedAbciQuery(path: string, query: string): Promise<unknown[]> {
+  public async openRenderList(query: string): Promise<RenderList> {
     const sep = query.includes("?") ? "&" : "?";
     const fetchPage = async (page: number, height?: number): Promise<RenderPage> => {
       const pageQuery = `${query}${sep}limit=${RENDER_PAGE_LIMIT}&page=${page}`;
       const result = await this.tm.abciQuery({
-        path,
+        path: "vm/qrender",
         data: Buffer.from(pageQuery, "utf-8"),
         height,
       });
@@ -2037,14 +2015,33 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
       return parseRenderPage(Buffer.from(result.responseBase.data).toString("utf-8"), pageQuery, page);
     };
     let first = await fetchPage(1);
-    if (first.total <= 1) {
-      return first.items;
+    let height: number | undefined;
+    if (first.total > 1) {
+      height = await this.currentHeight();
+      first = await fetchPage(1, height);
     }
-    const height = await this.currentHeight();
-    first = await fetchPage(1, height);
-    const items = [...first.items];
-    for (let page = 2; page <= first.total; page++) {
-      items.push(...(await fetchPage(page, height)).items);
+    const pinned = first;
+    return {
+      first: pinned,
+      page: async (page: number) => {
+        if (page === 1) {
+          return pinned;
+        }
+        const next = await fetchPage(page, height);
+        if (next.total !== pinned.total) {
+          throw new Error(`query ${query}: page ${page} counts ${next.total} pages, page 1 ${pinned.total}, at the same height`);
+        }
+        return next;
+      },
+    };
+  }
+
+  /** Every item of a list the IBC core realm renders: see openRenderList. */
+  public async pagedAbciQuery(query: string): Promise<unknown[]> {
+    const list = await this.openRenderList(query);
+    const items = [...list.first.items];
+    for (let page = 2; page <= list.first.total; page++) {
+      items.push(...(await list.page(page)).items);
     }
     return items;
   }
@@ -2052,7 +2049,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]> {
     try {
       const query = `gno.land/r/aib/ibc/core:clients/${clientId}/packet_receipts`;
-      const received = renderedSequences(await this.pagedAbciQuery("vm/qrender", query), query);
+      const received = renderedSequences(await this.pagedAbciQuery(query), query);
       return sequences.filter(seq => !received.has(seq));
     }
     catch (e) {
@@ -2071,24 +2068,12 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   public async queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array> {
-    try {
-      const data = await this.pagedAbciQuery("vm/qrender", `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`);
-
-      const commitment = data.find((item: {
-        sequence: string
-      }) => BigInt(item.sequence) === sequence);
-      if (commitment) {
-        return fromBase64((commitment as {
-          data: string
-        }).data);
-      }
-      else {
-        throw new Error(`Commitment for client ID ${clientId} and sequence ${sequence} not found in data.`);
-      }
+    const query = `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`;
+    const commitment = renderedCommitment(await this.pagedAbciQuery(query), sequence, query);
+    if (!commitment) {
+      throw new Error(`Commitment for client ID ${clientId} and sequence ${sequence} not found in data.`);
     }
-    catch (e) {
-      throw new Error(`Failed to parse commitment for client ID ${clientId} and sequence ${sequence}: ${getErrorMessage(e)}`);
-    }
+    return commitment;
   }
 
   public async queryUnreceivedAcks(_portId: string, _channelId: string, _sequences: readonly number[]): Promise<number[]> {
@@ -2098,7 +2083,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   public async queryUnreceivedAcksV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]> {
     try {
       const query = `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`;
-      const committed = renderedSequences(await this.pagedAbciQuery("vm/qrender", query), query);
+      const committed = renderedSequences(await this.pagedAbciQuery(query), query);
       return sequences.filter(seq => committed.has(seq));
     }
     catch (e) {

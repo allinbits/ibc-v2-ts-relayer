@@ -1209,6 +1209,7 @@ describe("Link with gno render answers", () => {
     Object.assign(client, {
       queryUnreceivedAcksV2: GnoIbcClient.prototype.queryUnreceivedAcksV2,
       pagedAbciQuery: GnoIbcClient.prototype.pagedAbciQuery,
+      openRenderList: GnoIbcClient.prototype.openRenderList,
       tm: {
         abciQuery: vi.fn(async () => ({
           responseBase: {
