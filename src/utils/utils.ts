@@ -189,22 +189,38 @@ export function parseRevisionNumber(chainId: string): bigint {
   return 0n;
 }
 
+const MAX_UINT64 = 2n ** 64n - 1n;
+
 // revisionNumberFor is parseRevisionNumber unless `overrides` names the chain:
 // a comma-separated list of `chainId=revision`, e.g. "test-ibc-1=0". It exists
 // for a counterparty light client that was set up with a revision the chain id
 // does not encode, such as a GnoLightClient deployed with revision 0 for a
-// chain id ending in "-1".
+// chain id ending in "-1". Every entry must be one chain id, one "=" and a
+// uint64: a malformed one throws rather than leave a chain on the revision its
+// id encodes, which its counterparty's client would reject.
 export function revisionNumberFor(chainId: string, overrides: string | undefined): bigint {
-  for (const entry of (overrides ?? "").split(",")) {
-    const [id, rev] = entry.trim().split("=");
-    if (id === chainId && rev !== undefined) {
-      if (!/^\d+$/.test(rev)) {
-        throw new Error(`revision override for ${chainId} must be a decimal number, not "${rev}"`);
+  let found: bigint | undefined;
+  for (const raw of (overrides ?? "").split(",")) {
+    const entry = raw.trim();
+    if (entry === "") {
+      continue;
+    }
+    const parts = entry.split("=").map(part => part.trim());
+    if (parts.length !== 2 || parts[0] === "") {
+      throw new Error(`revision override "${entry}" must be chainId=revision`);
+    }
+    const [id, rev] = parts;
+    if (!/^\d+$/.test(rev) || BigInt(rev) > MAX_UINT64) {
+      throw new Error(`revision override for ${id} must be a uint64, not "${rev}"`);
+    }
+    if (id === chainId) {
+      if (found !== undefined && found !== BigInt(rev)) {
+        throw new Error(`revision override for ${chainId} given twice: ${found} and ${rev}`);
       }
-      return BigInt(rev);
+      found = BigInt(rev);
     }
   }
-  return parseRevisionNumber(chainId);
+  return found ?? parseRevisionNumber(chainId);
 }
 
 // may will run the transform if value is defined, otherwise returns undefined

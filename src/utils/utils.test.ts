@@ -193,6 +193,20 @@ describe("utils", () => {
     it("should refuse a malformed override", () => {
       expect(() => revisionNumberFor("test-ibc-1", "test-ibc-1=x")).toThrow();
     });
+
+    it("should refuse an override entry that is not one chainId=uint64", () => {
+      // Each of these once selected a revision silently: 0 from the first
+      // part of "0=oops", and the id's own 1 for an entry with no "=".
+      for (const overrides of ["test-ibc-1=0=oops", "test-ibc-1", "test-ibc-1=", "=0", "test-ibc-1=-1", "test-ibc-1=1.5", "test-ibc-1=18446744073709551616", "other-2=x,test-ibc-1=0", "test-ibc-1=0,test-ibc-1=1"]) {
+        expect(() => revisionNumberFor("test-ibc-1", overrides), overrides).toThrow();
+      }
+    });
+
+    it("should accept the uint64 range and stray separators", () => {
+      expect(revisionNumberFor("test-ibc-1", "test-ibc-1=18446744073709551615")).toBe(2n ** 64n - 1n);
+      expect(revisionNumberFor("test-ibc-1", " , test-ibc-1 = 0 ,")).toBe(0n);
+      expect(revisionNumberFor("test-ibc-1", "test-ibc-1=0,test-ibc-1=0")).toBe(0n);
+    });
   });
 
   describe("may", () => {
