@@ -25,11 +25,11 @@ export interface IbcV2Extension {
       ) => Promise<QueryPacketCommitmentResponse>
       readonly unreceivedPackets: (
         clientId: string,
-        packetCommitmentSequences: readonly number[],
+        packetCommitmentSequences: readonly (bigint | number)[],
       ) => Promise<QueryUnreceivedPacketsResponse>
       readonly unreceivedAcks: (
         clientId: string,
-        packetAckSequences: readonly number[],
+        packetAckSequences: readonly (bigint | number)[],
       ) => Promise<QueryUnreceivedAcksResponse>
       readonly nextSequenceSend: (
         clientId: string,
@@ -65,14 +65,14 @@ export function setupIbcV2Extension(base: QueryClient): IbcV2Extension {
         }),
         unreceivedPackets: async (
           clientId: string,
-          sequences: readonly number[],
+          sequences: readonly (bigint | number)[],
         ) => channelQueryService.UnreceivedPackets({
           clientId,
           sequences: sequences.map(s => BigInt(s)),
         }),
         unreceivedAcks: async (
           clientId: string,
-          packetAckSequences: readonly number[],
+          packetAckSequences: readonly (bigint | number)[],
         ) => channelQueryService.UnreceivedAcks({
           clientId,
           packetAckSequences: packetAckSequences.map(s => BigInt(s)),

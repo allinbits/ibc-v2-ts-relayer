@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- one fixture set serves every relay-round scenario */
 import {
   Packet as PacketV2,
 } from "@atomone/atomone-types/ibc/core/channel/v2/packet.js";
@@ -310,7 +311,7 @@ function ethereumSource(finalized: number, sent: PacketV2WithMetadata[]) {
     waitForIndexer: vi.fn(async () => {}),
     queryUnreceivedPacketsV2: vi.fn(async () => []),
     // Every packet it sent is still committed.
-    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly number[]) => [...sequences]),
+    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly bigint[]) => [...sequences]),
     getPacketProofV2: vi.fn(async (_p: PacketV2, at: Height) => ({
       data: new Uint8Array(),
       proof: new Uint8Array(),
@@ -369,7 +370,7 @@ function gnoDestination(source: ReturnType<typeof ethereumSource>["client"], kno
       state.known = (await source.latestHeader()).height;
       return height(state.known);
     }),
-    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly number[]) => sequences.filter(s => !received.includes(s))),
+    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly bigint[]) => sequences.filter(s => !received.includes(Number(s)))),
     queryUnreceivedAcksV2: vi.fn(async () => []),
     receivePacketsV2: vi.fn(async (packets: readonly PacketV2[], _proofs: readonly Uint8Array[], proofHeight: Height) => {
       if (Number(proofHeight.revisionHeight) > state.known) {
@@ -580,8 +581,8 @@ function gnoPacket(sequence: number, timeout: number): PacketV2WithMetadata {
 /** Router state as the latest block and the finalized one hold it. */
 function routerState() {
   const state = {
-    latest: new Set<number>(),
-    finalized: new Set<number>(),
+    latest: new Set<bigint>(),
+    finalized: new Set<bigint>(),
   };
   return {
     state,
@@ -608,7 +609,12 @@ function ethereumDestination(finalized: number) {
   const state = {
     head: finalized + 2 * EPOCH + 5,
     finalized,
+    // How far the execution block a finalized slot commits to is behind the
+    // slot's own time: 0 before Gloas, a slot or more from it on.
+    execLag: 0,
   };
+  /** The time gno's Ethereum client stores for a finalized slot. */
+  const execTime = (slot: number) => slotTime(slot) - state.execLag;
   const receipts = routerState();
   const commitments = routerState();
   const provedAt: number[] = [];
@@ -617,13 +623,14 @@ function ethereumDestination(finalized: number) {
     clientType: ClientType.Ethereum,
     revisionHeight: height,
     eventProofOffset: vi.fn(async () => 0),
+    execTime,
     currentHeight: vi.fn(async () => state.head),
     currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
     latestHeader: vi.fn(async () => ({
       height: state.finalized,
       time: {
-        seconds: BigInt(slotTime(state.finalized)),
+        seconds: BigInt(execTime(state.finalized)),
         nanos: 0,
       },
     })),
@@ -631,9 +638,9 @@ function ethereumDestination(finalized: number) {
       state.head += 1;
     }),
     waitForIndexer: vi.fn(async () => {}),
-    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly number[], at?: "latest" | "finalized") =>
+    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly bigint[], at?: "latest" | "finalized") =>
       sequences.filter(seq => !receipts.at(at).has(seq))),
-    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly number[], at?: "latest" | "finalized") =>
+    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly bigint[], at?: "latest" | "finalized") =>
       sequences.filter(seq => commitments.at(at).has(seq))),
     // gno's client on Ethereum already covers the packets' block.
     getLatestClientState: vi.fn(async () => ({
@@ -642,7 +649,7 @@ function ethereumDestination(finalized: number) {
     })),
     receivePacketsV2: vi.fn(async (packets: readonly PacketV2[]) => {
       for (const p of packets) {
-        receipts.state.latest.add(Number(p.sequence));
+        receipts.state.latest.add(p.sequence);
       }
       return {
         events: [],
@@ -652,7 +659,7 @@ function ethereumDestination(finalized: number) {
     }),
     acknowledgePacketsV2: vi.fn(async (acks: readonly AckV2WithMetadata[]) => {
       for (const a of acks) {
-        commitments.state.latest.delete(Number(a.originalPacket.sequence));
+        commitments.state.latest.delete(a.originalPacket.sequence);
       }
       return {
         events: [],
@@ -725,9 +732,9 @@ function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known
       return [];
     }),
     // The packets it sent whose commitment is still there.
-    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly number[]) => {
+    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly bigint[]) => {
       available();
-      return sequences.filter(seq => !timedOut.includes(seq));
+      return sequences.filter(seq => !timedOut.includes(Number(seq)));
     }),
     getLatestClientState: vi.fn(async () => ({
       lcType: "ethereum",
@@ -755,8 +762,9 @@ function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known
         throw new Error(`timeoutPacket x${packets.length}: ConsensusStateNotFound(${slot})`);
       }
       for (const p of packets) {
-        if (slotTime(slot) < Number(p.timeoutTimestamp)) {
-          throw new Error(`timeoutPacket x${packets.length}: consensus state at slot ${slot} has timestamp ${slotTime(slot)}, before the packet's timeout ${p.timeoutTimestamp}`);
+        // gno's Ethereum client checks the execution timestamp it stored.
+        if (dest.execTime(slot) < Number(p.timeoutTimestamp)) {
+          throw new Error(`timeoutPacket x${packets.length}: consensus state at slot ${slot} has timestamp ${dest.execTime(slot)}, before the packet's timeout ${p.timeoutTimestamp}`);
         }
         timedOut.push(Number(p.sequence));
       }
@@ -928,7 +936,7 @@ describe("Link.checkAndRelayPacketsAndAcks with Ethereum writes not final yet", 
       sourceClient: "client-0",
       destinationClient: "ethereum-1",
     });
-    eth.commitments.state.latest.add(7);
+    eth.commitments.state.latest.add(7n);
     eth.commitments.finalize();
     const gno = gnoSource(eth.client, FINALIZED, [], [
       {
@@ -972,13 +980,13 @@ describe("Link.checkAndRelayPacketsAndAcks with Ethereum writes not final yet", 
     const eth = ethereumSource(FINALIZED, [dead]);
     const gno = gnoDestination(eth.client, FINALIZED);
     const commitments = routerState();
-    commitments.state.latest.add(1);
+    commitments.state.latest.add(1n);
     commitments.finalize();
-    eth.client.queryUnreceivedAcksV2.mockImplementation(async (_client: string, sequences: readonly number[], at?: "latest" | "finalized") =>
+    eth.client.queryUnreceivedAcksV2.mockImplementation(async (_client: string, sequences: readonly bigint[], at?: "latest" | "finalized") =>
       sequences.filter(seq => commitments.at(at).has(seq)));
     const timeoutPacketsV2 = vi.fn(async (packets: readonly PacketV2[]) => {
       for (const p of packets) {
-        commitments.state.latest.delete(Number(p.sequence));
+        commitments.state.latest.delete(p.sequence);
       }
       return {
         events: [],
@@ -1153,4 +1161,93 @@ describe("waitOneBlock", () => {
       expect(Date.now()).toBeGreaterThanOrEqual(deadline);
     });
   }
+});
+
+/*
+ * From Gloas on, the state a finalized slot commits to is the previous
+ * execution payload's, a slot or more older than the slot, and gno's
+ * Ethereum client checks a timeout against that payload's timestamp. A
+ * timeout between the two used to be decided against the slot's time and
+ * submitted too early, round after round.
+ */
+describe("Link timeouts on Ethereum from Gloas on", () => {
+  const FINALIZED = 11407200;
+
+  it("waits on a timeout between the execution timestamp and the slot's time", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    eth.state.execLag = 12;
+    const gno = gnoSource(eth.client, FINALIZED, [gnoPacket(1, slotTime(FINALIZED) - 6)]);
+    const start: RelayedHeights = {
+      packetHeightA: SENT_HEIGHT - 10,
+      ackHeightA: SENT_HEIGHT - 10,
+      packetHeightB: FINALIZED - 1,
+      ackHeightB: FINALIZED - 1,
+    };
+
+    const heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start, 2, 6);
+    expect(gno.client.timeoutPacketsV2).not.toHaveBeenCalled();
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
+
+    eth.state.finalized += EPOCH;
+    await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights, 2, 6);
+    expect(gno.timedOut).toEqual([1]);
+    expect(eth.provedAt).toEqual([FINALIZED + EPOCH]);
+  });
+});
+
+describe("Link with gno render answers", () => {
+  const FINALIZED = 11407200;
+  const start: RelayedHeights = {
+    packetHeightA: SENT_HEIGHT - 10,
+    ackHeightA: SENT_HEIGHT - 10,
+    packetHeightB: FINALIZED - 1,
+    ackHeightB: FINALIZED - 1,
+  };
+
+  /** Has gno's client answer its commitment list from `answer`, through the real parsing. */
+  function renders(client: ReturnType<typeof gnoSource>["client"], answer: () => string) {
+    Object.assign(client, {
+      queryUnreceivedAcksV2: GnoIbcClient.prototype.queryUnreceivedAcksV2,
+      pagedAbciQuery: GnoIbcClient.prototype.pagedAbciQuery,
+      tm: {
+        abciQuery: vi.fn(async () => ({
+          responseBase: {
+            data: Buffer.from(answer(), "utf-8"),
+          },
+        })),
+      },
+    });
+  }
+
+  it("fails the round on the realm's error answer and keeps the floor, so the packet is delivered later", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    const gno = gnoSource(eth.client, FINALIZED, [gnoPacket(1, slotTime(FINALIZED + 100 * EPOCH))]);
+    let answer = "{\"error\":\"client ethereum-1 not found\"}";
+    renders(gno.client, () => answer);
+
+    await expect(new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start)).rejects.toThrow(/client ethereum-1 not found/);
+    expect(eth.client.receivePacketsV2).not.toHaveBeenCalled();
+
+    answer = "{\"items\":[{\"sequence\":\"1\",\"data\":\"oy\"}],\"page\":1,\"total\":1}";
+    const heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start);
+    expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(1);
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
+  });
+
+  it("relays a packet whose sequence is past 2^53 under its own sequence", async () => {
+    const SEQUENCE = 9007199254740993n;
+    const eth = ethereumDestination(FINALIZED);
+    const sent = gnoPacket(1, slotTime(FINALIZED + 100 * EPOCH));
+    sent.packet = PacketV2.fromPartial({
+      ...sent.packet,
+      sequence: SEQUENCE,
+    });
+    const gno = gnoSource(eth.client, FINALIZED, [sent]);
+    renders(gno.client, () => `{"items":[{"sequence":"${SEQUENCE}","data":"oy"}],"page":1,"total":1}`);
+
+    await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start);
+    const [received] = eth.client.receivePacketsV2.mock.calls[0] as unknown as [readonly PacketV2[]];
+    expect(received.map(p => p.sequence)).toEqual([SEQUENCE]);
+    expect(eth.receipts.state.latest).toEqual(new Set([SEQUENCE]));
+  });
 });

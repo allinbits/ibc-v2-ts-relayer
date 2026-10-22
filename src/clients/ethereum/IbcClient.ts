@@ -254,12 +254,12 @@ export class EthereumIbcClient extends BaseIbcClient<EthereumIbcClientTypes> {
   }
 
   /** At the latest block by default; at "finalized", the state no reorg can undo. */
-  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[], at: source.StateTag = "latest"): Promise<number[]> {
+  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly bigint[], at: source.StateTag = "latest"): Promise<bigint[]> {
     return source.queryUnreceivedPacketsV2(this, clientId, sequences, at);
   }
 
   /** At the latest block by default; at "finalized", the state no reorg can undo. */
-  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[], at: source.StateTag = "latest"): Promise<number[]> {
+  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly bigint[], at: source.StateTag = "latest"): Promise<bigint[]> {
     return source.queryUnreceivedAcksV2(this, clientId, sequences, at);
   }
 

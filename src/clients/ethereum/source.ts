@@ -376,8 +376,8 @@ async function commitment(c: EthereumIbcClient, path: Uint8Array, at: StateTag =
 const ZERO = `0x${"00".repeat(32)}`;
 
 /** Packets sent to clientId that the router has no receipt for, at the latest or the finalized block. */
-export async function queryUnreceivedPacketsV2(c: EthereumIbcClient, clientId: string, sequences: readonly number[], at: StateTag = "latest"): Promise<number[]> {
-  const receipts = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 2, BigInt(s)), at)));
+export async function queryUnreceivedPacketsV2(c: EthereumIbcClient, clientId: string, sequences: readonly bigint[], at: StateTag = "latest"): Promise<bigint[]> {
+  const receipts = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 2, s), at)));
   return sequences.filter((_, i) => receipts[i] === ZERO);
 }
 
@@ -385,8 +385,8 @@ export async function queryUnreceivedPacketsV2(c: EthereumIbcClient, clientId: s
  * Packets sent from clientId whose commitment is still there, at the latest
  * or the finalized block: neither acknowledged nor timed out.
  */
-export async function queryUnreceivedAcksV2(c: EthereumIbcClient, clientId: string, sequences: readonly number[], at: StateTag = "latest"): Promise<number[]> {
-  const commitments = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 1, BigInt(s)), at)));
+export async function queryUnreceivedAcksV2(c: EthereumIbcClient, clientId: string, sequences: readonly bigint[], at: StateTag = "latest"): Promise<bigint[]> {
+  const commitments = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 1, s), at)));
   return sequences.filter((_, i) => commitments[i] !== ZERO);
 }
 

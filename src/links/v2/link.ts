@@ -752,7 +752,7 @@ export class Link {
     }) => packet), dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId);
     const isUnreceived = ({
       packet,
-    }: PacketV2WithMetadata) => unreceived[packetId(packet)].has(Number(packet.sequence));
+    }: PacketV2WithMetadata) => unreceived[packetId(packet)].has(packet.sequence);
     const unreceivedPackets = allPackets.filter(isUnreceived);
     const received = allPackets.filter(p => !isUnreceived(p));
 
@@ -765,7 +765,7 @@ export class Link {
     }) => packet), src.client.queryUnreceivedAcksV2.bind(src.client), ackId);
     const isCommitted = ({
       packet,
-    }: PacketV2WithMetadata) => committed[ackId(packet)].has(Number(packet.sequence));
+    }: PacketV2WithMetadata) => committed[ackId(packet)].has(packet.sequence);
 
     const [receiptsNotFinal, timeoutsNotFinal] = await Promise.all([this.receiptsNotFinal(dest.client, received), this.clearedNotFinal(src.client, unreceivedPackets.filter(p => !isCommitted(p)), p => p.packet)]);
     return {
@@ -803,7 +803,7 @@ export class Link {
     const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedAcksV2.bind(dest.client), ackId);
     const isUnreceived = ({
       originalPacket: packet,
-    }: AckV2WithMetadata) => unreceived[ackId(packet)].has(Number(packet.sequence));
+    }: AckV2WithMetadata) => unreceived[ackId(packet)].has(packet.sequence);
 
     return {
       pending: filteredAcks.filter(isUnreceived),
@@ -825,7 +825,7 @@ export class Link {
     }) => packet), (client, sequences) => chain.queryUnreceivedPacketsV2(client, sequences, "finalized"), packetId);
     return packets.filter(({
       packet,
-    }) => unreceived[packetId(packet)].has(Number(packet.sequence)));
+    }) => unreceived[packetId(packet)].has(packet.sequence));
   }
 
   /**
@@ -840,7 +840,7 @@ export class Link {
     const committed = await this.filterUnreceived(items.map(packetOf), (client, sequences) => chain.queryUnreceivedAcksV2(client, sequences, "finalized"), ackId);
     return items.filter((item) => {
       const packet = packetOf(item);
-      return committed[ackId(packet)].has(Number(packet.sequence));
+      return committed[ackId(packet)].has(packet.sequence);
     });
   }
 
@@ -848,37 +848,36 @@ export class Link {
     packets: Packet[],
     unreceivedQuery: (
       client: string,
-      sequences: readonly number[],
-    ) => Promise<number[]>,
+      sequences: readonly bigint[],
+    ) => Promise<bigint[]>,
     idFunc: (packet: Packet) => string,
-  ): Promise<Record<string, Set<number>>> {
+  ): Promise<Record<string, Set<bigint>>> {
     if (packets.length === 0) {
       return {
       };
     }
 
-    const packetsPerDestination: Record<string, number[]> = {
+    const sequencesPerClient: Record<string, bigint[]> = {
     };
     for (const packet of packets) {
       const key = idFunc(packet);
-      if (!packetsPerDestination[key]) {
-        packetsPerDestination[key] = [];
+      if (!sequencesPerClient[key]) {
+        sequencesPerClient[key] = [];
       }
-      packetsPerDestination[key].push(Number(packet.sequence));
+      sequencesPerClient[key].push(packet.sequence);
     }
     const unreceivedResponses = await Promise.all(
-      Object.entries(packetsPerDestination).map(
-        async ([destination, sequences]) => {
-          const [client, _] = destination.split(idDelim);
+      Object.entries(sequencesPerClient).map(
+        async ([client, sequences]) => {
           const notfound = await unreceivedQuery(client, sequences);
           return {
-            key: destination,
+            key: client,
             sequences: notfound,
           };
         },
       ),
     );
-    const unreceived: Record<string, Set<number>> = {
+    const unreceived: Record<string, Set<bigint>> = {
     };
     for (const {
       key, sequences,
@@ -1097,11 +1096,14 @@ const boundBefore = (bound: number, waiting: readonly {
 const nextFloor = (floor: number | undefined, bound: number): number =>
   floor === undefined ? bound : Math.max(floor, bound);
 
-const idDelim = ":";
-const packetId = (packet: Packet) =>
-  `${packet.destinationClient}${idDelim}${packet.sequence}`;
-const ackId = (packet: Packet) =>
-  `${packet.sourceClient}${idDelim}${packet.sequence}`;
+/**
+ * The client a packet's receipt is kept under, on its destination, and the
+ * one its commitment is kept under, on its source: filterUnreceived asks
+ * once per client, with every sequence, which stay bigints throughout, as a
+ * uint64 sequence past 2^53 has no exact number.
+ */
+const packetId = (packet: Packet) => packet.destinationClient;
+const ackId = (packet: Packet) => packet.sourceClient;
 
 export interface EndpointPair {
   readonly src: BaseEndpoint

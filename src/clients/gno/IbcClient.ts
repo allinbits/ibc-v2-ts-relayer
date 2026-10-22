@@ -92,6 +92,10 @@ import {
   createClientTemplate, recvPacket, registerCounterParty, timeout, updateClientTemplate,
 } from "./queries.js";
 import {
+  parseRenderPage, RENDER_PAGE_LIMIT, renderedSequences,
+  RenderPage,
+} from "./render.js";
+import {
   ProofHelper,
 } from "./templates/ProofHelper.js";
 
@@ -2012,64 +2016,44 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
+  /**
+   * Every item of a list the IBC core realm renders. A list of several pages
+   * is read at one height, as items could otherwise shift between pages
+   * past the reads. Throws on an error answer or a malformed one (see
+   * render.ts): only a well-formed list is one.
+   */
   public async pagedAbciQuery(path: string, query: string): Promise<unknown[]> {
-    const result = await this.tm.abciQuery({
-      path,
-      data: Buffer.from(query, "utf-8"),
-    });
-    if (result.responseBase.error) {
-      throw new Error("Query: " + query + " failed. Error: " + result.responseBase.error);
-    }
-    const items = [];
-    try {
-      const data = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
-      if (Array.isArray(data)) {
-        return data;
+    const sep = query.includes("?") ? "&" : "?";
+    const fetchPage = async (page: number, height?: number): Promise<RenderPage> => {
+      const pageQuery = `${query}${sep}limit=${RENDER_PAGE_LIMIT}&page=${page}`;
+      const result = await this.tm.abciQuery({
+        path,
+        data: Buffer.from(pageQuery, "utf-8"),
+        height,
+      });
+      if (result.responseBase.error) {
+        throw new Error("Query: " + pageQuery + " failed. Error: " + result.responseBase.error);
       }
-      else {
-        if (data.items && Array.isArray(data.items) && data.total === 1) {
-          return data.items;
-        }
-        else {
-          if (data.total > 1) {
-            items.push(...data.items);
-            for (let i = 2; i <= data.total; i++) {
-              const result = await this.tm.abciQuery({
-                path,
-                data: Buffer.from(query + "&page=" + i, "utf-8"),
-              });
-              if (result.responseBase.error) {
-                throw new Error("Query: " + query + "&page=" + i + " failed. Error: " + result.responseBase.error);
-              }
-              const pageData = JSON.parse(Buffer.from(result.responseBase.data).toString("utf-8"));
-              if (pageData.items && Array.isArray(pageData.items)) {
-                items.push(...pageData.items);
-              }
-              else {
-                throw new Error("Invalid data format for page " + i + ": " + result.responseBase.data);
-              }
-            }
-          }
-        }
-      }
-      return items;
+      return parseRenderPage(Buffer.from(result.responseBase.data).toString("utf-8"), pageQuery, page);
+    };
+    let first = await fetchPage(1);
+    if (first.total <= 1) {
+      return first.items;
     }
-    catch (e) {
-      throw new Error(`Failed to parse query result for query ${query}: ${getErrorMessage(e)}`);
+    const height = await this.currentHeight();
+    first = await fetchPage(1, height);
+    const items = [...first.items];
+    for (let page = 2; page <= first.total; page++) {
+      items.push(...(await fetchPage(page, height)).items);
     }
+    return items;
   }
 
-  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
+  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]> {
     try {
-      const data = await this.pagedAbciQuery(
-        "vm/qrender",
-        `gno.land/r/aib/ibc/core:clients/${clientId}/packet_receipts`,
-      );
-
-      const receivedSet = new Set(data.map((item: {
-        sequence: string
-      }) => BigInt(item.sequence)));
-      return sequences.filter(seq => !receivedSet.has(BigInt(seq)));
+      const query = `gno.land/r/aib/ibc/core:clients/${clientId}/packet_receipts`;
+      const received = renderedSequences(await this.pagedAbciQuery("vm/qrender", query), query);
+      return sequences.filter(seq => !received.has(seq));
     }
     catch (e) {
       throw new Error(`Failed to parse unreceived packets for client ID ${clientId} and sequences ${sequences}: ${getErrorMessage(e)}`);
@@ -2111,16 +2095,11 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     throw new Error("IBC v1 is not supported on Gno clients yet.");
   }
 
-  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]): Promise<number[]> {
+  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]> {
     try {
-      const data = await this.pagedAbciQuery(
-        "vm/qrender", `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`,
-      );
-
-      const committedSet = new Set(data.map((item: {
-        sequence: string
-      }) => BigInt(item.sequence)));
-      return sequences.filter(seq => committedSet.has(BigInt(seq)));
+      const query = `gno.land/r/aib/ibc/core:clients/${clientId}/packet_commitments`;
+      const committed = renderedSequences(await this.pagedAbciQuery("vm/qrender", query), query);
+      return sequences.filter(seq => committed.has(seq));
     }
     catch (e) {
       throw new Error(`Failed to parse unreceived ACKs for client ID ${clientId} and sequences ${sequences}: ${getErrorMessage(e)}`);

@@ -2204,11 +2204,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     return res.sequences.map(seq => Number(seq));
   }
 
-  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]) {
+  public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]> {
     const res = await this.query.ibc.channelV2.unreceivedPackets(
       clientId, sequences,
     );
-    return res.sequences.map(seq => Number(seq));
+    return res.sequences;
   }
 
   public async queryCommitments(portId: string, channelId: string, sequence: bigint): Promise<Uint8Array> {
@@ -2232,11 +2232,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
     return res.sequences.map(seq => Number(seq));
   }
 
-  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]) {
+  public async queryUnreceivedAcksV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]> {
     const res = await this.query.ibc.channelV2.unreceivedAcks(
       clientId, sequences,
     );
-    return res.sequences.map(seq => Number(seq));
+    return res.sequences;
   }
 
   public async buildCreateClientArgs(trustPeriodSec?: number | null): Promise<{

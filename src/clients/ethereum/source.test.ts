@@ -323,8 +323,8 @@ describe("router state reads", () => {
     }, {
       [key(2, 1n)]: SET,
     });
-    await expect(queryUnreceivedPacketsV2(c, "client-0", [1, 2, 3])).resolves.toEqual([3]);
-    await expect(queryUnreceivedPacketsV2(c, "client-0", [1, 2, 3], "finalized")).resolves.toEqual([2, 3]);
+    await expect(queryUnreceivedPacketsV2(c, "client-0", [1n, 2n, 3n])).resolves.toEqual([3n]);
+    await expect(queryUnreceivedPacketsV2(c, "client-0", [1n, 2n, 3n], "finalized")).resolves.toEqual([2n, 3n]);
     expect(tags).toEqual(["latest", "latest", "latest", "finalized", "finalized", "finalized"]);
   });
 
@@ -336,8 +336,8 @@ describe("router state reads", () => {
     }, {
       [key(1, 1n)]: SET,
     });
-    await expect(queryUnreceivedAcksV2(c, "client-0", [1])).resolves.toEqual([]);
-    await expect(queryUnreceivedAcksV2(c, "client-0", [1], "finalized")).resolves.toEqual([1]);
+    await expect(queryUnreceivedAcksV2(c, "client-0", [1n])).resolves.toEqual([]);
+    await expect(queryUnreceivedAcksV2(c, "client-0", [1n], "finalized")).resolves.toEqual([1n]);
   });
 
   it("propagates a failed read rather than take it for an absent commitment", async () => {
@@ -351,6 +351,6 @@ describe("router state reads", () => {
         },
       },
     } as unknown as EthereumIbcClient;
-    await expect(queryUnreceivedAcksV2(c, "client-0", [1])).rejects.toThrow(/503/);
+    await expect(queryUnreceivedAcksV2(c, "client-0", [1n])).rejects.toThrow(/503/);
   });
 });

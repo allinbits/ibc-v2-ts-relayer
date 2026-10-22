@@ -279,8 +279,8 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   abstract queryUnreceivedPackets(portId: string, channelId: string, sequences: readonly number[]): Promise<number[]>;
   abstract queryUnreceivedAcks(portId: string, channelId: string, sequences: readonly number[]): Promise<number[]>;
   abstract queryCommitments(portId: string, channelId: string, sequence: bigint): Promise<Uint8Array>;
-  abstract queryUnreceivedPacketsV2(clientId: string, sequences: readonly number[]): Promise<number[]>;
-  abstract queryUnreceivedAcksV2(clientId: string, sequences: readonly number[]): Promise<number[]>;
+  abstract queryUnreceivedPacketsV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]>;
+  abstract queryUnreceivedAcksV2(clientId: string, sequences: readonly bigint[]): Promise<bigint[]>;
   abstract queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array>;
 
   /*
