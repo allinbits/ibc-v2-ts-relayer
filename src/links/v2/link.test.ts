@@ -12,6 +12,12 @@ import {
 } from "vitest";
 import type * as winston from "winston";
 
+import {
+  GnoIbcClient,
+} from "../../clients/gno/IbcClient.js";
+import {
+  TendermintIbcClient,
+} from "../../clients/tendermint/IbcClient.js";
 import type {
   BaseEndpoint,
 } from "../../endpoints/BaseEndpoint.js";
@@ -76,13 +82,14 @@ function ackCommitment(a: Uint8Array): Uint8Array {
  * call, and whose storage proofs show the ack commitment only at slots from
  * ACK_SLOT on.
  */
-function ethereumEnd() {
+function ethereumEnd(proofOffset = 0) {
   let finalized = FINALIZED_SLOT;
   const provedAt: number[] = [];
   const client = {
     chainId: "11155111",
     clientType: ClientType.Ethereum,
     revisionHeight: height,
+    eventProofOffset: vi.fn(async () => proofOffset),
     latestHeader: vi.fn(async () => ({
       height: finalized,
     })),
@@ -197,9 +204,33 @@ describe("Link.relayAcks from Ethereum", () => {
     const gno = gnoEnd(eth.client);
     const link = new Link(gno.end, eth.end, logger);
 
-    await expect(link.relayAcks("B", [ack])).rejects.toThrow(/has not reached height 11406791/);
+    await expect(link.relayAcks("B", [ack])).rejects.toThrow(/has not reached height 11406790/);
     expect(gno.client.updateClient).not.toHaveBeenCalled();
     expect(gno.client.acknowledgePacketsV2).not.toHaveBeenCalled();
+  });
+
+  it("proves the ack at its own slot before Gloas and needs the next one from Gloas on", async () => {
+    // Finality reaching the ack's slot exactly, as it does when the ack's
+    // block is the epoch's checkpoint.
+    for (const [offset, needed] of [[0, ACK_SLOT], [1, ACK_SLOT + 1]]) {
+      const eth = ethereumEnd(offset);
+      const gno = gnoEnd(eth.client);
+      eth.client.latestHeader.mockResolvedValue({
+        height: ACK_SLOT,
+      });
+      // A wait advances finality past the ack.
+      eth.client.waitOneBlock.mockImplementation(async () => {
+        eth.client.latestHeader.mockResolvedValue({
+          height: ACK_SLOT + SLOTS_PER_EPOCH,
+        });
+      });
+      const link = new Link(gno.end, eth.end, logger);
+
+      await link.relayAcks("B", [ack]);
+      expect(eth.client.eventProofOffset).toHaveBeenCalledWith(ACK_SLOT);
+      expect(eth.client.waitOneBlock).toHaveBeenCalledTimes(needed === ACK_SLOT ? 0 : 1);
+      expect(eth.provedAt).toEqual([needed === ACK_SLOT ? ACK_SLOT : ACK_SLOT + SLOTS_PER_EPOCH]);
+    }
   });
 });
 
@@ -262,6 +293,7 @@ function ethereumSource(finalized: number, sent: PacketV2WithMetadata[]) {
     chainId: "11155111",
     clientType: ClientType.Ethereum,
     revisionHeight: height,
+    eventProofOffset: vi.fn(async () => 0),
     currentHeight: vi.fn(async () => state.head),
     currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
@@ -276,9 +308,9 @@ function ethereumSource(finalized: number, sent: PacketV2WithMetadata[]) {
       state.finalized += EPOCH;
     }),
     waitForIndexer: vi.fn(async () => {}),
-    queryCommitmentsV2: vi.fn(async () => Uint8Array.from([1])),
     queryUnreceivedPacketsV2: vi.fn(async () => []),
-    queryUnreceivedAcksV2: vi.fn(async () => []),
+    // Every packet it sent is still committed.
+    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly number[]) => [...sequences]),
     getPacketProofV2: vi.fn(async (_p: PacketV2, at: Height) => ({
       data: new Uint8Array(),
       proof: new Uint8Array(),
@@ -374,34 +406,35 @@ describe("Link.checkAndRelayPacketsAndAcks from Ethereum", () => {
     const gno = gnoDestination(eth.client, FINALIZED - EPOCH);
     const link = new Link(gno.end, eth.end, logger);
 
-    // The packet's slot is past the finalized one: the scan stops short of
-    // it, and the floor it hands back is the bound it reached.
+    // The packet's slot is past the finalized one: the scan reaches the
+    // finalized slot, whose own events it proves, and the floor it hands
+    // back is the bound it reached.
     let heights = await link.checkAndRelayPacketsAndAcks({
       packetHeightB: FINALIZED - 100,
       ackHeightB: FINALIZED - 100,
     });
-    expect(eth.scans).toEqual([[FINALIZED - 100, FINALIZED - 1]]);
+    expect(eth.scans).toEqual([[FINALIZED - 100, FINALIZED]]);
     expect(gno.client.receivePacketsV2).not.toHaveBeenCalled();
-    expect(heights.packetHeightB).toBe(FINALIZED - 1);
+    expect(heights.packetHeightB).toBe(FINALIZED);
 
     // Two epochs on, the slot is still not final.
     eth.state.finalized += 2 * EPOCH;
     heights = await link.checkAndRelayPacketsAndAcks(heights);
     expect(gno.client.receivePacketsV2).not.toHaveBeenCalled();
-    expect(heights.packetHeightB).toBe(FINALIZED + 2 * EPOCH - 1);
+    expect(heights.packetHeightB).toBe(FINALIZED + 2 * EPOCH);
 
     // One more and it is: the round delivers it, proven at the finalized
     // slot the one update brought gno's client to, with no block waited.
     eth.state.finalized += EPOCH;
     heights = await link.checkAndRelayPacketsAndAcks(heights);
     expect(eth.scans).toHaveLength(3);
-    expect(eth.scans[2]).toEqual([FINALIZED + 2 * EPOCH - 1, FINALIZED + 3 * EPOCH - 1]);
+    expect(eth.scans[2]).toEqual([FINALIZED + 2 * EPOCH, FINALIZED + 3 * EPOCH]);
     expect(gno.received).toEqual([1]);
     expect(eth.client.waitOneBlock).not.toHaveBeenCalled();
     expect(gno.client.updateClient).toHaveBeenCalledTimes(1);
     const [, , proofHeight] = gno.client.receivePacketsV2.mock.calls[0];
     expect(Number(proofHeight.revisionHeight)).toBe(FINALIZED + 3 * EPOCH);
-    expect(heights.packetHeightB).toBe(FINALIZED + 3 * EPOCH - 1);
+    expect(heights.packetHeightB).toBe(FINALIZED + 3 * EPOCH);
 
     // Once: with finality unmoved the next round has nothing to scan, and
     // the one after scans on from the bound.
@@ -410,7 +443,7 @@ describe("Link.checkAndRelayPacketsAndAcks from Ethereum", () => {
     eth.state.finalized += EPOCH;
     await link.checkAndRelayPacketsAndAcks(heights);
     expect(eth.scans).toHaveLength(4);
-    expect(eth.scans[3]).toEqual([FINALIZED + 3 * EPOCH - 1, FINALIZED + 4 * EPOCH - 1]);
+    expect(eth.scans[3]).toEqual([FINALIZED + 3 * EPOCH, FINALIZED + 4 * EPOCH]);
     expect(gno.received).toEqual([1]);
   });
 
@@ -438,7 +471,7 @@ describe("Link.checkAndRelayPacketsAndAcks from Ethereum", () => {
     }
 
     // Every packet in a provable slot was received, in order, once.
-    const provable = sent.filter(p => p.height < eth.state.finalized).map(p => Number(p.packet.sequence));
+    const provable = sent.filter(p => p.height <= eth.state.finalized).map(p => Number(p.packet.sequence));
     expect(provable.length).toBeGreaterThan(200);
     expect(gno.received).toEqual(provable);
     // The scans tiled the chain, each starting where the last one ended,
@@ -449,7 +482,44 @@ describe("Link.checkAndRelayPacketsAndAcks from Ethereum", () => {
     }
     expect(eth.scans.every(([, bound]) => bound !== undefined && bound < eth.state.head)).toBe(true);
     expect(eth.client.waitOneBlock).not.toHaveBeenCalled();
-    expect(heights.packetHeightB).toBe(eth.state.finalized - 1);
+    expect(heights.packetHeightB).toBe(eth.state.finalized);
+  });
+
+  it("relays an event in the finalized checkpoint's own block in the same round", async () => {
+    const eth = ethereumSource(FINALIZED, [sentPacket(1, FINALIZED)]);
+    const gno = gnoDestination(eth.client, FINALIZED - EPOCH);
+    const link = new Link(gno.end, eth.end, logger);
+
+    const heights = await link.checkAndRelayPacketsAndAcks({
+      packetHeightB: FINALIZED - 10,
+      ackHeightB: FINALIZED - 10,
+    });
+    expect(gno.received).toEqual([1]);
+    const [, , proofHeight] = gno.client.receivePacketsV2.mock.calls[0];
+    expect(Number(proofHeight.revisionHeight)).toBe(FINALIZED);
+    expect(heights.packetHeightB).toBe(FINALIZED);
+  });
+
+  it("from Gloas on, leaves the finalized checkpoint's own block for the next finalized slot", async () => {
+    const eth = ethereumSource(FINALIZED, [sentPacket(1, FINALIZED)]);
+    eth.client.eventProofOffset.mockResolvedValue(1);
+    const gno = gnoDestination(eth.client, FINALIZED - EPOCH);
+    const link = new Link(gno.end, eth.end, logger);
+
+    let heights = await link.checkAndRelayPacketsAndAcks({
+      packetHeightB: FINALIZED - 10,
+      ackHeightB: FINALIZED - 10,
+    });
+    expect(eth.scans).toEqual([[FINALIZED - 10, FINALIZED - 1]]);
+    expect(gno.received).toEqual([]);
+    expect(heights.packetHeightB).toBe(FINALIZED - 1);
+
+    eth.state.finalized += EPOCH;
+    heights = await link.checkAndRelayPacketsAndAcks(heights);
+    expect(gno.received).toEqual([1]);
+    const [, , proofHeight] = gno.client.receivePacketsV2.mock.calls[0];
+    expect(Number(proofHeight.revisionHeight)).toBe(FINALIZED + EPOCH);
+    expect(heights.packetHeightB).toBe(FINALIZED + EPOCH - 1);
   });
 
   it("keeps a floor past the provable header and scans on from it", async () => {
@@ -469,9 +539,9 @@ describe("Link.checkAndRelayPacketsAndAcks from Ethereum", () => {
 
     eth.state.finalized += 3 * EPOCH;
     heights = await link.checkAndRelayPacketsAndAcks(heights);
-    expect(eth.scans).toEqual([[FINALIZED + 70, FINALIZED + 3 * EPOCH - 1]]);
+    expect(eth.scans).toEqual([[FINALIZED + 70, FINALIZED + 3 * EPOCH]]);
     expect(gno.received).toEqual([1]);
-    expect(heights.packetHeightB).toBe(FINALIZED + 3 * EPOCH - 1);
+    expect(heights.packetHeightB).toBe(FINALIZED + 3 * EPOCH);
   });
 });
 
@@ -507,21 +577,46 @@ function gnoPacket(sequence: number, timeout: number): PacketV2WithMetadata {
   };
 }
 
+/** Router state as the latest block and the finalized one hold it. */
+function routerState() {
+  const state = {
+    latest: new Set<number>(),
+    finalized: new Set<number>(),
+  };
+  return {
+    state,
+    at: (tag: "latest" | "finalized" = "latest") => state[tag],
+    /** Finality reaches the latest block. */
+    finalize: () => {
+      state.finalized = new Set(state.latest);
+    },
+    /** A reorg drops every block past the finalized one. */
+    reorg: () => {
+      state.latest = new Set(state.finalized);
+    },
+  };
+}
+
 /**
  * An Ethereum destination whose head and finalized slots move as a test
- * says, and which has received nothing. Its proofs of non-receipt record
- * the slot they were taken at.
+ * says. Its router's receipts, and the commitments of the packets it sent,
+ * are read at the latest or the finalized block; its writes land in the
+ * latest one only. Its proofs of non-receipt record the slot they were
+ * taken at.
  */
 function ethereumDestination(finalized: number) {
   const state = {
     head: finalized + 2 * EPOCH + 5,
     finalized,
   };
+  const receipts = routerState();
+  const commitments = routerState();
   const provedAt: number[] = [];
   const client = {
     chainId: "11155111",
     clientType: ClientType.Ethereum,
     revisionHeight: height,
+    eventProofOffset: vi.fn(async () => 0),
     currentHeight: vi.fn(async () => state.head),
     currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
@@ -536,18 +631,35 @@ function ethereumDestination(finalized: number) {
       state.head += 1;
     }),
     waitForIndexer: vi.fn(async () => {}),
-    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly number[]) => [...sequences]),
-    queryUnreceivedAcksV2: vi.fn(async () => []),
+    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly number[], at?: "latest" | "finalized") =>
+      sequences.filter(seq => !receipts.at(at).has(seq))),
+    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly number[], at?: "latest" | "finalized") =>
+      sequences.filter(seq => commitments.at(at).has(seq))),
     // gno's client on Ethereum already covers the packets' block.
     getLatestClientState: vi.fn(async () => ({
       lcType: "10-gno",
       latestHeight: height(SENT_HEIGHT + 1),
     })),
-    receivePacketsV2: vi.fn(async () => ({
-      events: [],
-      transactionHash: "",
-      height: 1,
-    })),
+    receivePacketsV2: vi.fn(async (packets: readonly PacketV2[]) => {
+      for (const p of packets) {
+        receipts.state.latest.add(Number(p.sequence));
+      }
+      return {
+        events: [],
+        transactionHash: "",
+        height: 1,
+      };
+    }),
+    acknowledgePacketsV2: vi.fn(async (acks: readonly AckV2WithMetadata[]) => {
+      for (const a of acks) {
+        commitments.state.latest.delete(Number(a.originalPacket.sequence));
+      }
+      return {
+        events: [],
+        transactionHash: "",
+        height: 1,
+      };
+    }),
     getTimeoutProofV2: vi.fn(async (_p: PacketV2, at: Height) => {
       provedAt.push(Number(at.revisionHeight));
       return {
@@ -567,6 +679,8 @@ function ethereumDestination(finalized: number) {
     end,
     client,
     state,
+    receipts,
+    commitments,
     provedAt,
   };
 }
@@ -574,15 +688,23 @@ function ethereumDestination(finalized: number) {
 /**
  * A gno source: its Ethereum client follows the destination's finality on
  * update, and it accepts a timeout as gno's core does, with a proof at a
- * slot its client knows whose time is not before the packet's timeout.
+ * slot its client knows whose time is not before the packet's timeout. It
+ * may also have written acks, of packets the destination sent.
  */
-function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known: number, sent: PacketV2WithMetadata[]) {
+function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known: number, sent: PacketV2WithMetadata[], written: AckV2WithMetadata[] = []) {
   const state = {
     height: 200,
     known,
+    // While set, every state query fails as an overloaded node does.
+    unavailable: false,
   };
   const scans: [number | undefined, number | undefined][] = [];
   const timedOut: number[] = [];
+  const available = () => {
+    if (state.unavailable) {
+      throw new Error("abci query: HTTP 503 Service Unavailable");
+    }
+  };
   const client = {
     chainId: "test-ibc-1",
     clientType: ClientType.Gno,
@@ -598,15 +720,27 @@ function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known
       },
     })),
     waitForIndexer: vi.fn(async () => {}),
-    queryCommitmentsV2: vi.fn(async (_client: string, sequence: bigint) => {
-      if (timedOut.includes(Number(sequence))) {
-        throw new Error(`commitment of packet ${sequence} not found`);
-      }
-      return Uint8Array.from([1]);
+    queryUnreceivedPacketsV2: vi.fn(async () => {
+      available();
+      return [];
     }),
-    queryUnreceivedPacketsV2: vi.fn(async () => []),
-    queryUnreceivedAcksV2: vi.fn(async () => []),
+    // The packets it sent whose commitment is still there.
+    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly number[]) => {
+      available();
+      return sequences.filter(seq => !timedOut.includes(seq));
+    }),
+    getLatestClientState: vi.fn(async () => ({
+      lcType: "ethereum",
+      forkParameters: {
+      },
+      latestHeight: height(state.known),
+    })),
     getPacketProofV2: vi.fn(async (_p: PacketV2, at: Height) => ({
+      data: new Uint8Array(),
+      proof: new Uint8Array(),
+      proofHeight: at,
+    })),
+    getAckProofV2: vi.fn(async (_p: PacketV2, at: Height) => ({
       data: new Uint8Array(),
       proof: new Uint8Array(),
       proofHeight: at,
@@ -643,7 +777,9 @@ function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known
         height: h,
       }) => (min === undefined || h > min) && (max === undefined || h <= max));
     }),
-    queryWrittenAcks: vi.fn(async () => []),
+    queryWrittenAcks: vi.fn(async (min: number | undefined, max: number | undefined) => written.filter(({
+      height: h,
+    }) => (min === undefined || h > min) && (max === undefined || h <= max))),
   } as unknown as BaseEndpoint;
   return {
     end,
@@ -738,4 +874,283 @@ describe("Link.checkAndRelayPacketsAndAcks timeouts on Ethereum", () => {
     // The waiting packet holds the floor.
     expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
   });
+});
+
+/*
+ * Ethereum returns a write after one confirmation, long before finality. A
+ * round used to move the floor past every packet it delivered there: a
+ * reorg that dropped the receive (or the ack, or the timeout) left the
+ * send event below every later floor, after a restart too, so the packet
+ * was neither delivered again nor timed out.
+ */
+describe("Link.checkAndRelayPacketsAndAcks with Ethereum writes not final yet", () => {
+  const FINALIZED = 11407200;
+  const start: RelayedHeights = {
+    packetHeightA: SENT_HEIGHT - 10,
+    ackHeightA: SENT_HEIGHT - 10,
+    packetHeightB: FINALIZED - 1,
+    ackHeightB: FINALIZED - 1,
+  };
+
+  it("holds the floor below a packet received on Ethereum until the receipt is final, and delivers it again after a reorg", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    const gno = gnoSource(eth.client, FINALIZED, [gnoPacket(1, slotTime(FINALIZED + 100 * EPOCH))]);
+
+    let heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start);
+    expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(1);
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
+
+    // Received in the latest block only: not delivered twice, still held.
+    gno.state.height += 5;
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(1);
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
+
+    // A reorg drops the receive: a restarted relayer delivers it again.
+    eth.receipts.reorg();
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
+
+    // Final, the receipt releases the floor.
+    eth.receipts.finalize();
+    gno.state.height += 5;
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.packetHeightA).toBe(gno.state.height - 1);
+  });
+
+  it("holds the ack floor below an ack Ethereum processed until that is final, and relays it again after a reorg", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    // A packet Ethereum sent, whose ack gno wrote at SENT_HEIGHT.
+    const sent = PacketV2.fromPartial({
+      ...gnoPacket(7, slotTime(FINALIZED + 100 * EPOCH)).packet,
+      sourceClient: "client-0",
+      destinationClient: "ethereum-1",
+    });
+    eth.commitments.state.latest.add(7);
+    eth.commitments.finalize();
+    const gno = gnoSource(eth.client, FINALIZED, [], [
+      {
+        acknowledgement: Uint8Array.from([1]),
+        originalPacket: sent,
+        height: SENT_HEIGHT,
+        txHash: "",
+        txEvents: [],
+      },
+    ]);
+
+    let heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(1);
+    expect(heights.ackHeightA).toBe(SENT_HEIGHT - 1);
+
+    gno.state.height += 5;
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(1);
+    expect(heights.ackHeightA).toBe(SENT_HEIGHT - 1);
+
+    eth.commitments.reorg();
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.ackHeightA).toBe(SENT_HEIGHT - 1);
+
+    eth.commitments.finalize();
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.ackHeightA).toBe(gno.state.height - 1);
+  });
+
+  it("holds the floor below a packet timed out on Ethereum until the timeout is final, and times it out again after a reorg", async () => {
+    const SENT_SLOT = FINALIZED - 5;
+    const dead: PacketV2WithMetadata = {
+      packet: PacketV2.fromPartial({
+        ...sentPacket(1, SENT_SLOT).packet,
+        timeoutTimestamp: 1000n,
+      }),
+      height: SENT_SLOT,
+    };
+    const eth = ethereumSource(FINALIZED, [dead]);
+    const gno = gnoDestination(eth.client, FINALIZED);
+    const commitments = routerState();
+    commitments.state.latest.add(1);
+    commitments.finalize();
+    eth.client.queryUnreceivedAcksV2.mockImplementation(async (_client: string, sequences: readonly number[], at?: "latest" | "finalized") =>
+      sequences.filter(seq => commitments.at(at).has(seq)));
+    const timeoutPacketsV2 = vi.fn(async (packets: readonly PacketV2[]) => {
+      for (const p of packets) {
+        commitments.state.latest.delete(Number(p.sequence));
+      }
+      return {
+        events: [],
+        transactionHash: "",
+        height: 1,
+      };
+    });
+    Object.assign(eth.client, {
+      // gno's client on Ethereum already covers gno's head.
+      getLatestClientState: vi.fn(async () => ({
+        lcType: "10-gno",
+        latestHeight: height(gno.state.height),
+      })),
+      timeoutPacketsV2,
+    });
+    Object.assign(gno.client, {
+      getTimeoutProofV2: vi.fn(async (_p: PacketV2, at: Height) => ({
+        data: new Uint8Array(),
+        proof: new Uint8Array(),
+        proofHeight: at,
+      })),
+    });
+    const from: RelayedHeights = {
+      packetHeightB: FINALIZED - 10,
+      ackHeightB: FINALIZED - 10,
+    };
+
+    let heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(from);
+    expect(timeoutPacketsV2).toHaveBeenCalledTimes(1);
+    expect(heights.packetHeightB).toBe(SENT_SLOT - 1);
+
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(timeoutPacketsV2).toHaveBeenCalledTimes(1);
+    expect(heights.packetHeightB).toBe(SENT_SLOT - 1);
+
+    commitments.reorg();
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(timeoutPacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.packetHeightB).toBe(SENT_SLOT - 1);
+
+    commitments.finalize();
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(timeoutPacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.packetHeightB).toBe(FINALIZED);
+  });
+});
+
+/*
+ * The source's commitments decide which unreceived packets are still
+ * pending. Reading them one at a time took any error for an absent
+ * commitment: a 503 dropped a pending packet, and the round then saved a
+ * floor past it, so no later round, after a restart neither, looked at it
+ * again.
+ */
+describe("Link.checkAndRelayPacketsAndAcks when a commitment query fails", () => {
+  const FINALIZED = 11407200;
+
+  it("fails the round and keeps the floor, so a restarted relayer delivers the packet", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    const gno = gnoSource(eth.client, FINALIZED, [gnoPacket(1, slotTime(FINALIZED + 100 * EPOCH))]);
+    const stored: RelayedHeights = {
+      packetHeightA: SENT_HEIGHT - 10,
+      ackHeightA: SENT_HEIGHT - 10,
+      packetHeightB: FINALIZED - 1,
+      ackHeightB: FINALIZED - 1,
+    };
+
+    gno.state.unavailable = true;
+    await expect(new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(stored)).rejects.toThrow(/503/);
+    expect(eth.client.receivePacketsV2).not.toHaveBeenCalled();
+
+    // The relayer restarts from the floor it had stored.
+    gno.state.unavailable = false;
+    await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(stored);
+    expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Link timeouts and the header that classified them", () => {
+  const FINALIZED = 11407200;
+
+  it("refuses to prove a timeout below the header the packet timed out at", async () => {
+    const eth = ethereumDestination(FINALIZED + EPOCH);
+    const gno = gnoSource(eth.client, FINALIZED, [gnoPacket(1, slotTime(FINALIZED + EPOCH))]);
+    // The round reads the finalized slot past the timeout, then a lagging
+    // beacon node serves an older one.
+    const stale = {
+      height: FINALIZED,
+      time: {
+        seconds: BigInt(slotTime(FINALIZED)),
+        nanos: 0,
+      },
+    };
+    const fresh = await eth.client.latestHeader();
+    eth.client.latestHeader.mockReset();
+    eth.client.latestHeader.mockResolvedValueOnce(fresh).mockResolvedValueOnce(fresh).mockResolvedValue(stale);
+
+    await expect(new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks({
+      packetHeightA: SENT_HEIGHT - 10,
+      ackHeightA: SENT_HEIGHT - 10,
+      packetHeightB: FINALIZED - 1,
+      ackHeightB: FINALIZED - 1,
+    }, 2, 6)).rejects.toThrow(new RegExp(`has not reached height ${FINALIZED + EPOCH}`));
+    expect(gno.client.updateClient).not.toHaveBeenCalled();
+    expect(eth.client.getTimeoutProofV2).not.toHaveBeenCalled();
+    expect(gno.client.timeoutPacketsV2).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * A Tendermint or gno waitOneBlock polls until the height moves: on a
+ * halted chain, forever, so the cap on blocks waited never came into play.
+ */
+describe("Link.updateClientToHeight from a halted chain", () => {
+  for (const [name, type, waitOneBlock] of [["gno", ClientType.Gno, GnoIbcClient.prototype.waitOneBlock], ["Tendermint", ClientType.Tendermint, TendermintIbcClient.prototype.waitOneBlock]] as const) {
+    it(`gives up once the wait has taken its blocks' time on ${name}`, async () => {
+      const halted = {
+        chainId: "halted-1",
+        clientType: type,
+        estimatedBlockTime: 2,
+        currentHeight: vi.fn(async () => 100),
+        latestHeader: vi.fn(async () => ({
+          height: 100,
+        })),
+        waitOneBlock,
+      };
+      const host = {
+        chainId: "11155111",
+        clientType: ClientType.Ethereum,
+        getLatestClientState: vi.fn(async () => ({
+          lcType: "10-gno",
+          latestHeight: height(90),
+        })),
+        updateClient: vi.fn(),
+      };
+      const link = new Link({
+        clientID: "client-0",
+        client: halted,
+      } as unknown as BaseEndpoint, {
+        clientID: "client-1",
+        client: host,
+      } as unknown as BaseEndpoint, logger);
+
+      const started = Date.now();
+      await expect(link.updateClientToHeight("A", 101)).rejects.toThrow(/has not reached height 101/);
+      // 150 blocks of 2ms, with room for a slow machine.
+      expect(Date.now() - started).toBeLessThan(5000);
+      expect(host.updateClient).not.toHaveBeenCalled();
+    });
+  }
+});
+
+describe("waitOneBlock", () => {
+  for (const [name, waitOneBlock] of [["gno", GnoIbcClient.prototype.waitOneBlock], ["Tendermint", TendermintIbcClient.prototype.waitOneBlock]] as const) {
+    it(`returns at the next block, or at the deadline, on ${name}`, async () => {
+      let h = 100;
+      const chain = {
+        estimatedBlockTime: 1,
+        currentHeight: vi.fn(async () => h),
+      };
+      const wait = waitOneBlock.bind(chain as never);
+
+      // The height moves after a few polls.
+      chain.currentHeight.mockImplementation(async () => (chain.currentHeight.mock.calls.length > 3 ? ++h : h));
+      await wait();
+      expect(h).toBe(101);
+
+      // It never moves again: the deadline ends the wait.
+      chain.currentHeight.mockImplementation(async () => h);
+      const deadline = Date.now() + 20;
+      await wait(deadline);
+      expect(Date.now()).toBeGreaterThanOrEqual(deadline);
+    });
+  }
 });

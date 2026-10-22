@@ -5,7 +5,7 @@ import {
   Height,
 } from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
-  arrayContentEquals, isDefined,
+  arrayContentEquals,
 } from "@cosmjs/utils";
 import * as winston from "winston";
 
@@ -50,8 +50,9 @@ export type Side = "A" | "B";
 /**
  * How many blocks (Ethereum: slots) updateClientToHeight waits for the
  * source's provable header to reach the height it needs before giving up on
- * this round. Ethereum finality normally takes two to three epochs (64 to 96
- * slots); past this the relay loop retries later rather than hanging.
+ * this round, counted both in waits and in the time that many blocks take.
+ * Ethereum finality normally takes two to three epochs (64 to 96 slots);
+ * past this the relay loop retries later rather than hanging.
  */
 const MAX_HEADER_WAIT_BLOCKS = 150;
 
@@ -458,13 +459,16 @@ export class Link {
     this.logger.info(
       `Waiting for ${this.chain(source)} to reach height ${minHeight} (latest provable header: ${height})`,
     );
+    // A halted chain never produces the block waitOneBlock waits for, so
+    // the wait is bounded in time as well as in blocks.
+    const deadline = Date.now() + MAX_HEADER_WAIT_BLOCKS * src.estimatedBlockTime;
     for (let waited = 0; height < minHeight; waited++) {
-      if (waited >= MAX_HEADER_WAIT_BLOCKS) {
+      if (waited >= MAX_HEADER_WAIT_BLOCKS || Date.now() >= deadline) {
         throw new Error(
           `${this.chain(source)} has not reached height ${minHeight} after ${waited} blocks (latest provable header: ${height}); retry later`,
         );
       }
-      await src.waitOneBlock();
+      await src.waitOneBlock(deadline);
       height = (await src.latestHeader()).height;
     }
   }
@@ -514,18 +518,13 @@ export class Link {
     // scan of the side's own packets, and it decides which of the other
     // side's packets have timed out.
     const [provableA, provableB] = await Promise.all([this.provableHeader("A"), this.provableHeader("B")]);
-    const packetBoundA = scanBound(provableA);
-    const packetBoundB = scanBound(provableB);
-    const [packetsA, packetsB] = await Promise.all([this.scanPackets("A", relayFrom.packetHeightA, packetBoundA), this.scanPackets("B", relayFrom.packetHeightB, packetBoundB)]);
+    const [packetBoundA, packetBoundB] = await Promise.all([this.scanBound("A", provableA), this.scanBound("B", provableB)]);
+    const [scannedA, scannedB] = await Promise.all([this.scanPackets("A", relayFrom.packetHeightA, packetBoundA), this.scanPackets("B", relayFrom.packetHeightB, packetBoundB)]);
+    const packetsA = scannedA.pending;
+    const packetsB = scannedB.pending;
 
-    const filteredPacketsA
-      = this.packetFilter !== null
-        ? packetsA.filter(packet => this.packetFilter?.(packet.packet))
-        : packetsA;
-    const filteredPacketsB
-      = this.packetFilter !== null
-        ? packetsB.filter(packet => this.packetFilter?.(packet.packet))
-        : packetsB;
+    const filteredPacketsA = this.filterPackets(packetsA);
+    const filteredPacketsB = this.filterPackets(packetsB);
 
     const [
       {
@@ -541,18 +540,29 @@ export class Link {
     // let's wait a bit to ensure our newly committed acks are indexed
     await Promise.all([this.endA.client.waitForIndexer(), this.endB.client.waitForIndexer()]);
 
-    const [ackBoundA, ackBoundB] = (await Promise.all([this.provableHeader("A"), this.provableHeader("B")])).map(scanBound);
-    const [acksA, acksB] = await Promise.all([this.scanAcks("A", relayFrom.ackHeightA, ackBoundA), this.scanAcks("B", relayFrom.ackHeightB, ackBoundB)]);
+    const [ackProvableA, ackProvableB] = await Promise.all([this.provableHeader("A"), this.provableHeader("B")]);
+    const [ackBoundA, ackBoundB] = await Promise.all([this.scanBound("A", ackProvableA), this.scanBound("B", ackProvableB)]);
+    const [ackScanA, ackScanB] = await Promise.all([this.scanAcks("A", relayFrom.ackHeightA, ackBoundA), this.scanAcks("B", relayFrom.ackHeightB, ackBoundB)]);
+    const acksA = ackScanA.pending;
+    const acksB = ackScanB.pending;
 
     await Promise.all([this.relayAcks("A", acksA), this.relayAcks("B", acksB)]);
 
-    await Promise.all([this.timeoutPackets("A", timeoutA), this.timeoutPackets("B", timeoutB)]);
+    // A timeout is proven at a header no older than the one that classified
+    // it: an older one can predate the timeout.
+    await Promise.all([this.timeoutPackets("A", timeoutA, provableB.height), this.timeoutPackets("B", timeoutB, provableA.height)]);
 
+    // A floor stays below every event whose effect is not final yet, so
+    // that a later round, after a restart too, scans it again: packets
+    // waiting to time out, and those whose receipt, timeout or ack a reorg
+    // of the chain holding it could still undo. That covers this round's
+    // transactions on such a chain, and earlier rounds' ones the scan found
+    // there in its latest state but not yet in its finalized one.
     const heights = {
-      packetHeightA: nextFloor(relayFrom.packetHeightA, boundBefore(packetBoundA, waitA)),
-      packetHeightB: nextFloor(relayFrom.packetHeightB, boundBefore(packetBoundB, waitB)),
-      ackHeightA: nextFloor(relayFrom.ackHeightA, ackBoundA),
-      ackHeightB: nextFloor(relayFrom.ackHeightB, ackBoundB),
+      packetHeightA: nextFloor(relayFrom.packetHeightA, boundBefore(packetBoundA, [...waitA, ...this.filterPackets(scannedA.unsettled), ...this.awaitingFinality("B", submitA), ...this.awaitingFinality("A", timeoutA)])),
+      packetHeightB: nextFloor(relayFrom.packetHeightB, boundBefore(packetBoundB, [...waitB, ...this.filterPackets(scannedB.unsettled), ...this.awaitingFinality("A", submitB), ...this.awaitingFinality("B", timeoutB)])),
+      ackHeightA: nextFloor(relayFrom.ackHeightA, boundBefore(ackBoundA, [...ackScanA.unsettled, ...this.awaitingFinality("B", acksA)])),
+      ackHeightB: nextFloor(relayFrom.ackHeightB, boundBefore(ackBoundB, [...ackScanB.unsettled, ...this.awaitingFinality("A", acksB)])),
     };
 
     const info: RelayInfo = {
@@ -566,6 +576,54 @@ export class Link {
       heights,
       info,
     };
+  }
+
+  private filterPackets(packets: readonly PacketV2WithMetadata[]): readonly PacketV2WithMetadata[] {
+    return this.packetFilter !== null
+      ? packets.filter(packet => this.packetFilter?.(packet.packet))
+      : packets;
+  }
+
+  /**
+   * The items whose transactions this round sent to a side's chain, if a
+   * reorg there can still undo them: Ethereum's writes return after one
+   * confirmation, well before finality. Tendermint and gno blocks are final
+   * once committed.
+   */
+  private awaitingFinality<T>(chain: Side, items: readonly T[]): readonly T[] {
+    return isEthereum(this.getEnds(chain).src.client) ? items : [];
+  }
+
+  /**
+   * How far past an event's height the first header that can prove it is,
+   * on a side's chain. A Tendermint or gno header commits to the app hash of
+   * the block before it: 1. An Ethereum finalized slot's state root already
+   * holds its own block's events before Gloas: see eventProofOffset.
+   */
+  private async proofOffset(side: Side, height: number): Promise<number> {
+    const client = this.getEnds(side).src.client;
+    return isEthereum(client) ? client.eventProofOffset(height) : 1;
+  }
+
+  /** The lowest header of a side that proves every one of the events at heights. */
+  private async provingHeight(side: Side, heights: readonly number[]): Promise<number> {
+    const proving = await Promise.all(heights.map(async h => h + await this.proofOffset(side, h)));
+    return Math.max(...proving);
+  }
+
+  /**
+   * The highest height of a side whose packets and acks can be relayed in
+   * this round: the highest its latest provable header proves, as
+   * relayPackets and relayAcks need a header at proofOffset past an event.
+   * An event past the bound stays unscanned until the header that proves it
+   * exists, and the loop never waits for one.
+   *
+   * A round scans (floor, bound] and hands the bound back as the next floor,
+   * so the scans tile the chain: a head read apart from the scan could stand
+   * past the blocks the scan covered, and the blocks between were lost.
+   */
+  private async scanBound(side: Side, provable: ProvableHeader): Promise<number> {
+    return provable.height - await this.proofOffset(side, provable.height);
   }
 
   /**
@@ -647,23 +705,23 @@ export class Link {
     };
   }
 
-  /** The pending packets sent in (floor, bound]; none when the bound is not past the floor. */
-  private async scanPackets(source: Side, floor: number | undefined, bound: number): Promise<PacketV2WithMetadata[]> {
+  /** The packets sent in (floor, bound]; none when the bound is not past the floor. */
+  private async scanPackets(source: Side, floor: number | undefined, bound: number): Promise<Scan<PacketV2WithMetadata>> {
     if (floor !== undefined && bound <= floor) {
-      return [];
+      return emptyScan();
     }
-    return this.getPendingPackets(source, {
+    return this.findPendingPackets(source, {
       minHeight: floor,
       maxHeight: bound,
     });
   }
 
-  /** The pending acks written in (floor, bound]; none when the bound is not past the floor. */
-  private async scanAcks(source: Side, floor: number | undefined, bound: number): Promise<AckV2WithMetadata[]> {
+  /** The acks written in (floor, bound]; none when the bound is not past the floor. */
+  private async scanAcks(source: Side, floor: number | undefined, bound: number): Promise<Scan<AckV2WithMetadata>> {
     if (floor !== undefined && bound <= floor) {
-      return [];
+      return emptyScan();
     }
-    return this.getPendingAcks(source, {
+    return this.findPendingAcks(source, {
       minHeight: floor,
       maxHeight: bound,
     });
@@ -674,43 +732,46 @@ export class Link {
     opts: QueryOpts = {
     },
   ): Promise<PacketV2WithMetadata[]> {
+    return (await this.findPendingPackets(source, opts)).pending;
+  }
+
+  /**
+   * The packets a side sent in a window that are neither received nor timed
+   * out, and those whose receipt or timeout is not final yet.
+   */
+  private async findPendingPackets(source: Side, opts: QueryOpts): Promise<Scan<PacketV2WithMetadata>> {
     this.logger.verbose(`Get pending packets on ${this.chain(source)}`);
     const {
       src, dest,
     } = this.getEnds(source);
     const allPackets = await src.querySentPackets(opts.minHeight, opts.maxHeight) as PacketV2WithMetadata[];
-    const toFilter = allPackets.map(({
-      packet,
-    }) => packet);
 
-    // This gets the subset of packets that were already processed on the receiving chain
-    const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId);
-    const unreceivedPackets = allPackets.filter(({
+    // The packets the receiving chain has no receipt for.
+    const unreceived = await this.filterUnreceived(allPackets.map(({
       packet,
-    }) =>
-      unreceived[packetId(packet)].has(Number(packet.sequence)),
-    );
+    }) => packet), dest.client.queryUnreceivedPacketsV2.bind(dest.client), packetId);
+    const isUnreceived = ({
+      packet,
+    }: PacketV2WithMetadata) => unreceived[packetId(packet)].has(Number(packet.sequence));
+    const unreceivedPackets = allPackets.filter(isUnreceived);
+    const received = allPackets.filter(p => !isUnreceived(p));
 
-    // However, some of these may have already been submitted as timeouts on the source chain. Check and filter
-    const valid = await Promise.all(
-      unreceivedPackets.map(async (packet) => {
-        const {
-          sourceClient, sequence,
-        } = packet.packet;
-        try {
-          // this throws an error if no commitment there
-          await src.client.queryCommitmentsV2(
-            sourceClient, sequence,
-          );
-          return packet;
-        }
-        catch {
-          // Commitment not found - packet may have already been timed out
-          return undefined;
-        }
-      }),
-    );
-    return valid.filter(isDefined);
+    // Of those, the ones still committed on the source, not yet timed out.
+    // This query fails as a whole when the chain does not answer: reading
+    // each commitment on its own took any error for an absent commitment,
+    // dropping a pending packet below the next floor for good.
+    const committed = await this.filterUnreceived(unreceivedPackets.map(({
+      packet,
+    }) => packet), src.client.queryUnreceivedAcksV2.bind(src.client), ackId);
+    const isCommitted = ({
+      packet,
+    }: PacketV2WithMetadata) => committed[ackId(packet)].has(Number(packet.sequence));
+
+    const [receiptsNotFinal, timeoutsNotFinal] = await Promise.all([this.receiptsNotFinal(dest.client, received), this.clearedNotFinal(src.client, unreceivedPackets.filter(p => !isCommitted(p)), p => p.packet)]);
+    return {
+      pending: unreceivedPackets.filter(isCommitted),
+      unsettled: [...receiptsNotFinal, ...timeoutsNotFinal],
+    };
   }
 
   public async getPendingAcks(
@@ -718,6 +779,14 @@ export class Link {
     opts: QueryOpts = {
     },
   ): Promise<AckV2WithMetadata[]> {
+    return (await this.findPendingAcks(source, opts)).pending;
+  }
+
+  /**
+   * The acks a side wrote in a window that the packet's sender has not
+   * processed, and those it has processed but not finally yet.
+   */
+  private async findPendingAcks(source: Side, opts: QueryOpts): Promise<Scan<AckV2WithMetadata>> {
     this.logger.verbose(`Get pending acks on ${this.chain(source)}`);
     const {
       src, dest,
@@ -732,12 +801,47 @@ export class Link {
     }) => originalPacket);
 
     const unreceived = await this.filterUnreceived(toFilter, dest.client.queryUnreceivedAcksV2.bind(dest.client), ackId);
-
-    return filteredAcks.filter(({
+    const isUnreceived = ({
       originalPacket: packet,
-    }) =>
-      unreceived[ackId(packet)].has(Number(packet.sequence)),
-    );
+    }: AckV2WithMetadata) => unreceived[ackId(packet)].has(Number(packet.sequence));
+
+    return {
+      pending: filteredAcks.filter(isUnreceived),
+      unsettled: await this.clearedNotFinal(dest.client, filteredAcks.filter(a => !isUnreceived(a)), a => a.originalPacket),
+    };
+  }
+
+  /**
+   * Of the packets a chain holds a receipt for, those it does not hold one
+   * for in its finalized state: a reorg can still undo their receive, and
+   * only Ethereum's state can be reorged.
+   */
+  private async receiptsNotFinal(chain: BaseIbcClient, packets: readonly PacketV2WithMetadata[]): Promise<PacketV2WithMetadata[]> {
+    if (!isEthereum(chain) || packets.length === 0) {
+      return [];
+    }
+    const unreceived = await this.filterUnreceived(packets.map(({
+      packet,
+    }) => packet), (client, sequences) => chain.queryUnreceivedPacketsV2(client, sequences, "finalized"), packetId);
+    return packets.filter(({
+      packet,
+    }) => unreceived[packetId(packet)].has(Number(packet.sequence)));
+  }
+
+  /**
+   * Of the packets whose commitment a chain has cleared, by an ack or a
+   * timeout, those still committed in its finalized state: a reorg can still
+   * undo the clearing, and only Ethereum's state can be reorged.
+   */
+  private async clearedNotFinal<T>(chain: BaseIbcClient, items: readonly T[], packetOf: (item: T) => Packet): Promise<T[]> {
+    if (!isEthereum(chain) || items.length === 0) {
+      return [];
+    }
+    const committed = await this.filterUnreceived(items.map(packetOf), (client, sequences) => chain.queryUnreceivedAcksV2(client, sequences, "finalized"), ackId);
+    return items.filter((item) => {
+      const packet = packetOf(item);
+      return committed[ackId(packet)].has(Number(packet.sequence));
+    });
   }
 
   private async filterUnreceived(
@@ -805,7 +909,7 @@ export class Link {
     } = this.getEnds(source);
 
     // check if we need to update client at all
-    const neededHeight = Math.max(...packets.map(x => x.height)) + 1;
+    const neededHeight = await this.provingHeight(source, packets.map(x => x.height));
     const headerHeight = await this.updateClientToHeight(source, neededHeight);
 
     const submit = packets.map(({
@@ -850,7 +954,7 @@ export class Link {
     } = this.getEnds(source);
 
     // check if we need to update client at all
-    const neededHeight = Math.max(...acks.map(x => x.height)) + 1;
+    const neededHeight = await this.provingHeight(source, acks.map(x => x.height));
     const headerHeight = await this.updateClientToHeight(source, neededHeight);
 
     const proofs = await Promise.all(
@@ -866,9 +970,14 @@ export class Link {
 
   // Source: the side that originally sent the packet
   // We need to relay a proof from dest -> source
+  //
+  // minProofHeight is the destination's header the packets were found timed
+  // out against: the proof is taken at it or a later one, never an earlier
+  // one, whose time can be before the timeout.
   public async timeoutPackets(
     source: Side,
     packets: readonly PacketV2WithMetadata[],
+    minProofHeight?: number,
   ): Promise<number | null> {
     this.logger.info(
       `Timeout ${packets.length} packets sent from ${this.chain(source)}`,
@@ -882,10 +991,21 @@ export class Link {
     } = this.getEnds(source);
     const destSide = otherSide(source);
 
-    // We need a header that is after the timeout, not after the packet was committed
-    // This can get complex with timeout timestamps. Let's just update to latest
-    await dest.client.waitOneBlock();
-    const headerHeight = await this.updateClient(destSide);
+    let headerHeight: Height;
+    if (minProofHeight === undefined) {
+      // We need a header that is after the timeout, not after the packet was committed
+      // This can get complex with timeout timestamps. Let's just update to latest
+      await dest.client.waitOneBlock();
+      headerHeight = await this.updateClient(destSide);
+    }
+    else {
+      // An update can land below the header that classified the packets,
+      // as when a lagging beacon node serves an older finalized slot.
+      headerHeight = await this.updateClientToHeight(destSide, minProofHeight);
+      if (Number(headerHeight.revisionHeight) < minProofHeight) {
+        throw new Error(`timeout proof height ${headerHeight.revisionHeight} on ${this.otherChain(source)} is below ${minProofHeight}, the header the packets timed out at`);
+      }
+    }
 
     const rawPackets = packets.map(({
       packet,
@@ -943,25 +1063,28 @@ interface SplitPackets {
 }
 
 /**
- * The highest height of a side whose packets and acks can be relayed in
- * this round: one below its latest provable header, as relayPackets and
- * relayAcks prove an event at the height after its block. An event past
- * the bound stays unscanned until the header that proves it exists, and
- * the loop never waits for one.
- *
- * A round scans (floor, bound] and hands the bound back as the next floor,
- * so the scans tile the chain: a head read apart from the scan could stand
- * past the blocks the scan covered, and the blocks between were lost.
+ * What a scan of a window found: the events to act on, and those already
+ * acted on whose effect is not final yet, which hold the floor below them.
  */
-const scanBound = (provable: ProvableHeader): number => provable.height - 1;
+interface Scan<T> {
+  readonly pending: T[]
+  readonly unsettled: T[]
+}
+
+const emptyScan = <T>(): Scan<T> => ({
+  pending: [],
+  unsettled: [],
+});
 
 /**
- * The bound a scan hands back when it leaves packets waiting: one below the
+ * The bound a scan hands back when it leaves events held: one below the
  * earliest of them, so that the next round scans it again. The bound the
- * scan reached would put the packet below every later floor, never to be
- * timed out.
+ * scan reached would put the event below every later floor, never to be
+ * timed out or relayed again.
  */
-const boundBefore = (bound: number, waiting: readonly PacketV2WithMetadata[]): number =>
+const boundBefore = (bound: number, waiting: readonly {
+  height: number
+}[]): number =>
   waiting.reduce((b, {
     height,
   }) => Math.min(b, height - 1), bound);

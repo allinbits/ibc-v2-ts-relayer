@@ -129,7 +129,12 @@ natives). Heights of an Ethereum client are finalized beacon slots.
   RPCs refuse that; set the chain's proof RPC (`-p`) to one that serves it, such as an archive node.
 - The relay loop reads the router's packet and acknowledgement events up to the finalized slot, each round
   scanning from the bound the last one reached, so a packet is relayed in the round its slot is final (two
-  to three epochs after its block) and the loop never stands waiting for finality.
+  to three epochs after its block) and the loop never stands waiting for finality. A finalized slot's proof
+  covers the events of its own block before Gloas; from Gloas on, whose beacon blocks commit only to the
+  previous execution payload, an event needs a finalized slot past its own.
+- Writes to Ethereum (receives, acknowledgements, timeouts) return after one confirmation. Until the change
+  they make is in the router's finalized state, the loop's floor stays below the event they answer, so that
+  after a reorg drops one, a later round, after a restart too, sends it again.
 - A packet sent to Ethereum is timed out once its timeout has passed at the finalized slot, where the proof of
   non-receipt is taken, not at the head: gno's Ethereum client verifies the proof against the finalized slot's
   time. Past its timeout at the head but not yet at the finalized slot, the packet waits, and is neither
