@@ -299,6 +299,18 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
   }
 
   // we may have to wait a bit before a tx returns and making queries on the event log
+  /** The tx-indexer's latest indexed block: the events are read from it. */
+  public async scanHorizon(): Promise<number> {
+    const data = await this.graphClient.request<{
+      latestBlockHeight?: unknown
+    }>("query latest { latestBlockHeight }");
+    const height = data?.latestBlockHeight;
+    if (typeof height !== "number" || !Number.isSafeInteger(height) || height < 0) {
+      throw new Error(`tx-indexer answered latestBlockHeight ${JSON.stringify(height)}`);
+    }
+    return height;
+  }
+
   public async waitForIndexer(): Promise<void> {
     await sleep(this.estimatedIndexerTime);
   }

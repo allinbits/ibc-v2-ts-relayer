@@ -200,6 +200,10 @@ export class EthereumIbcClient extends BaseIbcClient<EthereumIbcClientTypes> {
     return source.waitForIndexer(this);
   }
 
+  public async scanHorizon(): Promise<number> {
+    return source.scanHorizon(this);
+  }
+
   public async getRawReceiptProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
     return source.getRawReceiptProofV2(this, clientId, sequence, proofHeight);
   }

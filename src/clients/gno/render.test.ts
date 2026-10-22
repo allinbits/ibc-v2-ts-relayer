@@ -287,3 +287,39 @@ describe("GnoIbcClient.getConsensusStatesAfter", () => {
     await expect(client.getConsensusStatesAfter("07-tendermint-1", ClientType.Tendermint, 0n, 1000)).rejects.toThrow(/page 2 counts 3 pages, page 1 2/);
   });
 });
+
+describe("GnoIbcClient.scanHorizon", () => {
+  it("is the tx-indexer's latest indexed block", async () => {
+    const request = vi.fn(async () => ({
+      latestBlockHeight: 95,
+    }));
+    const client = Object.assign(Object.create(GnoIbcClient.prototype) as GnoIbcClient, {
+      graphClient: {
+        request,
+      },
+    });
+    await expect(client.scanHorizon()).resolves.toBe(95);
+    expect(request).toHaveBeenCalledWith(expect.stringContaining("latestBlockHeight"));
+  });
+
+  it("refuses an answer without a height", async () => {
+    for (const answer of [
+      null,
+      {
+      },
+      {
+        latestBlockHeight: "95",
+      },
+      {
+        latestBlockHeight: -1,
+      },
+    ]) {
+      const client = Object.assign(Object.create(GnoIbcClient.prototype) as GnoIbcClient, {
+        graphClient: {
+          request: vi.fn(async () => answer),
+        },
+      });
+      await expect(client.scanHorizon()).rejects.toThrow();
+    }
+  });
+});

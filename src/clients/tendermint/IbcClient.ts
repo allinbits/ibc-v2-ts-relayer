@@ -282,6 +282,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   }
 
   // we may have to wait a bit before a tx returns and making queries on the event log
+  /** The node's latest block: the events are read from its tx index. */
+  public async scanHorizon(): Promise<number> {
+    return this.currentHeight();
+  }
+
   public async waitForIndexer(): Promise<void> {
     await sleep(this.estimatedIndexerTime);
   }

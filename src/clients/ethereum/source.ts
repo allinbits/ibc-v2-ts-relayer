@@ -211,6 +211,16 @@ export async function waitOneBlock(c: EthereumIbcClient, deadline?: number): Pro
   await sleep(deadline === undefined ? slot : Math.max(0, Math.min(slot, deadline - Date.now())));
 }
 
+/**
+ * The slot of the execution RPC's latest block, which serves the router's
+ * events: before Gloas the beacon node can finalize slots this RPC has not
+ * reached yet.
+ */
+export async function scanHorizon(c: EthereumIbcClient): Promise<number> {
+  const p = await chainParams(c);
+  return Number(slotAt(p, (await c.publicClient.getBlock()).timestamp));
+}
+
 export async function waitForIndexer(_c: EthereumIbcClient): Promise<void> {
   // Events are read straight from the node.
 }
@@ -278,6 +288,15 @@ async function blockRange(c: EthereumIbcClient, minSlot: number | undefined, max
   const p = await chainParams(c);
   const floor = BigInt(c.config.fromBlock ?? "0");
   const fromBlock = minSlot === undefined ? floor : await firstBlockAtOrAfter(c, slotTime(p, BigInt(minSlot) + 1n));
+  if (maxSlot !== undefined) {
+    // A node that has not reached maxSlot (one behind a load balancer, say)
+    // would end the range at its head: the scan would look complete, and
+    // the link save a floor past blocks it never read.
+    const head = slotAt(p, (await c.publicClient.getBlock()).timestamp);
+    if (head < BigInt(maxSlot)) {
+      throw new Error(`the execution RPC is at slot ${head}, not yet at ${maxSlot}: retry later`);
+    }
+  }
   const toBlock = maxSlot === undefined
     ? await c.publicClient.getBlockNumber()
     : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot) + 1n)) - 1n;

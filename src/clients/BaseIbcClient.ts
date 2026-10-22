@@ -154,6 +154,13 @@ export abstract class BaseIbcClient<T extends IbcClientTypes = IbcClientTypes> {
   /** Waits for the next block, or until deadline (epoch milliseconds) if one is given and passes first. */
   abstract waitOneBlock(deadline?: number): Promise<void>;
   abstract waitForIndexer(): Promise<void>;
+  /**
+   * The highest height whose packet and acknowledgement events the event
+   * queries (querySentPacketsV2, queryWrittenAcksV2) serve completely: the
+   * height the indexer or node behind them has reached. A scan past it
+   * would find nothing there yet, and a floor past it skip those events.
+   */
+  abstract scanHorizon(): Promise<number>;
 
   /* helper methods for specific clients on this chain */
   abstract getUnbondingPeriod(clientId: string): Promise<number>;

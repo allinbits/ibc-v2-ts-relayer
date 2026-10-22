@@ -296,6 +296,9 @@ function ethereumSource(finalized: number, sent: PacketV2WithMetadata[]) {
     revisionHeight: height,
     eventProofOffset: vi.fn(async () => 0),
     currentHeight: vi.fn(async () => state.head),
+    // The execution RPC serving its events, at the head unless a test lags
+    // it; a head never trails finality, which some tests move alone.
+    scanHorizon: vi.fn(async () => Math.max(state.head, state.finalized)),
     currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
     latestHeader: vi.fn(async () => ({
@@ -350,6 +353,8 @@ function gnoDestination(source: ReturnType<typeof ethereumSource>["client"], kno
     clientType: ClientType.Gno,
     revisionHeight: height,
     currentHeight: vi.fn(async () => state.height),
+    // The tx-indexer serving its events, at the head unless a test lags it.
+    scanHorizon: vi.fn(async () => state.height),
     currentTime: vi.fn(async () => dateAt(state.height)),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.height + blocks)),
     latestHeader: vi.fn(async () => ({
@@ -625,6 +630,9 @@ function ethereumDestination(finalized: number) {
     eventProofOffset: vi.fn(async () => 0),
     execTime,
     currentHeight: vi.fn(async () => state.head),
+    // The execution RPC serving its events, at the head unless a test lags
+    // it; a head never trails finality, which some tests move alone.
+    scanHorizon: vi.fn(async () => Math.max(state.head, state.finalized)),
     currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
     latestHeader: vi.fn(async () => ({
@@ -717,6 +725,8 @@ function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known
     clientType: ClientType.Gno,
     revisionHeight: height,
     currentHeight: vi.fn(async () => state.height),
+    // The tx-indexer serving its events, at the head unless a test lags it.
+    scanHorizon: vi.fn(async () => state.height),
     currentTime: vi.fn(async () => dateAt(state.height)),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.height + blocks)),
     latestHeader: vi.fn(async () => ({
@@ -1250,5 +1260,79 @@ describe("Link with gno render answers", () => {
     const [received] = eth.client.receivePacketsV2.mock.calls[0] as unknown as [readonly PacketV2[]];
     expect(received.map(p => p.sequence)).toEqual([SEQUENCE]);
     expect(eth.receipts.state.latest).toEqual(new Set([SEQUENCE]));
+  });
+});
+
+/*
+ * A round hands its scan bound back as the next floor. The bound followed
+ * the provable header alone: when the source of the events lagged it (an
+ * Ethereum execution RPC behind the beacon node's finality, gno's
+ * tx-indexer behind its node), the scan found nothing past the lag, and
+ * the floor passed events no later round would read.
+ */
+describe("Link scans bounded by what the event source has served", () => {
+  const FINALIZED = 11407200;
+
+  it("keeps the floor at an Ethereum execution RPC's head when it trails finality", async () => {
+    const eth = ethereumSource(FINALIZED, [sentPacket(1, FINALIZED - 10)]);
+    eth.client.scanHorizon.mockResolvedValue(FINALIZED - 20);
+    const gno = gnoDestination(eth.client, FINALIZED - EPOCH);
+
+    let heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks({
+      packetHeightB: FINALIZED - 30,
+      ackHeightB: FINALIZED - 30,
+    });
+    expect(eth.scans).toEqual([[FINALIZED - 30, FINALIZED - 20]]);
+    expect(gno.received).toEqual([]);
+    expect(heights.packetHeightB).toBe(FINALIZED - 20);
+    expect(heights.ackHeightB).toBe(FINALIZED - 20);
+
+    // Caught up, a restarted relayer reads the packet's slot.
+    eth.client.scanHorizon.mockResolvedValue(FINALIZED + 10);
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.scans[1]).toEqual([FINALIZED - 20, FINALIZED]);
+    expect(gno.received).toEqual([1]);
+    expect(heights.packetHeightB).toBe(FINALIZED);
+  });
+
+  it("keeps the floors at gno's indexed height when the tx-indexer trails the node", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    const sentByEthereum = PacketV2.fromPartial({
+      ...gnoPacket(7, slotTime(FINALIZED + 100 * EPOCH)).packet,
+      sourceClient: "client-0",
+      destinationClient: "ethereum-1",
+    });
+    eth.commitments.state.latest.add(7n);
+    eth.commitments.finalize();
+    const gno = gnoSource(eth.client, FINALIZED, [gnoPacket(1, slotTime(FINALIZED + 100 * EPOCH))], [
+      {
+        acknowledgement: Uint8Array.from([1]),
+        originalPacket: sentByEthereum,
+        height: SENT_HEIGHT,
+        txHash: "",
+        txEvents: [],
+      },
+    ]);
+    // The node is at 200, its indexer at 95: blocks past it are not indexed.
+    gno.client.scanHorizon.mockResolvedValue(SENT_HEIGHT - 5);
+    const start: RelayedHeights = {
+      packetHeightA: SENT_HEIGHT - 10,
+      ackHeightA: SENT_HEIGHT - 10,
+      packetHeightB: FINALIZED - 1,
+      ackHeightB: FINALIZED - 1,
+    };
+
+    const heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start);
+    expect(gno.scans).toEqual([[SENT_HEIGHT - 10, SENT_HEIGHT - 5]]);
+    expect(eth.client.receivePacketsV2).not.toHaveBeenCalled();
+    expect(eth.client.acknowledgePacketsV2).not.toHaveBeenCalled();
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 5);
+    expect(heights.ackHeightA).toBe(SENT_HEIGHT - 5);
+
+    // Indexed, both are relayed by a restarted relayer.
+    gno.client.scanHorizon.mockResolvedValue(gno.state.height);
+    await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(1);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(1);
   });
 });

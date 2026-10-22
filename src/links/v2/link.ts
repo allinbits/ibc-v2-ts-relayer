@@ -623,7 +623,11 @@ export class Link {
    * past the blocks the scan covered, and the blocks between were lost.
    */
   private async scanBound(side: Side, provable: ProvableHeader): Promise<number> {
-    return provable.height - await this.proofOffset(side, provable.height);
+    const [offset, horizon] = await Promise.all([this.proofOffset(side, provable.height), this.getEnds(side).src.client.scanHorizon()]);
+    // Nor past the height the side's event source has served: the round
+    // hands the bound back as the next floor, and a floor past events the
+    // source has yet to serve (a lagging indexer or RPC) skips them for good.
+    return Math.min(provable.height - offset, horizon);
   }
 
   /**

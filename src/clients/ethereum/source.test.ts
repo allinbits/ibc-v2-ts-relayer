@@ -15,7 +15,7 @@ import type {
   EthereumIbcClient,
 } from "./IbcClient.js";
 import {
-  eventProofOffset, planUpdates, querySentPacketsV2, queryUnreceivedAcksV2, queryUnreceivedPacketsV2,
+  eventProofOffset, planUpdates, querySentPacketsV2, queryUnreceivedAcksV2, queryUnreceivedPacketsV2, queryWrittenAcksV2, scanHorizon,
 } from "./source.js";
 
 // Slots per sync committee period in these tests.
@@ -225,6 +225,19 @@ describe("querySentPacketsV2", () => {
     await querySentPacketsV2(c, "client-0", undefined, 160);
     // Slot 160 is block 159, past the missed slot.
     expect(scanned).toEqual([[150n, 159n]]);
+  });
+
+  it("refuses a window past the execution RPC's head rather than end it there", async () => {
+    // Block 100 is at slot 100, the head; finality may stand past it.
+    const {
+      c, scanned,
+    } = source(100n);
+    await expect(scanHorizon(c)).resolves.toBe(100);
+    await expect(querySentPacketsV2(c, "client-0", 90, 110)).rejects.toThrow(/at slot 100, not yet at 110/);
+    await expect(queryWrittenAcksV2(c, "client-0", 90, 110)).rejects.toThrow(/at slot 100, not yet at 110/);
+    expect(scanned).toEqual([]);
+    await querySentPacketsV2(c, "client-0", 90, 100);
+    expect(scanned).toEqual([[91n, 100n]]);
   });
 
   it("reports a packet at the slot of its block", async () => {
