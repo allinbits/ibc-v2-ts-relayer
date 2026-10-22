@@ -771,7 +771,8 @@ export class Link {
       packet,
     }: PacketV2WithMetadata) => committed[ackId(packet)].has(packet.sequence);
 
-    const [receiptsNotFinal, timeoutsNotFinal] = await Promise.all([this.receiptsNotFinal(dest.client, received), this.clearedNotFinal(src.client, unreceivedPackets.filter(p => !isCommitted(p)), p => p.packet)]);
+    // A timed-out packet's send is at its own height on the source.
+    const [receiptsNotFinal, timeoutsNotFinal] = await Promise.all([this.receiptsNotFinal(dest.client, received), this.clearedNotFinal(src.client, unreceivedPackets.filter(p => !isCommitted(p)), p => p.packet, p => p.height)]);
     return {
       pending: unreceivedPackets.filter(isCommitted),
       unsettled: [...receiptsNotFinal, ...timeoutsNotFinal],
@@ -809,9 +810,21 @@ export class Link {
       originalPacket: packet,
     }: AckV2WithMetadata) => unreceived[ackId(packet)].has(packet.sequence);
 
+    const acked = filteredAcks.filter(a => !isUnreceived(a));
+    let unsettled: AckV2WithMetadata[] = [];
+    if (acked.length > 0 && isEthereum(dest.client)) {
+      // The packets were sent on the destination, at heights the acks do
+      // not carry; each was proven to this side's client of it, so it was
+      // sent at or below that client's latest height.
+      const clientState = await src.client.getLatestClientState(src.clientID, dest.client.clientType);
+      const proven = Number((clientState as {
+        latestHeight?: Height
+      }).latestHeight?.revisionHeight ?? Number.MAX_SAFE_INTEGER);
+      unsettled = await this.clearedNotFinal(dest.client, acked, a => a.originalPacket, () => proven);
+    }
     return {
       pending: filteredAcks.filter(isUnreceived),
-      unsettled: await this.clearedNotFinal(dest.client, filteredAcks.filter(a => !isUnreceived(a)), a => a.originalPacket),
+      unsettled,
     };
   }
 
@@ -824,9 +837,12 @@ export class Link {
     if (!isEthereum(chain) || packets.length === 0) {
       return [];
     }
+    const {
+      number,
+    } = await chain.finalizedSnapshot();
     const unreceived = await this.filterUnreceived(packets.map(({
       packet,
-    }) => packet), (client, sequences) => chain.queryUnreceivedPacketsV2(client, sequences, "finalized"), packetId);
+    }) => packet), (client, sequences) => chain.queryUnreceivedPacketsV2(client, sequences, number), packetId);
     return packets.filter(({
       packet,
     }) => unreceived[packetId(packet)].has(packet.sequence));
@@ -834,18 +850,31 @@ export class Link {
 
   /**
    * Of the packets whose commitment a chain has cleared, by an ack or a
-   * timeout, those still committed in its finalized state: a reorg can still
-   * undo the clearing, and only Ethereum's state can be reorged.
+   * timeout, those whose clearing is not final: still committed in its
+   * finalized state, where a reorg can still undo the clearing, and only
+   * Ethereum's state can be reorged. sentBy gives a height the packet was
+   * sent at or before: a finalized state older than that, from an RPC that
+   * lags, has no commitment because the send is not in it yet, and proves
+   * nothing about the clearing.
    */
-  private async clearedNotFinal<T>(chain: BaseIbcClient, items: readonly T[], packetOf: (item: T) => Packet): Promise<T[]> {
+  private async clearedNotFinal<T>(chain: BaseIbcClient, items: readonly T[], packetOf: (item: T) => Packet, sentBy: (item: T) => number): Promise<T[]> {
     if (!isEthereum(chain) || items.length === 0) {
       return [];
     }
-    const committed = await this.filterUnreceived(items.map(packetOf), (client, sequences) => chain.queryUnreceivedAcksV2(client, sequences, "finalized"), ackId);
-    return items.filter((item) => {
-      const packet = packetOf(item);
-      return committed[ackId(packet)].has(packet.sequence);
-    });
+    const snapshot = await chain.finalizedSnapshot();
+    const before = items.filter(item => sentBy(item) > snapshot.slot);
+    const covered = items.filter(item => sentBy(item) <= snapshot.slot);
+    if (before.length > 0) {
+      this.logger.info(`${before.length} cleared packets on ${chain.chainId} were sent after its RPC's finalized slot ${snapshot.slot}: held until it passes them`);
+    }
+    const committed = await this.filterUnreceived(covered.map(packetOf), (client, sequences) => chain.queryUnreceivedAcksV2(client, sequences, snapshot.number), ackId);
+    return [
+      ...before,
+      ...covered.filter((item) => {
+        const packet = packetOf(item);
+        return committed[ackId(packet)].has(packet.sequence);
+      }),
+    ];
   }
 
   private async filterUnreceived(

@@ -15,7 +15,7 @@ import type {
   EthereumIbcClient,
 } from "./IbcClient.js";
 import {
-  eventProofOffset, planUpdates, querySentPacketsV2, queryUnreceivedAcksV2, queryUnreceivedPacketsV2, queryWrittenAcksV2, scanHorizon,
+  eventProofOffset, finalizedSnapshot, planUpdates, querySentPacketsV2, queryUnreceivedAcksV2, queryUnreceivedPacketsV2, queryWrittenAcksV2, scanHorizon,
 } from "./source.js";
 
 // Slots per sync committee period in these tests.
@@ -240,6 +240,35 @@ describe("querySentPacketsV2", () => {
     expect(scanned).toEqual([[91n, 100n]]);
   });
 
+  it("derives and checks the range from one read of the head", async () => {
+    // The head read first is block 120; a second read, from a lagging node
+    // behind the same RPC URL, would be block 100.
+    const {
+      c, scanned,
+    } = source(120n);
+    const getBlock = c.publicClient.getBlock.bind(c.publicClient);
+    let headReads = 0;
+    Object.assign(c.publicClient, {
+      getBlock: async (args?: {
+        blockNumber?: bigint
+      }) => {
+        if (args?.blockNumber === undefined) {
+          headReads++;
+          return getBlock(headReads === 1
+            ? undefined
+            : {
+              blockNumber: 100n,
+            });
+        }
+        return getBlock(args);
+      },
+    });
+    await querySentPacketsV2(c, "client-0", 100, 115);
+    // Slots 101 to 115 are blocks 101 to 114, past the missed slot.
+    expect(scanned).toEqual([[101n, 114n]]);
+    expect(headReads).toBe(1);
+  });
+
   it("reports a packet at the slot of its block", async () => {
     const {
       c,
@@ -299,23 +328,37 @@ describe("eventProofOffset", () => {
 describe("router state reads", () => {
   /** A router whose commitments differ between the latest and the finalized block. */
   function router(latest: Record<string, string>, finalized: Record<string, string>) {
-    const tags: (string | undefined)[] = [];
+    const tags: (string | bigint | undefined)[] = [];
     const c = {
       config: {
         router: "0x6a1E8C6F167006dE6d95fE05e930765d0EA9f49d",
       },
       publicClient: {
         readContract: async ({
-          args, blockTag,
+          args, blockTag, blockNumber,
         }: {
           args: [`0x${string}`]
           blockTag?: string
+          blockNumber?: bigint
         }) => {
-          tags.push(blockTag);
-          const state = blockTag === "finalized" ? finalized : latest;
+          tags.push(blockTag ?? blockNumber);
+          // Block 7 is the finalized one.
+          const state = blockNumber === 7n ? finalized : latest;
           return state[args[0]] ?? ZERO_WORD;
         },
+        getBlock: async ({
+          blockTag,
+        }: {
+          blockTag: string
+        }) => {
+          expect(blockTag).toBe("finalized");
+          return {
+            number: 7n,
+            timestamp: GENESIS + 70n * 12n,
+          };
+        },
       },
+      beacon: forkSchedule().beacon,
     } as unknown as EthereumIbcClient;
     return {
       c,
@@ -337,8 +380,13 @@ describe("router state reads", () => {
       [key(2, 1n)]: SET,
     });
     await expect(queryUnreceivedPacketsV2(c, "client-0", [1n, 2n, 3n])).resolves.toEqual([3n]);
-    await expect(queryUnreceivedPacketsV2(c, "client-0", [1n, 2n, 3n], "finalized")).resolves.toEqual([2n, 3n]);
-    expect(tags).toEqual(["latest", "latest", "latest", "finalized", "finalized", "finalized"]);
+    const snapshot = await finalizedSnapshot(c);
+    expect(snapshot).toEqual({
+      number: 7n,
+      slot: 70,
+    });
+    await expect(queryUnreceivedPacketsV2(c, "client-0", [1n, 2n, 3n], snapshot.number)).resolves.toEqual([2n, 3n]);
+    expect(tags).toEqual(["latest", "latest", "latest", 7n, 7n, 7n]);
   });
 
   it("reads a commitment at the latest or the finalized block", async () => {
@@ -350,7 +398,7 @@ describe("router state reads", () => {
       [key(1, 1n)]: SET,
     });
     await expect(queryUnreceivedAcksV2(c, "client-0", [1n])).resolves.toEqual([]);
-    await expect(queryUnreceivedAcksV2(c, "client-0", [1n], "finalized")).resolves.toEqual([1n]);
+    await expect(queryUnreceivedAcksV2(c, "client-0", [1n], 7n)).resolves.toEqual([1n]);
   });
 
   it("propagates a failed read rather than take it for an absent commitment", async () => {

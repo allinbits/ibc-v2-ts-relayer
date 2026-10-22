@@ -204,6 +204,10 @@ export class EthereumIbcClient extends BaseIbcClient<EthereumIbcClientTypes> {
     return source.scanHorizon(this);
   }
 
+  public async finalizedSnapshot(): Promise<source.FinalizedSnapshot> {
+    return source.finalizedSnapshot(this);
+  }
+
   public async getRawReceiptProofV2(clientId: string, sequence: bigint, proofHeight: Height): Promise<DataProof> {
     return source.getRawReceiptProofV2(this, clientId, sequence, proofHeight);
   }
@@ -257,12 +261,12 @@ export class EthereumIbcClient extends BaseIbcClient<EthereumIbcClientTypes> {
     return source.queryWrittenAcksV2(this, clientID, minHeight, maxHeight);
   }
 
-  /** At the latest block by default; at "finalized", the state no reorg can undo. */
+  /** At the latest block by default, or at a given one, such as finalizedSnapshot's. */
   public async queryUnreceivedPacketsV2(clientId: string, sequences: readonly bigint[], at: source.StateTag = "latest"): Promise<bigint[]> {
     return source.queryUnreceivedPacketsV2(this, clientId, sequences, at);
   }
 
-  /** At the latest block by default; at "finalized", the state no reorg can undo. */
+  /** At the latest block by default, or at a given one, such as finalizedSnapshot's. */
   public async queryUnreceivedAcksV2(clientId: string, sequences: readonly bigint[], at: source.StateTag = "latest"): Promise<bigint[]> {
     return source.queryUnreceivedAcksV2(this, clientId, sequences, at);
   }

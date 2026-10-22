@@ -249,13 +249,16 @@ async function blockTimestamp(c: EthereumIbcClient, n: bigint): Promise<bigint> 
   return ts;
 }
 
+interface BlockRef {
+  number: bigint
+  timestamp: bigint
+}
+
 /**
- * The first block whose timestamp is at or after t, or the block after the
- * latest one. A binary search: missed slots make block numbers drift from
- * slots.
+ * The first block whose timestamp is at or after t, or the block after
+ * latest. A binary search: missed slots make block numbers drift from slots.
  */
-async function firstBlockAtOrAfter(c: EthereumIbcClient, t: bigint): Promise<bigint> {
-  const latest = await c.publicClient.getBlock();
+async function firstBlockAtOrAfter(c: EthereumIbcClient, t: bigint, latest: BlockRef): Promise<bigint> {
   if (latest.timestamp < t) {
     return latest.number + 1n;
   }
@@ -287,19 +290,21 @@ async function blockRange(c: EthereumIbcClient, minSlot: number | undefined, max
 }> {
   const p = await chainParams(c);
   const floor = BigInt(c.config.fromBlock ?? "0");
-  const fromBlock = minSlot === undefined ? floor : await firstBlockAtOrAfter(c, slotTime(p, BigInt(minSlot) + 1n));
+  // One read of the head, from which the whole range is derived and against
+  // which it is checked: a second read, from a node behind a load balancer
+  // that lags the first, could end the range short of maxSlot while the
+  // check passed, and the link save a floor past blocks never read.
+  const latest = await c.publicClient.getBlock();
   if (maxSlot !== undefined) {
-    // A node that has not reached maxSlot (one behind a load balancer, say)
-    // would end the range at its head: the scan would look complete, and
-    // the link save a floor past blocks it never read.
-    const head = slotAt(p, (await c.publicClient.getBlock()).timestamp);
+    const head = slotAt(p, latest.timestamp);
     if (head < BigInt(maxSlot)) {
       throw new Error(`the execution RPC is at slot ${head}, not yet at ${maxSlot}: retry later`);
     }
   }
+  const fromBlock = minSlot === undefined ? floor : await firstBlockAtOrAfter(c, slotTime(p, BigInt(minSlot) + 1n), latest);
   const toBlock = maxSlot === undefined
-    ? await c.publicClient.getBlockNumber()
-    : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot) + 1n)) - 1n;
+    ? latest.number
+    : await firstBlockAtOrAfter(c, slotTime(p, BigInt(maxSlot) + 1n), latest) - 1n;
   return {
     fromBlock: fromBlock < floor ? floor : fromBlock,
     toBlock,
@@ -411,10 +416,32 @@ export async function queryWrittenAcksV2(
 }
 
 /**
- * The state a router query reads: the latest block, or the latest finalized
- * one, which no reorg can undo.
+ * The state a router query reads: the latest block, or a given one, such as
+ * a finalized snapshot's, which no reorg can undo.
  */
-export type StateTag = "latest" | "finalized";
+export type StateTag = "latest" | bigint;
+
+/** A finalized block of the execution RPC, and the slot it is at. */
+export interface FinalizedSnapshot {
+  number: bigint
+  slot: number
+}
+
+/**
+ * The execution RPC's latest finalized block, read once so that every query
+ * of a check reads the same state, and dated by its slot: a lagging RPC's
+ * finalized block can predate events the beacon node has long finalized.
+ */
+export async function finalizedSnapshot(c: EthereumIbcClient): Promise<FinalizedSnapshot> {
+  const p = await chainParams(c);
+  const block = await c.publicClient.getBlock({
+    blockTag: "finalized",
+  });
+  return {
+    number: block.number,
+    slot: Number(slotAt(p, block.timestamp)),
+  };
+}
 
 async function commitment(c: EthereumIbcClient, path: Uint8Array, at: StateTag = "latest"): Promise<Hex> {
   return c.publicClient.readContract({
@@ -422,7 +449,13 @@ async function commitment(c: EthereumIbcClient, path: Uint8Array, at: StateTag =
     abi: routerSourceAbi,
     functionName: "getCommitment",
     args: [keccak256(path)],
-    blockTag: at,
+    ...(at === "latest"
+      ? {
+        blockTag: "latest" as const,
+      }
+      : {
+        blockNumber: at,
+      }),
     // Optional in viem, but required by its types without strictNullChecks.
     authorizationList: undefined,
   });
@@ -430,7 +463,7 @@ async function commitment(c: EthereumIbcClient, path: Uint8Array, at: StateTag =
 
 const ZERO = `0x${"00".repeat(32)}`;
 
-/** Packets sent to clientId that the router has no receipt for, at the latest or the finalized block. */
+/** Packets sent to clientId that the router has no receipt for, at the latest or a given block. */
 export async function queryUnreceivedPacketsV2(c: EthereumIbcClient, clientId: string, sequences: readonly bigint[], at: StateTag = "latest"): Promise<bigint[]> {
   const receipts = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 2, s), at)));
   return sequences.filter((_, i) => receipts[i] === ZERO);
@@ -438,7 +471,7 @@ export async function queryUnreceivedPacketsV2(c: EthereumIbcClient, clientId: s
 
 /**
  * Packets sent from clientId whose commitment is still there, at the latest
- * or the finalized block: neither acknowledged nor timed out.
+ * or a given block: neither acknowledged nor timed out.
  */
 export async function queryUnreceivedAcksV2(c: EthereumIbcClient, clientId: string, sequences: readonly bigint[], at: StateTag = "latest"): Promise<bigint[]> {
   const commitments = await Promise.all(sequences.map(s => commitment(c, packetPath(clientId, 1, s), at)));

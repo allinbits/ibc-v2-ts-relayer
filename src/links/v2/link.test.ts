@@ -299,6 +299,11 @@ function ethereumSource(finalized: number, sent: PacketV2WithMetadata[]) {
     // The execution RPC serving its events, at the head unless a test lags
     // it; a head never trails finality, which some tests move alone.
     scanHorizon: vi.fn(async () => Math.max(state.head, state.finalized)),
+    // Its finalized block, past every send unless a test dates it earlier.
+    finalizedSnapshot: vi.fn(async () => ({
+      number: 1n,
+      slot: Number.MAX_SAFE_INTEGER,
+    })),
     currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
     latestHeader: vi.fn(async () => ({
@@ -591,7 +596,8 @@ function routerState() {
   };
   return {
     state,
-    at: (tag: "latest" | "finalized" = "latest") => state[tag],
+    /** The state a query reads: the latest block, or (at a block number) the finalized one. */
+    at: (tag: "latest" | bigint = "latest") => state[tag === "latest" ? "latest" : "finalized"],
     /** Finality reaches the latest block. */
     finalize: () => {
       state.finalized = new Set(state.latest);
@@ -633,6 +639,11 @@ function ethereumDestination(finalized: number) {
     // The execution RPC serving its events, at the head unless a test lags
     // it; a head never trails finality, which some tests move alone.
     scanHorizon: vi.fn(async () => Math.max(state.head, state.finalized)),
+    // Its finalized block, past every send unless a test dates it earlier.
+    finalizedSnapshot: vi.fn(async () => ({
+      number: 1n,
+      slot: Number.MAX_SAFE_INTEGER,
+    })),
     currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
     latestHeader: vi.fn(async () => ({
@@ -646,9 +657,9 @@ function ethereumDestination(finalized: number) {
       state.head += 1;
     }),
     waitForIndexer: vi.fn(async () => {}),
-    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly bigint[], at?: "latest" | "finalized") =>
+    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly bigint[], at?: "latest" | bigint) =>
       sequences.filter(seq => !receipts.at(at).has(seq))),
-    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly bigint[], at?: "latest" | "finalized") =>
+    queryUnreceivedAcksV2: vi.fn(async (_client: string, sequences: readonly bigint[], at?: "latest" | bigint) =>
       sequences.filter(seq => commitments.at(at).has(seq))),
     // gno's client on Ethereum already covers the packets' block.
     getLatestClientState: vi.fn(async () => ({
@@ -992,7 +1003,7 @@ describe("Link.checkAndRelayPacketsAndAcks with Ethereum writes not final yet", 
     const commitments = routerState();
     commitments.state.latest.add(1n);
     commitments.finalize();
-    eth.client.queryUnreceivedAcksV2.mockImplementation(async (_client: string, sequences: readonly bigint[], at?: "latest" | "finalized") =>
+    eth.client.queryUnreceivedAcksV2.mockImplementation(async (_client: string, sequences: readonly bigint[], at?: "latest" | bigint) =>
       sequences.filter(seq => commitments.at(at).has(seq)));
     const timeoutPacketsV2 = vi.fn(async (packets: readonly PacketV2[]) => {
       for (const p of packets) {
@@ -1334,5 +1345,136 @@ describe("Link scans bounded by what the event source has served", () => {
     await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
     expect(eth.client.receivePacketsV2).toHaveBeenCalledTimes(1);
     expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * An absent commitment in the RPC's finalized state confirmed a clearing
+ * (an ack or a timeout) as final. When that state predated the packet's
+ * send, from an RPC whose finalized block lags, the commitment was absent
+ * because the send was not in it yet: the floor moved on, and a reorg that
+ * then dropped the clearing was never answered.
+ */
+describe("Link with an Ethereum RPC whose finalized block predates the send", () => {
+  const FINALIZED = 11407200;
+
+  it("holds the ack floor until the finalized block passes the slot the packet was proven at", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    const sent = PacketV2.fromPartial({
+      ...gnoPacket(7, slotTime(FINALIZED + 100 * EPOCH)).packet,
+      sourceClient: "client-0",
+      destinationClient: "ethereum-1",
+    });
+    // Sent and committed, but the RPC's finalized block is from before.
+    eth.commitments.state.latest.add(7n);
+    eth.client.finalizedSnapshot.mockResolvedValue({
+      number: 1n,
+      slot: FINALIZED - 100,
+    });
+    const gno = gnoSource(eth.client, FINALIZED, [], [
+      {
+        acknowledgement: Uint8Array.from([1]),
+        originalPacket: sent,
+        height: SENT_HEIGHT,
+        txHash: "",
+        txEvents: [],
+      },
+    ]);
+    const start: RelayedHeights = {
+      packetHeightA: SENT_HEIGHT - 10,
+      ackHeightA: SENT_HEIGHT - 10,
+      packetHeightB: FINALIZED - 1,
+      ackHeightB: FINALIZED - 1,
+    };
+
+    let heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(start);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(1);
+    // Absent at latest and in the stale finalized state: still held.
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(heights.ackHeightA).toBe(SENT_HEIGHT - 1);
+
+    // A reorg drops the ack: relayed again.
+    eth.commitments.state.latest.add(7n);
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.ackHeightA).toBe(SENT_HEIGHT - 1);
+
+    // The finalized block passes gno's client of Ethereum, with the ack in it.
+    eth.commitments.finalize();
+    eth.client.finalizedSnapshot.mockResolvedValue({
+      number: 2n,
+      slot: FINALIZED + EPOCH,
+    });
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(eth.client.acknowledgePacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.ackHeightA).toBe(gno.state.height - 1);
+  });
+
+  it("holds the packet floor until the finalized block passes a packet timed out on Ethereum", async () => {
+    const SENT_SLOT = FINALIZED - 5;
+    const dead: PacketV2WithMetadata = {
+      packet: PacketV2.fromPartial({
+        ...sentPacket(1, SENT_SLOT).packet,
+        timeoutTimestamp: 1000n,
+      }),
+      height: SENT_SLOT,
+    };
+    const eth = ethereumSource(FINALIZED, [dead]);
+    const gno = gnoDestination(eth.client, FINALIZED);
+    const commitments = routerState();
+    commitments.state.latest.add(1n);
+    eth.client.finalizedSnapshot.mockResolvedValue({
+      number: 1n,
+      slot: SENT_SLOT - 1,
+    });
+    eth.client.queryUnreceivedAcksV2.mockImplementation(async (_client: string, sequences: readonly bigint[], at?: "latest" | bigint) =>
+      sequences.filter(seq => commitments.at(at).has(seq)));
+    const timeoutPacketsV2 = vi.fn(async (packets: readonly PacketV2[]) => {
+      for (const p of packets) {
+        commitments.state.latest.delete(p.sequence);
+      }
+      return {
+        events: [],
+        transactionHash: "",
+        height: 1,
+      };
+    });
+    Object.assign(eth.client, {
+      getLatestClientState: vi.fn(async () => ({
+        lcType: "10-gno",
+        latestHeight: height(gno.state.height),
+      })),
+      timeoutPacketsV2,
+    });
+    Object.assign(gno.client, {
+      getTimeoutProofV2: vi.fn(async (_p: PacketV2, at: Height) => ({
+        data: new Uint8Array(),
+        proof: new Uint8Array(),
+        proofHeight: at,
+      })),
+    });
+
+    let heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks({
+      packetHeightB: FINALIZED - 10,
+      ackHeightB: FINALIZED - 10,
+    });
+    expect(timeoutPacketsV2).toHaveBeenCalledTimes(1);
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(heights.packetHeightB).toBe(SENT_SLOT - 1);
+
+    // A reorg drops the timeout, not the send: timed out again.
+    commitments.state.latest.add(1n);
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(timeoutPacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.packetHeightB).toBe(SENT_SLOT - 1);
+
+    commitments.finalize();
+    eth.client.finalizedSnapshot.mockResolvedValue({
+      number: 2n,
+      slot: FINALIZED,
+    });
+    heights = await new Link(gno.end, eth.end, logger).checkAndRelayPacketsAndAcks(heights);
+    expect(timeoutPacketsV2).toHaveBeenCalledTimes(2);
+    expect(heights.packetHeightB).toBe(FINALIZED);
   });
 });
