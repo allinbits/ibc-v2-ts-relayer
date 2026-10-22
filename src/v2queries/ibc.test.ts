@@ -25,6 +25,9 @@ import {
 } from "vitest";
 
 import {
+  TendermintIbcClient,
+} from "../clients/tendermint/IbcClient.js";
+import {
   setupIbcV2Extension,
 } from "./ibc.js";
 
@@ -176,6 +179,47 @@ describe("v2queries/ibc", () => {
         expect(mockChannelV2Query.PacketCommitment).toHaveBeenCalledWith({
           clientId: "07-tendermint-0",
           sequence: 999999n,
+        });
+      });
+
+      it("should keep a uint64 sequence past 2^53 exact", async () => {
+        const SEQUENCE = 9007199254740993n;
+        mockChannelV2Query.PacketCommitment.mockResolvedValue({
+          commitment: new Uint8Array([1]),
+          proof: new Uint8Array(),
+        });
+        mockChannelV2Query.UnreceivedPackets.mockResolvedValue({
+          sequences: [SEQUENCE],
+        });
+        mockChannelV2Query.UnreceivedAcks.mockResolvedValue({
+          sequences: [SEQUENCE],
+        });
+
+        const extension = setupIbcV2Extension(mockQueryClient);
+        await extension.ibc.channelV2.packetCommitment("07-tendermint-0", SEQUENCE);
+        expect(mockChannelV2Query.PacketCommitment).toHaveBeenLastCalledWith({
+          clientId: "07-tendermint-0",
+          sequence: SEQUENCE,
+        });
+
+        // The Tendermint client passes its sequences through untouched.
+        const client = Object.assign(Object.create(TendermintIbcClient.prototype) as TendermintIbcClient, {
+          query: extension,
+        });
+        await client.queryCommitmentsV2("07-tendermint-0", SEQUENCE);
+        expect(mockChannelV2Query.PacketCommitment).toHaveBeenLastCalledWith({
+          clientId: "07-tendermint-0",
+          sequence: SEQUENCE,
+        });
+        await expect(client.queryUnreceivedPacketsV2("07-tendermint-0", [SEQUENCE])).resolves.toEqual([SEQUENCE]);
+        expect(mockChannelV2Query.UnreceivedPackets).toHaveBeenLastCalledWith({
+          clientId: "07-tendermint-0",
+          sequences: [SEQUENCE],
+        });
+        await expect(client.queryUnreceivedAcksV2("07-tendermint-0", [SEQUENCE])).resolves.toEqual([SEQUENCE]);
+        expect(mockChannelV2Query.UnreceivedAcks).toHaveBeenLastCalledWith({
+          clientId: "07-tendermint-0",
+          packetAckSequences: [SEQUENCE],
         });
       });
 

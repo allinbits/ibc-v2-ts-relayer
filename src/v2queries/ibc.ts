@@ -21,7 +21,7 @@ export interface IbcV2Extension {
     readonly channelV2: {
       readonly packetCommitment: (
         clientId: string,
-        sequence: number,
+        sequence: bigint | number,
       ) => Promise<QueryPacketCommitmentResponse>
       readonly unreceivedPackets: (
         clientId: string,
@@ -58,7 +58,7 @@ export function setupIbcV2Extension(base: QueryClient): IbcV2Extension {
       channelV2: {
         packetCommitment: async (
           clientId: string,
-          sequence: number,
+          sequence: bigint | number,
         ) => channelQueryService.PacketCommitment({
           clientId,
           sequence: BigInt(sequence),

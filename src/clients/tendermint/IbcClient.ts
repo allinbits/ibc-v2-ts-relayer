@@ -2220,7 +2220,7 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
 
   public async queryCommitmentsV2(clientId: string, sequence: bigint): Promise<Uint8Array> {
     const res = await this.query.ibc.channelV2.packetCommitment(
-      clientId, Number(sequence),
+      clientId, sequence,
     );
     return res.commitment;
   }
