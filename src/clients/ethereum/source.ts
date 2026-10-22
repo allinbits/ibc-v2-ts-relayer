@@ -162,10 +162,46 @@ export async function eventProofOffset(c: EthereumIbcClient, slot: number): Prom
   return BigInt(slot) / p.slotsPerEpoch >= p.forks.GLOAS.epoch ? 1 : 0;
 }
 
-/** The latest finalized slot: what a counterparty light client can reach. */
+/**
+ * The latest finalized slot, what a counterparty light client can reach, at
+ * the time gno's Ethereum client stores for it: the timestamp of the
+ * execution block the slot's beacon block commits to (finalizedExecution in
+ * the client). Before Gloas that is the slot's own payload, at the slot's
+ * time; from Gloas on it is the previous payload, a slot or more earlier, and
+ * a timeout decided against the slot's own time could be proven at a
+ * consensus state that predates it.
+ */
 export async function latestHeader(c: EthereumIbcClient): Promise<EthereumHeader> {
   const fin = await c.beacon.finalityUpdate();
-  return header(c, Number(fin.finalized_header.beacon.slot));
+  const h = fin.finalized_header;
+  const timestamp = h.execution
+    ? BigInt(h.execution.timestamp)
+    : await executionTimestamp(c, headerBlockHash(h));
+  return {
+    height: Number(h.beacon.slot),
+    time: {
+      seconds: timestamp,
+      nanos: 0,
+    },
+  };
+}
+
+const executionTimestamps = new WeakMap<EthereumIbcClient, Map<string, bigint>>();
+
+/** The timestamp of the execution block blockHash, verified against the hash; finalized blocks never change. */
+async function executionTimestamp(c: EthereumIbcClient, blockHash: string): Promise<bigint> {
+  let cache = executionTimestamps.get(c);
+  if (!cache) {
+    cache = new Map();
+    executionTimestamps.set(c, cache);
+  }
+  const key = blockHash.toLowerCase();
+  let ts = cache.get(key);
+  if (ts === undefined) {
+    ts = (await executionHeader(c.publicClient, blockHash)).timestamp;
+    cache.set(key, ts);
+  }
+  return ts;
 }
 
 /** Waits one slot, or until deadline (epoch milliseconds) if that comes first. */
