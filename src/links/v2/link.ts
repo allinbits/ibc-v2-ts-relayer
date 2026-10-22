@@ -510,7 +510,12 @@ export class Link {
     heights: RelayedHeights
     info: RelayInfo
   }> {
-    const [packetBoundA, packetBoundB] = await Promise.all([this.scanBound("A"), this.scanBound("B")]);
+    // Each side's latest provable header, read once: its height bounds the
+    // scan of the side's own packets, and it decides which of the other
+    // side's packets have timed out.
+    const [provableA, provableB] = await Promise.all([this.provableHeader("A"), this.provableHeader("B")]);
+    const packetBoundA = scanBound(provableA);
+    const packetBoundB = scanBound(provableB);
     const [packetsA, packetsB] = await Promise.all([this.scanPackets("A", relayFrom.packetHeightA, packetBoundA), this.scanPackets("B", relayFrom.packetHeightB, packetBoundB)]);
 
     const filteredPacketsA
@@ -522,35 +527,21 @@ export class Link {
         ? packetsB.filter(packet => this.packetFilter?.(packet.packet))
         : packetsB;
 
-    const cutoffHeightA = await this.endB.client.timeoutHeight(
-      timedoutThresholdBlocks,
-    );
-    const cutoffTimeA
-      = secondsFromDateNanos(await this.endB.client.currentTime())
-        + timedoutThresholdSeconds;
-    const {
-      toSubmit: submitA, toTimeout: timeoutA,
-    } = splitPendingPackets(
-      cutoffHeightA, cutoffTimeA, filteredPacketsA,
-    );
-    const cutoffHeightB = await this.endA.client.timeoutHeight(
-      timedoutThresholdBlocks,
-    );
-    const cutoffTimeB
-      = secondsFromDateNanos(await this.endA.client.currentTime())
-        + timedoutThresholdSeconds;
-    const {
-      toSubmit: submitB, toTimeout: timeoutB,
-    } = splitPendingPackets(
-      cutoffHeightB, cutoffTimeB, filteredPacketsB,
-    );
+    const [
+      {
+        toSubmit: submitA, toTimeout: timeoutA, toWait: waitA,
+      },
+      {
+        toSubmit: submitB, toTimeout: timeoutB, toWait: waitB,
+      },
+    ] = await Promise.all([this.splitPackets("A", filteredPacketsA, provableB, timedoutThresholdBlocks, timedoutThresholdSeconds), this.splitPackets("B", filteredPacketsB, provableA, timedoutThresholdBlocks, timedoutThresholdSeconds)]);
     // FIXME: use the returned acks first? Then query for others?
     await Promise.all([this.relayPackets("A", submitA), this.relayPackets("B", submitB)]);
 
     // let's wait a bit to ensure our newly committed acks are indexed
     await Promise.all([this.endA.client.waitForIndexer(), this.endB.client.waitForIndexer()]);
 
-    const [ackBoundA, ackBoundB] = await Promise.all([this.scanBound("A"), this.scanBound("B")]);
+    const [ackBoundA, ackBoundB] = (await Promise.all([this.provableHeader("A"), this.provableHeader("B")])).map(scanBound);
     const [acksA, acksB] = await Promise.all([this.scanAcks("A", relayFrom.ackHeightA, ackBoundA), this.scanAcks("B", relayFrom.ackHeightB, ackBoundB)]);
 
     await Promise.all([this.relayAcks("A", acksA), this.relayAcks("B", acksB)]);
@@ -558,8 +549,8 @@ export class Link {
     await Promise.all([this.timeoutPackets("A", timeoutA), this.timeoutPackets("B", timeoutB)]);
 
     const heights = {
-      packetHeightA: nextFloor(relayFrom.packetHeightA, packetBoundA),
-      packetHeightB: nextFloor(relayFrom.packetHeightB, packetBoundB),
+      packetHeightA: nextFloor(relayFrom.packetHeightA, boundBefore(packetBoundA, waitA)),
+      packetHeightB: nextFloor(relayFrom.packetHeightB, boundBefore(packetBoundB, waitB)),
       ackHeightA: nextFloor(relayFrom.ackHeightA, ackBoundA),
       ackHeightB: nextFloor(relayFrom.ackHeightB, ackBoundB),
     };
@@ -578,28 +569,82 @@ export class Link {
   }
 
   /**
-   * The highest height of a side whose packets and acks can be relayed in
-   * this round: one below its latest provable header, as relayPackets and
-   * relayAcks prove an event at the height after its block. A Tendermint or
-   * gno chain proves up to its latest block, Ethereum up to its latest
-   * finalized slot, so an event past the bound stays unscanned until the
-   * header that proves it exists, and the loop never waits for one.
-   *
-   * A round scans (floor, bound] and hands the bound back as the next floor,
-   * so the scans tile the chain: a head read apart from the scan could stand
-   * past the blocks the scan covered, and the blocks between were lost.
+   * A side's latest provable header, the latest one the other side's client
+   * can be updated to: the latest block of a Tendermint or gno chain, the
+   * latest finalized slot of Ethereum, which trails its head by two epochs
+   * or more. A proof the other side can verify is taken at this header or
+   * an earlier one.
    */
-  private async scanBound(side: Side): Promise<number> {
+  private async provableHeader(side: Side): Promise<ProvableHeader> {
+    const client = this.getEnds(side).src.client;
+    if (isTendermint(client)) {
+      const header = await client.latestHeader();
+      return {
+        height: header.height,
+        time: secondsFromDateNanos(header.time),
+      };
+    }
+    if (isGno(client) || isEthereum(client)) {
+      const header = await client.latestHeader();
+      return {
+        height: Number(header.height),
+        time: Number(header.time.seconds),
+      };
+    }
+    throw new Error(
+      `relaying only supported for Tendermint/Gno/Ethereum clients, got ${client.clientType}`,
+    );
+  }
+
+  /**
+   * Splits the packets a side sent into those to deliver now, those to time
+   * out now, and those to leave waiting. A packet is delivered while it is
+   * live at the destination's head, where the receive executes, less the
+   * configured margin; it is timed out once it is dead at the destination's
+   * latest provable header, where the proof of non-receipt is taken, and no
+   * margin can bring that header forward. Dead at the head but not yet at
+   * the provable header, it waits for a later round.
+   *
+   * The two headers are one on a Tendermint or gno chain. On Ethereum the
+   * provable header is the finalized slot, 13 minutes or more behind the
+   * head: deciding timeouts against the head had the loop submit, round
+   * after round, a timeout the destination's client could not yet verify.
+   */
+  private async splitPackets(
+    source: Side,
+    packets: readonly PacketV2WithMetadata[],
+    provable: ProvableHeader,
+    timedoutThresholdBlocks: number,
+    timedoutThresholdSeconds: number,
+  ): Promise<SplitPackets> {
+    if (packets.length === 0) {
+      return {
+        toSubmit: [],
+        toTimeout: [],
+        toWait: [],
+      };
+    }
     const {
-      src,
-    } = this.getEnds(side);
-    const client = src.client;
-    if (!isTendermint(client) && !isGno(client) && !isEthereum(client)) {
-      throw new Error(
-        `scanning only supported for Tendermint/Gno/Ethereum clients, got ${client.clientType}`,
+      dest,
+    } = this.getEnds(source);
+    const headHeight = await dest.client.timeoutHeight(timedoutThresholdBlocks);
+    const headTime = secondsFromDateNanos(await dest.client.currentTime()) + timedoutThresholdSeconds;
+    const {
+      toSubmit, toTimeout: dead,
+    } = splitPendingPackets(headHeight, headTime, packets);
+    const {
+      toSubmit: toWait, toTimeout,
+    } = splitPendingPackets(dest.client.revisionHeight(provable.height), provable.time, dead);
+    if (toWait.length > 0) {
+      this.logger.info(
+        `${toWait.length} packets sent from ${this.chain(source)} wait for the provable header of ${this.otherChain(source)} to pass their timeout`,
       );
     }
-    return Number((await client.latestHeader()).height) - 1;
+    return {
+      toSubmit,
+      toTimeout,
+      toWait,
+    };
   }
 
   /** The pending packets sent in (floor, bound]; none when the bound is not past the floor. */
@@ -884,6 +929,42 @@ export class Link {
     }
   }
 }
+
+/** A chain's latest provable header: its height, and its time in seconds. */
+interface ProvableHeader {
+  readonly height: number
+  readonly time: number
+}
+
+interface SplitPackets {
+  readonly toSubmit: readonly PacketV2WithMetadata[]
+  readonly toTimeout: readonly PacketV2WithMetadata[]
+  readonly toWait: readonly PacketV2WithMetadata[]
+}
+
+/**
+ * The highest height of a side whose packets and acks can be relayed in
+ * this round: one below its latest provable header, as relayPackets and
+ * relayAcks prove an event at the height after its block. An event past
+ * the bound stays unscanned until the header that proves it exists, and
+ * the loop never waits for one.
+ *
+ * A round scans (floor, bound] and hands the bound back as the next floor,
+ * so the scans tile the chain: a head read apart from the scan could stand
+ * past the blocks the scan covered, and the blocks between were lost.
+ */
+const scanBound = (provable: ProvableHeader): number => provable.height - 1;
+
+/**
+ * The bound a scan hands back when it leaves packets waiting: one below the
+ * earliest of them, so that the next round scans it again. The bound the
+ * scan reached would put the packet below every later floor, never to be
+ * timed out.
+ */
+const boundBefore = (bound: number, waiting: readonly PacketV2WithMetadata[]): number =>
+  waiting.reduce((b, {
+    height,
+  }) => Math.min(b, height - 1), bound);
 
 /**
  * The floor of the next scan: the bound this one reached, unless the floor

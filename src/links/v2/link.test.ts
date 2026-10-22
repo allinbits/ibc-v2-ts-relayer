@@ -219,6 +219,10 @@ const dateAt = (seconds: number) => Object.assign(new Date(seconds * 1000), {
   nanoseconds: 0,
 });
 
+const SLOT_SECONDS = 12;
+/** The time of a slot, on a clock whose genesis is at 0. */
+const slotTime = (slot: number) => slot * SLOT_SECONDS;
+
 /** A packet the router sent in the block at `slot`, timing out far ahead. */
 function sentPacket(sequence: number, slot: number): PacketV2WithMetadata {
   return {
@@ -259,10 +263,14 @@ function ethereumSource(finalized: number, sent: PacketV2WithMetadata[]) {
     clientType: ClientType.Ethereum,
     revisionHeight: height,
     currentHeight: vi.fn(async () => state.head),
-    currentTime: vi.fn(async () => dateAt(0)),
+    currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
     latestHeader: vi.fn(async () => ({
       height: state.finalized,
+      time: {
+        seconds: BigInt(slotTime(state.finalized)),
+        nanos: 0,
+      },
     })),
     waitOneBlock: vi.fn(async () => {
       state.finalized += EPOCH;
@@ -309,10 +317,14 @@ function gnoDestination(source: ReturnType<typeof ethereumSource>["client"], kno
     clientType: ClientType.Gno,
     revisionHeight: height,
     currentHeight: vi.fn(async () => state.height),
-    currentTime: vi.fn(async () => dateAt(0)),
+    currentTime: vi.fn(async () => dateAt(state.height)),
     timeoutHeight: vi.fn(async (blocks: number) => height(state.height + blocks)),
     latestHeader: vi.fn(async () => ({
       height: BigInt(state.height),
+      time: {
+        seconds: BigInt(state.height),
+        nanos: 0,
+      },
     })),
     waitForIndexer: vi.fn(async () => {}),
     getLatestClientState: vi.fn(async () => ({
@@ -460,5 +472,270 @@ describe("Link.checkAndRelayPacketsAndAcks from Ethereum", () => {
     expect(eth.scans).toEqual([[FINALIZED + 70, FINALIZED + 3 * EPOCH - 1]]);
     expect(gno.received).toEqual([1]);
     expect(heights.packetHeightB).toBe(FINALIZED + 3 * EPOCH - 1);
+  });
+});
+
+/*
+ * The gno => Ethereum timeout path as it ran on Sepolia: a packet's timeout
+ * passed on Sepolia's head, and the relay loop timed it out against that
+ * head at once. But the proof of non-receipt is taken at the finalized
+ * slot, 13 minutes behind the head, whose time was still before the
+ * timeout, so gno's Ethereum client rejected the timeout: every round, for
+ * a transaction's gas each, until finality caught up.
+ */
+const SENT_HEIGHT = 100;
+
+/** A packet gno sent in the block at SENT_HEIGHT, timing out at `timeout`. */
+function gnoPacket(sequence: number, timeout: number): PacketV2WithMetadata {
+  return {
+    packet: PacketV2.fromPartial({
+      sequence: BigInt(sequence),
+      sourceClient: "ethereum-1",
+      destinationClient: "client-0",
+      timeoutTimestamp: BigInt(timeout),
+      payloads: [
+        {
+          sourcePort: "transfer",
+          destinationPort: "transfer",
+          version: "ics20-1",
+          encoding: "application/x-solidity-abi",
+          value: Uint8Array.from([1]),
+        },
+      ],
+    }),
+    height: SENT_HEIGHT,
+  };
+}
+
+/**
+ * An Ethereum destination whose head and finalized slots move as a test
+ * says, and which has received nothing. Its proofs of non-receipt record
+ * the slot they were taken at.
+ */
+function ethereumDestination(finalized: number) {
+  const state = {
+    head: finalized + 2 * EPOCH + 5,
+    finalized,
+  };
+  const provedAt: number[] = [];
+  const client = {
+    chainId: "11155111",
+    clientType: ClientType.Ethereum,
+    revisionHeight: height,
+    currentHeight: vi.fn(async () => state.head),
+    currentTime: vi.fn(async () => dateAt(slotTime(state.head))),
+    timeoutHeight: vi.fn(async (blocks: number) => height(state.head + blocks)),
+    latestHeader: vi.fn(async () => ({
+      height: state.finalized,
+      time: {
+        seconds: BigInt(slotTime(state.finalized)),
+        nanos: 0,
+      },
+    })),
+    waitOneBlock: vi.fn(async () => {
+      state.head += 1;
+    }),
+    waitForIndexer: vi.fn(async () => {}),
+    queryUnreceivedPacketsV2: vi.fn(async (_client: string, sequences: readonly number[]) => [...sequences]),
+    queryUnreceivedAcksV2: vi.fn(async () => []),
+    // gno's client on Ethereum already covers the packets' block.
+    getLatestClientState: vi.fn(async () => ({
+      lcType: "10-gno",
+      latestHeight: height(SENT_HEIGHT + 1),
+    })),
+    receivePacketsV2: vi.fn(async () => ({
+      events: [],
+      transactionHash: "",
+      height: 1,
+    })),
+    getTimeoutProofV2: vi.fn(async (_p: PacketV2, at: Height) => {
+      provedAt.push(Number(at.revisionHeight));
+      return {
+        data: new Uint8Array(),
+        proof: new Uint8Array(),
+        proofHeight: at,
+      };
+    }),
+  };
+  const end = {
+    clientID: "client-0",
+    client,
+    querySentPackets: vi.fn(async () => []),
+    queryWrittenAcks: vi.fn(async () => []),
+  } as unknown as BaseEndpoint;
+  return {
+    end,
+    client,
+    state,
+    provedAt,
+  };
+}
+
+/**
+ * A gno source: its Ethereum client follows the destination's finality on
+ * update, and it accepts a timeout as gno's core does, with a proof at a
+ * slot its client knows whose time is not before the packet's timeout.
+ */
+function gnoSource(dest: ReturnType<typeof ethereumDestination>["client"], known: number, sent: PacketV2WithMetadata[]) {
+  const state = {
+    height: 200,
+    known,
+  };
+  const scans: [number | undefined, number | undefined][] = [];
+  const timedOut: number[] = [];
+  const client = {
+    chainId: "test-ibc-1",
+    clientType: ClientType.Gno,
+    revisionHeight: height,
+    currentHeight: vi.fn(async () => state.height),
+    currentTime: vi.fn(async () => dateAt(state.height)),
+    timeoutHeight: vi.fn(async (blocks: number) => height(state.height + blocks)),
+    latestHeader: vi.fn(async () => ({
+      height: BigInt(state.height),
+      time: {
+        seconds: BigInt(state.height),
+        nanos: 0,
+      },
+    })),
+    waitForIndexer: vi.fn(async () => {}),
+    queryCommitmentsV2: vi.fn(async (_client: string, sequence: bigint) => {
+      if (timedOut.includes(Number(sequence))) {
+        throw new Error(`commitment of packet ${sequence} not found`);
+      }
+      return Uint8Array.from([1]);
+    }),
+    queryUnreceivedPacketsV2: vi.fn(async () => []),
+    queryUnreceivedAcksV2: vi.fn(async () => []),
+    getPacketProofV2: vi.fn(async (_p: PacketV2, at: Height) => ({
+      data: new Uint8Array(),
+      proof: new Uint8Array(),
+      proofHeight: at,
+    })),
+    updateClient: vi.fn(async () => {
+      state.known = (await dest.latestHeader()).height;
+      return height(state.known);
+    }),
+    timeoutPacketsV2: vi.fn(async (packets: readonly PacketV2[], _proofs: readonly Uint8Array[], proofHeight: Height) => {
+      const slot = Number(proofHeight.revisionHeight);
+      if (slot > state.known) {
+        throw new Error(`timeoutPacket x${packets.length}: ConsensusStateNotFound(${slot})`);
+      }
+      for (const p of packets) {
+        if (slotTime(slot) < Number(p.timeoutTimestamp)) {
+          throw new Error(`timeoutPacket x${packets.length}: consensus state at slot ${slot} has timestamp ${slotTime(slot)}, before the packet's timeout ${p.timeoutTimestamp}`);
+        }
+        timedOut.push(Number(p.sequence));
+      }
+      state.height += 1;
+      return {
+        events: [],
+        transactionHash: "",
+        height: state.height,
+      };
+    }),
+  };
+  const end = {
+    clientID: "ethereum-1",
+    client,
+    querySentPackets: vi.fn(async (min: number | undefined, max: number | undefined) => {
+      scans.push([min, max]);
+      return sent.filter(({
+        height: h,
+      }) => (min === undefined || h > min) && (max === undefined || h <= max));
+    }),
+    queryWrittenAcks: vi.fn(async () => []),
+  } as unknown as BaseEndpoint;
+  return {
+    end,
+    client,
+    state,
+    scans,
+    timedOut,
+  };
+}
+
+describe("Link.checkAndRelayPacketsAndAcks timeouts on Ethereum", () => {
+  const FINALIZED = 11407200;
+  // Past the finalized slot's time, before the head's.
+  const TIMEOUT = slotTime(FINALIZED + EPOCH);
+
+  it("leaves a packet dead at the head and live at the finalized slot waiting, then times it out once", async () => {
+    const eth = ethereumDestination(FINALIZED);
+    const gno = gnoSource(eth.client, FINALIZED, [gnoPacket(1, TIMEOUT)]);
+    const link = new Link(gno.end, eth.end, logger);
+    const start: RelayedHeights = {
+      packetHeightA: SENT_HEIGHT - 10,
+      ackHeightA: SENT_HEIGHT - 10,
+      packetHeightB: FINALIZED - 1,
+      ackHeightB: FINALIZED - 1,
+    };
+
+    // The head is past the timeout, the finalized slot is not: nothing is
+    // attempted, and the floor is held below the packet for the next round.
+    let heights = await link.checkAndRelayPacketsAndAcks(start, 2, 6);
+    expect(gno.scans).toEqual([[SENT_HEIGHT - 10, gno.state.height - 1]]);
+    expect(eth.client.receivePacketsV2).not.toHaveBeenCalled();
+    expect(eth.client.getTimeoutProofV2).not.toHaveBeenCalled();
+    expect(gno.client.timeoutPacketsV2).not.toHaveBeenCalled();
+    expect(gno.client.updateClient).not.toHaveBeenCalled();
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
+    expect(heights.ackHeightA).toBe(gno.state.height - 1);
+
+    // Finality has not reached the timeout yet: the same, round after round.
+    gno.state.height += 50;
+    eth.state.head += 50;
+    heights = await link.checkAndRelayPacketsAndAcks(heights, 2, 6);
+    expect(gno.scans[1]).toEqual([SENT_HEIGHT - 1, gno.state.height - 1]);
+    expect(gno.client.timeoutPacketsV2).not.toHaveBeenCalled();
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
+
+    // The finalized slot's time reaches the timeout: the packet is timed
+    // out, with a proof at the finalized slot gno's client was updated to.
+    eth.state.finalized += EPOCH;
+    gno.state.height += 50;
+    eth.state.head += 50;
+    heights = await link.checkAndRelayPacketsAndAcks(heights, 2, 6);
+    expect(gno.timedOut).toEqual([1]);
+    expect(gno.client.timeoutPacketsV2).toHaveBeenCalledTimes(1);
+    expect(eth.provedAt).toEqual([FINALIZED + EPOCH]);
+    expect(gno.state.known).toBe(FINALIZED + EPOCH);
+    expect(eth.client.receivePacketsV2).not.toHaveBeenCalled();
+    expect(heights.packetHeightA).toBe(gno.state.height - 2);
+
+    // Timed out, the packet has no commitment left: a later round that
+    // scans its block again, from a floor below it, does not time it out
+    // twice.
+    gno.state.height += 50;
+    await link.checkAndRelayPacketsAndAcks(heights, 2, 6);
+    await link.checkAndRelayPacketsAndAcks({
+      ...heights,
+      packetHeightA: SENT_HEIGHT - 10,
+    }, 2, 6);
+    expect(gno.scans).toHaveLength(5);
+    expect(gno.client.timeoutPacketsV2).toHaveBeenCalledTimes(1);
+    expect(gno.timedOut).toEqual([1]);
+  });
+
+  it("delivers a packet live at the head and times out one dead at the finalized slot in the same round", async () => {
+    const live = gnoPacket(1, slotTime(FINALIZED + 10 * EPOCH));
+    const dead = gnoPacket(2, slotTime(FINALIZED));
+    const waiting = gnoPacket(3, TIMEOUT);
+    const eth = ethereumDestination(FINALIZED);
+    const gno = gnoSource(eth.client, FINALIZED, [live, dead, waiting]);
+    const link = new Link(gno.end, eth.end, logger);
+
+    const heights = await link.checkAndRelayPacketsAndAcks({
+      packetHeightA: SENT_HEIGHT - 10,
+      ackHeightA: SENT_HEIGHT - 10,
+      packetHeightB: FINALIZED - 1,
+      ackHeightB: FINALIZED - 1,
+    }, 2, 6);
+
+    const [received] = eth.client.receivePacketsV2.mock.calls[0] as unknown as [readonly PacketV2[]];
+    expect(received.map(p => Number(p.sequence))).toEqual([1]);
+    expect(gno.timedOut).toEqual([2]);
+    expect(eth.provedAt).toEqual([FINALIZED]);
+    // The waiting packet holds the floor.
+    expect(heights.packetHeightA).toBe(SENT_HEIGHT - 1);
   });
 });
