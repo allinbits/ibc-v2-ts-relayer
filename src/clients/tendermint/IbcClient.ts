@@ -2111,9 +2111,16 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
   public async querySentPacketsV2(clientId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<PacketV2WithMetadata[]> {
     const txsPackets = await this.getPacketsFromTxsV2(clientId, minHeight, maxHeight);
     const eventsPackets = await this.getPacketsFromBlockEventsV2(clientId, minHeight, maxHeight);
+    // The event query selects the txs and blocks that sent a packet from
+    // clientId, and parsing returns every packet they sent: a block whose
+    // end-block logic sends over several clients (one per counterparty
+    // chain) carries packets for the other paths too. Keep this path's.
     return ([] as PacketV2WithMetadata[])
       .concat(...txsPackets)
-      .concat(...eventsPackets);
+      .concat(...eventsPackets)
+      .filter(({
+        packet,
+      }) => packet.sourceClient === clientId);
   }
 
   public async queryWrittenAcks(connectionId: string, minHeight: number | undefined, maxHeight: number | undefined): Promise<AckWithMetadata[]> {
@@ -2168,7 +2175,11 @@ export class TendermintIbcClient extends BaseIbcClient<TendermintIbcClientTypes>
         }),
       );
     });
-    return out;
+    // As for sent packets: a tx that wrote acknowledgements over several
+    // clients matches the query once, and parsing returns all of them.
+    return out.filter(({
+      originalPacket,
+    }) => originalPacket.destinationClient === clientId);
   }
 
   public async queryUnreceivedPackets(portId: string, channelId: string, sequences: readonly number[]) {
