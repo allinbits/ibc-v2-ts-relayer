@@ -6,11 +6,16 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 sudo setcap cap_ipc_lock=+ep `which gnome-keyring-daemon`
-if [ -f "/etc/DBUS_SESSION_BUS_ADDRESS" ]; then
-  DBUS_SESSION_BUS_ADDRESS=$(cat /etc/DBUS_SESSION_BUS_ADDRESS)
+# The first session caches its bus address so that later `docker exec ...
+# with_keyring` sessions join it. The cache outlives the bus when the
+# container restarts, so join the cached bus only while it still answers.
+CACHED_BUS_ADDRESS=$(cat /etc/DBUS_SESSION_BUS_ADDRESS 2>/dev/null || true)
+if [ -n "$CACHED_BUS_ADDRESS" ] && dbus-send --bus="$CACHED_BUS_ADDRESS" --print-reply \
+     --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetId >/dev/null 2>&1; then
+  DBUS_SESSION_BUS_ADDRESS=$CACHED_BUS_ADDRESS
   export DBUS_SESSION_BUS_ADDRESS
 else
-  echo $DBUS_SESSION_BUS_ADDRESS > /etc/DBUS_SESSION_BUS_ADDRESS
+  echo "$DBUS_SESSION_BUS_ADDRESS" > /etc/DBUS_SESSION_BUS_ADDRESS
 fi
 
 # killall -q -9 "$(whoami)" gnome-keyring-daemon || echo ''
