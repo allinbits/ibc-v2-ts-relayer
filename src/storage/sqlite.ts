@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS chainFees (
     gasPrice DOUBLE NOT NULL,
     gasDenom TEXT NOT NULL,
     gasAdjustment DOUBLE NOT NULL DEFAULT 1.4,
+    extensions TEXT,
     UNIQUE (chainId) ON CONFLICT REPLACE
 );
 CREATE TABLE IF NOT EXISTS misbehaviourEvidence (
@@ -67,6 +68,16 @@ CREATE TABLE IF NOT EXISTS monitorCursors (
 // busy timeout makes a writer wait for the other's lock instead of failing.
 const BUSY_TIMEOUT_MS = 10_000;
 
+/** Brings databases created by an older schema up to date. */
+const migrate = (db: Database.Database): void => {
+  const chainFeesColumns = db.prepare("PRAGMA table_info(chainFees)").all() as {
+    name: string
+  }[];
+  if (!chainFeesColumns.some(c => c.name === "extensions")) {
+    db.exec("ALTER TABLE chainFees ADD COLUMN extensions TEXT");
+  }
+};
+
 let cachedDb: Database.Database | null = null;
 let cachedDbPath: string | null = null;
 
@@ -78,6 +89,7 @@ export const openDB = async (dbFile: string): Promise<Database.Database> => {
   db.pragma("journal_mode = WAL");
   db.pragma(`busy_timeout = ${BUSY_TIMEOUT_MS}`);
   await db.exec(baseSchema);
+  migrate(db);
   cachedDb = db;
   cachedDbPath = dbFile;
   return db;

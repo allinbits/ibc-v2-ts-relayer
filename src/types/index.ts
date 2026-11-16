@@ -47,12 +47,21 @@ export interface RelayPaths {
   clientB: string
   version: number
 }
+/**
+ * Chain-specific settings stored alongside a chain's fees. Each field only
+ * applies to the chain types that document it.
+ */
+export interface ChainFeesExtensions {
+  /** Gno only: max storage deposit (ugnot) a transaction may lock */
+  maxDeposit?: number
+}
 export interface ChainFees {
   id: number
   chainId: string
   gasPrice: number
   gasDenom: string
   gasAdjustment: number
+  extensions?: ChainFeesExtensions
 }
 export interface RelayedHeights {
   id: number
