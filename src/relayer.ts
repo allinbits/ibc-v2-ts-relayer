@@ -39,7 +39,7 @@ import {
   closeDB,
 } from "./storage/sqlite.js";
 import {
-  ChainType, ClientStatus, MisbehaviourStatus, RelayedHeights, RelayPaths,
+  ChainFeesExtensions, ChainType, ClientStatus, MisbehaviourStatus, RelayedHeights, RelayPaths,
 } from "./types/index.js";
 import {
   getSigner,
@@ -117,6 +117,7 @@ export class Relayer extends EventEmitter {
         gasAdjustment: feesA.gasAdjustment,
         addressPrefix: prefixA,
         estimatedBlockTime: 6000,
+        maxDeposit: feesA.extensions?.maxDeposit,
       });
     const clientB = chainTypeB === ChainType.Cosmos
       ? await TendermintIbcClient.connectWithSigner(nodeB, signerB as OfflineSigner, {
@@ -133,6 +134,7 @@ export class Relayer extends EventEmitter {
         gasAdjustment: feesB.gasAdjustment,
         addressPrefix: prefixB,
         estimatedBlockTime: 6000,
+        maxDeposit: feesB.extensions?.maxDeposit,
       });
     // Capture each chain's current height *before* the client/channel is
     // created. No IBC events for this path can exist below this height, so we
@@ -222,13 +224,19 @@ export class Relayer extends EventEmitter {
     gasPrice: string,
     gasDenom: string,
     gasAdjustment?: number,
+    extensions?: ChainFeesExtensions,
   ) {
     const price = parseFloat(gasPrice);
     if (Number.isNaN(price)) {
       throw new Error(`Invalid gas price: ${gasPrice}`);
     }
-    await storage.addChainFees(chainId, price, gasDenom, gasAdjustment);
-    this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}, Adjustment: ${gasAdjustment ?? 1.4}`);
+    const maxDeposit = extensions?.maxDeposit;
+    if (maxDeposit !== undefined && (!Number.isSafeInteger(maxDeposit) || maxDeposit <= 0)) {
+      throw new Error(`Invalid maxDeposit extension: ${maxDeposit}`);
+    }
+    await storage.addChainFees(chainId, price, gasDenom, gasAdjustment, extensions);
+    this.logger.info(`Gas price added for chain ID: ${chainId}, Price: ${gasPrice}, Denom: ${gasDenom}, Adjustment: ${gasAdjustment ?? 1.4}, Extensions: ${JSON.stringify(extensions ?? {
+    })}`);
   }
 
   async addExistingRelayPath(
@@ -280,6 +288,7 @@ export class Relayer extends EventEmitter {
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesA.gasPrice + feesA.gasDenom),
         gasAdjustment: feesA.gasAdjustment > 1.4 ? feesA.gasAdjustment : 2,
+        maxDeposit: feesA.extensions?.maxDeposit,
       });
     const clientB = path.chainTypeB === ChainType.Cosmos
       ? await TendermintIbcClient.connectWithSigner(path.nodeB, signerB as OfflineSigner, {
@@ -294,6 +303,7 @@ export class Relayer extends EventEmitter {
         logger: this.logger,
         gasPrice: GasPrice.fromString(feesB.gasPrice + feesB.gasDenom),
         gasAdjustment: feesB.gasAdjustment > 1.4 ? feesB.gasAdjustment : 2,
+        maxDeposit: feesB.extensions?.maxDeposit,
       });
     return {
       clientA,

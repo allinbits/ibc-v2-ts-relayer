@@ -1,5 +1,6 @@
 import {
   ChainFees,
+  ChainFeesExtensions,
   ChainType,
   MisbehaviourEvidence,
   MisbehaviourEvidenceUpdate,
@@ -21,9 +22,11 @@ export interface IStorage {
    * @param chainId - The chain identifier
    * @param gasPrice - The gas price value
    * @param gasDenom - The gas denomination (e.g., "uatom")
+   * @param gasAdjustment - The gas adjustment multiplier
+   * @param extensions - Chain-specific settings, stored as JSON
    * @returns The created ChainFees record
    */
-  addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment?: number): Promise<ChainFees>
+  addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment?: number, extensions?: ChainFeesExtensions): Promise<ChainFees>
 
   /**
    * Retrieves gas fee configuration for a chain.

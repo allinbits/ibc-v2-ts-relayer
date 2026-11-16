@@ -1,5 +1,6 @@
 import {
   ChainFees,
+  ChainFeesExtensions,
   ChainType,
   MisbehaviourEvidence,
   MisbehaviourEvidenceUpdate,
@@ -21,12 +22,13 @@ import {
  * Uses Dexie.js wrapper for IndexedDB operations.
  */
 export class DexieStorage implements IStorage {
-  async addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment: number = 1.4): Promise<ChainFees> {
+  async addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment: number = 1.4, extensions?: ChainFeesExtensions): Promise<ChainFees> {
     await db.chainFees.add({
       chainId,
       gasPrice,
       gasDenom,
       gasAdjustment,
+      extensions,
     });
     return this.getChainFees(chainId);
   }

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 
+import Database from "better-sqlite3";
 import {
   afterAll,
   afterEach,
@@ -15,6 +16,9 @@ import {
 import {
   describeMisbehaviourStorage,
 } from "./misbehaviour-storage.shared.js";
+import {
+  closeDB,
+} from "./sqlite.js";
 import {
   SQLiteStorage,
 } from "./sqlite-storage.js";
@@ -91,6 +95,54 @@ describe("SQLiteStorage", () => {
       const result = await storage.getChainFees("custom-chain");
 
       expect(result.gasAdjustment).toBe(2.0);
+    });
+
+    it("should store and parse extensions", async () => {
+      await storage.addChainFees("gno-chain", 0.025, "ugnot", 1.4, {
+        maxDeposit: 50000000,
+      });
+      const result = await storage.getChainFees("gno-chain");
+
+      expect(result.extensions).toEqual({
+        maxDeposit: 50000000,
+      });
+    });
+
+    it("should leave extensions undefined when none are stored", async () => {
+      await storage.addChainFees("no-ext-chain", 0.025, "uatom");
+      const result = await storage.getChainFees("no-ext-chain");
+
+      expect(result.extensions).toBeUndefined();
+    });
+
+    it("should add the extensions column to an existing database", async () => {
+      const legacyDbPath = ".test-legacy.db";
+      removeDbFiles(legacyDbPath);
+      const legacy = new Database(legacyDbPath);
+      legacy.exec(`CREATE TABLE chainFees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chainId TEXT NOT NULL,
+        gasPrice DOUBLE NOT NULL,
+        gasDenom TEXT NOT NULL,
+        gasAdjustment DOUBLE NOT NULL DEFAULT 1.4,
+        UNIQUE (chainId) ON CONFLICT REPLACE
+      )`);
+      legacy.prepare("INSERT INTO chainFees (chainId, gasPrice, gasDenom) VALUES (?, ?, ?)").run("old-chain", 0.025, "ugnot");
+      legacy.close();
+      try {
+        const legacyStorage = new SQLiteStorage(legacyDbPath);
+        expect((await legacyStorage.getChainFees("old-chain")).extensions).toBeUndefined();
+        await legacyStorage.addChainFees("old-chain", 0.025, "ugnot", 1.4, {
+          maxDeposit: 30000000,
+        });
+        expect((await legacyStorage.getChainFees("old-chain")).extensions).toEqual({
+          maxDeposit: 30000000,
+        });
+      }
+      finally {
+        closeDB();
+        removeDbFiles(legacyDbPath);
+      }
     });
 
     it("should throw error when chain fees not found", async () => {

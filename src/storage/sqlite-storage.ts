@@ -1,6 +1,7 @@
 import config from "../config/index.js";
 import {
   ChainFees,
+  ChainFeesExtensions,
   ChainType,
   MisbehaviourEvidence,
   MisbehaviourEvidenceUpdate,
@@ -93,9 +94,10 @@ export class SQLiteStorage implements IStorage {
     this.dbPath = dbPath ?? config.database.file;
   }
 
-  async addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment: number = 1.4): Promise<ChainFees> {
+  async addChainFees(chainId: string, gasPrice: number, gasDenom: string, gasAdjustment: number = 1.4, extensions?: ChainFeesExtensions): Promise<ChainFees> {
     const db = await openDB(this.dbPath);
-    await db.prepare("INSERT INTO chainFees (chainId, gasPrice, gasDenom, gasAdjustment) VALUES (?, ?, ?, ?)").run([chainId, gasPrice, gasDenom, gasAdjustment]);
+    await db.prepare("INSERT INTO chainFees (chainId, gasPrice, gasDenom, gasAdjustment, extensions) VALUES (?, ?, ?, ?, ?)")
+      .run([chainId, gasPrice, gasDenom, gasAdjustment, extensions === undefined ? null : JSON.stringify(extensions)]);
     return this.getChainFees(chainId);
   }
 
@@ -105,7 +107,18 @@ export class SQLiteStorage implements IStorage {
     if (!isChainFees(res)) {
       throw new Error(`Chain fees not found for chain ID: ${chainId}`);
     }
-    return res;
+    // extensions is stored as a JSON string (or NULL)
+    const {
+      extensions, ...fees
+    } = res as Omit<ChainFees, "extensions"> & {
+      extensions: string | null
+    };
+    return extensions === null
+      ? fees
+      : {
+        ...fees,
+        extensions: JSON.parse(extensions) as ChainFeesExtensions,
+      };
   }
 
   async updateRelayedHeights(
