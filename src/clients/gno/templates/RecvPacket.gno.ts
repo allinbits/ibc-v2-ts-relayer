@@ -4,7 +4,6 @@ import (
     "encoding/hex"
 
     "gno.land/p/aib/ibc/types/v0"
-    "gno.land/p/aib/ics23/v0"
     "gno.land/r/aib/ibc/core"
 )
 
@@ -18,7 +17,6 @@ func hexDec(s string) []byte {
 }
 func main(cur realm) {
     // Receive the packet
-    specs := ics23.IavlSpec()
     recvPacket := types.MsgRecvPacket{
       Packet: types.Packet{
       Sequence:          {{ sequence }},                        // XXX update
@@ -39,7 +37,7 @@ func main(cur realm) {
       },
       // Write the proof of packet commitment written during the SendPacket of
       // the counterparty client.
-      ProofCommitment: {{{ commitmentProof }}},
+      ProofCommitment: hexDec("{{ commitmentProof }}"), // a protobuf ibc-go MerkleProof
       ProofHeight: types.NewHeight({{ proofRevision }}, {{ proofHeight }}), // XXX update
     }
     

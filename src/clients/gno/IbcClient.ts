@@ -15,9 +15,6 @@ import {
   Height,
 } from "@atomone/atomone-types/ibc/core/client/v1/client.js";
 import {
-  MerkleProof,
-} from "@atomone/atomone-types/ibc/core/commitment/v1/commitment.js";
-import {
   QueryConnectionResponse,
 } from "@atomone/atomone-types/ibc/core/connection/v1/query.js";
 import {
@@ -81,9 +78,6 @@ import {
   acknowledgement,
   createClientTemplate, recvPacket, registerCounterParty, timeout, updateClientTemplate,
 } from "./queries.js";
-import {
-  ProofHelper,
-} from "./templates/ProofHelper.js";
 
 export type GnoIbcClientOptions = CreateWalletOptions & BaseIbcClientOptions & {
   gasPrice: GasPrice
@@ -1040,7 +1034,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
         `Sending packet #${packet.sequence} from ${this.chainId}:${packet.sourceClient}`,
         (packet.payloads),
       );
-      const ics23 = MerkleProof.decode(proofCommitments[i]);
       const rundotgno = recvPacket({
         sequence: packet.sequence.toString(),
         sourceClient: validateIbcIdentifier(packet.sourceClient, "sourceClient"),
@@ -1053,7 +1046,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
           version: validateIbcIdentifier(p.version, "version"),
           value: toHex(p.value),
         })),
-        commitmentProof: ProofHelper(ics23),
+        commitmentProof: toHex(proofCommitments[i]),
         proofRevision: proofHeight?.revisionNumber.toString() ?? "0",
         proofHeight: proofHeight?.revisionHeight.toString() ?? "0",
       });
@@ -1146,7 +1139,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < acks.length; i++) {
-      const ics23 = MerkleProof.decode(proofAckeds[i]);
       const rundotgno = acknowledgement({
         sequence: acks[i].originalPacket.sequence.toString(),
         sourceClient: validateIbcIdentifier(acks[i].originalPacket.sourceClient, "sourceClient"),
@@ -1160,7 +1152,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
           value: toHex(p.value),
         })),
         appAcknowledgement: toHex(acks[i].acknowledgement).length >= 4 ? toHex(acks[i].acknowledgement).substring(4) : toHex(acks[i].acknowledgement),
-        commitmentProof: ProofHelper(ics23),
+        commitmentProof: toHex(proofAckeds[i]),
         proofRevision: proofHeight?.revisionNumber.toString() ?? "0",
         proofHeight: proofHeight?.revisionHeight.toString() ?? "0",
       });
@@ -1259,7 +1251,6 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
     const maxDepositAmount: string = fundsToCoins((new Map()).set("ugnot", GNO_DEFAULT_DEPOSIT));
     const caller: string = await this.sign.getAddress();
     for (let i = 0; i < packets.length; i++) {
-      const ics23 = MerkleProof.decode(proofsUnreceived[i]);
       const rundotgno = timeout({
         sequence: packets[i].sequence.toString(),
         sourceClient: validateIbcIdentifier(packets[i].sourceClient, "sourceClient"),
@@ -1272,7 +1263,7 @@ export class GnoIbcClient extends BaseIbcClient<GnoIbcClientTypes> {
           version: validateIbcIdentifier(p.version, "version"),
           value: toHex(p.value),
         })),
-        commitmentProof: ProofHelper(ics23),
+        commitmentProof: toHex(proofsUnreceived[i]),
         proofRevision: proofHeight?.revisionNumber.toString() ?? "0",
         proofHeight: proofHeight?.revisionHeight.toString() ?? "0",
       });
