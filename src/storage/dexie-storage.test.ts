@@ -58,6 +58,17 @@ describe("DexieStorage", () => {
       expect(result.gasAdjustment).toBe(1.4);
     });
 
+    it("should store extensions", async () => {
+      await storage.addChainFees("gno-chain", 0.025, "ugnot", 1.4, {
+        maxDeposit: 50000000,
+      });
+      const result = await storage.getChainFees("gno-chain");
+
+      expect(result.extensions).toEqual({
+        maxDeposit: 50000000,
+      });
+    });
+
     it("should throw error when chain fees not found", async () => {
       await expect(
         storage.getChainFees("unknown-chain"),

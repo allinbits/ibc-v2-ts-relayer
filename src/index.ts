@@ -15,6 +15,7 @@ import {
   Relayer,
 } from "./relayer.js";
 import {
+  ChainFeesExtensions,
   ChainType,
   MisbehaviourStatus,
 } from "./types/index.js";
@@ -113,12 +114,13 @@ program.command("add-gas-price")
   .description("Add gas price for a chain")
   .requiredOption("-c, --chain-id <chainId>", "Chain ID to add gas price for")
   .option("-g, --gas-adjustment <gasAdjustment>", "Gas adjustment multiplier (default: 1.4)", parseFloat)
+  .option("-e, --extensions <json>", "Chain-specific settings as JSON. e.g. '{\"maxDeposit\":20000000}' (Gno: max storage deposit in ugnot)", (v: string) => JSON.parse(v) as ChainFeesExtensions)
   .argument("<string>", "Gas information in string format. e.g. 0.025udenom")
   .action(async (gasPrice, options) => {
     try {
       const relayer = new Relayer(log);
       const gas = GasPrice.fromString(gasPrice);
-      await relayer.addGasPrice(options.chainId, gas.amount.toString(), gas.denom, options.gasAdjustment);
+      await relayer.addGasPrice(options.chainId, gas.amount.toString(), gas.denom, options.gasAdjustment, options.extensions);
     }
     catch (error) {
       log.error("Failed to add gas price", {
